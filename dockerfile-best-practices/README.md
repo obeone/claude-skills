@@ -202,7 +202,7 @@ dockerfile-best-practices.skill
 **Docker Compose:**
 
 - No `version:` field (deprecated since Compose V2)
-- Avoid `container_name:` (prevents scaling)
+- Never use `container_name:` (prevents scaling and parallel environments)
 - Use specific image tags (not `:latest`)
 - Define health checks for dependencies
 - Set resource limits to prevent exhaustion

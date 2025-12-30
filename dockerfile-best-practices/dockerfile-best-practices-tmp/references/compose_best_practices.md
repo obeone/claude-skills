@@ -32,9 +32,9 @@ services:
 
 [Compose Specification](https://docs.docker.com/compose/compose-file/)
 
-## Don't Use container_name
+## Never Use container_name
 
-**AVOID `container_name:`** in service definitions.
+**NEVER use `container_name:`** in service definitions.
 
 ```yaml
 # ❌ BAD - Don't use container_name
@@ -56,27 +56,19 @@ services:
 - Prevents running multiple instances (`docker compose up --scale app=3`)
 - Breaks horizontal scaling
 - Creates naming conflicts in multi-environment setups
+- Prevents parallel testing environments
 - Compose generates predictable names: `{project}_{service}_{replica}`
 
-### When container_name is Acceptable
+Use project names to differentiate environments instead:
 
-Use `container_name:` sparingly and only for:
+```bash
+# Development
+docker compose -p myapp-dev up
 
-- Single-instance development tools (databases, caches)
-- Local development only (never in production configs)
-- Integration with external tools requiring specific names
+# Testing
+docker compose -p myapp-test up
 
-**Example (development only):**
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: dev-postgres  # OK for local dev DB
-
-  app:
-    image: myapp:latest
-    # No container_name - allows scaling
+# Each creates isolated containers with predictable names
 ```
 
 ## Additional Compose Best Practices
@@ -322,8 +314,6 @@ services:
 
   database:
     image: postgres:16-alpine
-    # container_name OK for single dev DB
-    container_name: dev-postgres
     environment:
       - POSTGRES_DB=myapp
       - POSTGRES_USER=myapp
@@ -343,7 +333,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: dev-redis
     volumes:
       - redis-data:/data
     healthcheck:
@@ -374,7 +363,7 @@ secrets:
 Before deploying your Compose file:
 
 - [ ] No `version:` field
-- [ ] No `container_name:` (except single dev services)
+- [ ] No `container_name:` (never use it)
 - [ ] Specific image tags (not `:latest`)
 - [ ] Health checks defined for critical services
 - [ ] Resource limits set
@@ -510,13 +499,20 @@ docker compose down -v
       image: myapp:latest
 ```
 
-### Remove container_name (unless needed)
+### Remove container_name (always)
 
 ```diff
   services:
     app:
       image: myapp:latest
 -     container_name: myapp-container
+```
+
+Use project names instead for environment isolation:
+
+```bash
+docker compose -p myapp-dev up
+docker compose -p myapp-prod up
 ```
 
 ### Update image tags
@@ -544,7 +540,7 @@ docker compose down -v
 ## Best Practices Summary
 
 1. **No `version:` field** - Use Compose Specification
-2. **No `container_name:`** - Allow scaling
+2. **Never use `container_name:`** - Allow scaling and parallel environments
 3. **Specific tags** - Not `:latest`
 4. **Health checks** - For dependencies
 5. **Resource limits** - Prevent exhaustion

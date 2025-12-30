@@ -313,13 +313,17 @@ For multi-container applications, follow modern Compose practices:
        image: myapp:1.0.0
    ```
 
-2. **Avoid `container_name:`** - Prevents scaling
+2. **Never use `container_name:`** - Prevents scaling and parallel environments
    ```yaml
    # ✅ GOOD - Let Compose generate names
    services:
      app:
        image: myapp:1.0.0
        # No container_name - allows scaling with --scale
+
+   # Use project names for environment isolation:
+   # docker compose -p myapp-dev up
+   # docker compose -p myapp-test up
    ```
 
 3. **Use specific image tags** - Not `:latest`
