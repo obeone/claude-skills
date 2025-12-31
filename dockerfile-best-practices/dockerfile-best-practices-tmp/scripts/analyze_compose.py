@@ -62,9 +62,9 @@ def analyze_compose(compose_data: dict, filename: str) -> List[Issue]:
         if 'container_name' in service_config:
             issues.append(Issue(
                 location,
-                'warning',
+                'error',
                 f'Using container_name: "{service_config["container_name"]}"',
-                'Avoid container_name - it prevents scaling with --scale. Let Compose generate names automatically.'
+                'Never use container_name - it prevents scaling with --scale and breaks parallel environments. Let Compose generate names automatically or use project names for isolation (docker compose -p myapp-dev up).'
             ))
 
         # Check for :latest tag
