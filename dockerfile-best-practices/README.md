@@ -1,7 +1,5 @@
 # WORK IN PROGRESS
 
-
-
 ## Dockerfile Best Practices Skill
 
 Comprehensive skill for creating and optimizing Dockerfiles with BuildKit, multi-stage builds, advanced caching, and security.
