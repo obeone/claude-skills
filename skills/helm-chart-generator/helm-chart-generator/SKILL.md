@@ -1,8 +1,34 @@
 ---
 name: helm-chart-generator
 description: "Generate complete Helm charts using the bjw-s-labs common library (app-template). Use when: (1) Creating a new Helm chart for Kubernetes applications, (2) Converting Docker Compose to Helm charts, (3) Setting up controllers with sidecars/init containers, (4) Configuring services, ingress, persistence, or networking, (5) Creating charts with multiple controllers or complex setups. Generates Chart.yaml, values.yaml, templates/common.yaml, and templates/NOTES.txt following bjw-s patterns."
+license: MIT
+compatibility: "Claude Code, Claude.ai"
+allowed-tools: "Read Grep Glob Bash Write Edit"
 metadata:
   version: "1.0.1"
+  category: development
+  tags:
+    - helm
+    - kubernetes
+    - k8s
+    - charts
+    - bjw-s
+    - app-template
+    - devops
+    - infrastructure
+  triggers:
+    - "create helm chart"
+    - "generate helm chart"
+    - "kubernetes deployment"
+    - "bjw-s chart"
+    - "app-template"
+    - "convert to helm"
+  surfaces:
+    - claude-code
+    - claude-ai
+  author:
+    name: obeone
+    url: https://github.com/obeone
 ---
 
 # Helm Chart Generator (bjw-s Common Library)
