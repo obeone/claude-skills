@@ -16,13 +16,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create GitHub release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-
-      - name: Pack and publish skills
+      - name: Build skill packages
         uses: NimbleBrainInc/skill-pack@v1
         with:
           directory: ./skills
+          build: true
+          upload: false
+          announce: false
+
+      - name: Create GitHub release with skill packages
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            skills/**/*.skill
+
+      - name: Announce skills
+        uses: NimbleBrainInc/skill-pack@v1
+        with:
+          directory: ./skills
+          build: false
+          upload: false
+          announce: true
