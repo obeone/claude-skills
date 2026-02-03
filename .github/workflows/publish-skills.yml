@@ -31,15 +31,17 @@ jobs:
 
       - name: Rename to stable names and upload
         run: |
-          for skill in skills/**/*.skill; do
+          # Find all .skill files (including root of skills/)
+          find skills -name "*.skill" -type f | while read -r skill; do
             # Rename: name-1.0.0.skill -> name.skill
             dir=$(dirname "$skill")
             base=$(basename "$skill")
             stable_name=$(echo "$base" | sed 's/-[0-9]*\.[0-9]*\.[0-9]*\.skill$/.skill/')
             mv "$skill" "$dir/$stable_name"
+            echo "Renamed: $skill -> $dir/$stable_name"
           done
-          # Upload only stable-named files
-          gh release upload "${{ github.ref_name }}" skills/**/*.skill --clobber
+          # Upload all stable-named files
+          find skills -name "*.skill" -type f -exec gh release upload "${{ github.ref_name }}" {} --clobber \;
         env:
           GH_TOKEN: ${{ github.token }}
 
