@@ -24,22 +24,19 @@ jobs:
           upload: false
           announce: false
 
-      - name: Create stable-named copies (without version)
+      - name: Rename to stable names and upload
         run: |
           for skill in skills/**/*.skill; do
-            # Extract skill name without version: name-1.0.0.skill -> name.skill
+            # Rename: name-1.0.0.skill -> name.skill
             dir=$(dirname "$skill")
             base=$(basename "$skill")
             stable_name=$(echo "$base" | sed 's/-[0-9]*\.[0-9]*\.[0-9]*\.skill$/.skill/')
-            cp "$skill" "$dir/$stable_name"
+            mv "$skill" "$dir/$stable_name"
           done
-
-      - name: Create GitHub release with skill packages
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            skills/**/*.skill
+          # Upload only stable-named files
+          gh release upload "${{ github.ref_name }}" skills/**/*.skill --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Announce skills
         uses: NimbleBrainInc/skill-pack@v1
