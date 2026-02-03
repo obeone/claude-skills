@@ -24,6 +24,11 @@ jobs:
           upload: false
           announce: false
 
+      - name: Create GitHub release
+        run: gh release create "${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Rename to stable names and upload
         run: |
           for skill in skills/**/*.skill; do
