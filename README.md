@@ -28,13 +28,13 @@
 ```bash
 # Personal skills (available in all projects)
 mkdir -p ~/.claude/skills
-curl -L https://github.com/obeone/claude-skill/releases/latest/download/dockerfile-best-practices.skill \
-  | tar -xz -C ~/.claude/skills/
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 
 # Or project-specific skills
 mkdir -p .claude/skills
-curl -L https://github.com/obeone/claude-skill/releases/latest/download/dockerfile-best-practices.skill \
-  | tar -xz -C .claude/skills/
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
 ```
 
 ### Claude.ai (Web)
@@ -48,10 +48,10 @@ curl -L https://github.com/obeone/claude-skill/releases/latest/download/dockerfi
 Clone the repository to use skills directly:
 
 ```bash
-git clone https://github.com/obeone/claude-skill.git
+git clone https://github.com/obeone/claude-skills.git
 
 # Copy to your skills directory
-cp -r claude-skill/skills/dockerfile-best-practices ~/.claude/skills/
+cp -r claude-skills/skills/dockerfile-best-practices ~/.claude/skills/
 ```
 
 ### Other Platforms

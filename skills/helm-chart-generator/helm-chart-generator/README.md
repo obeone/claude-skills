@@ -27,24 +27,26 @@
 
 ```bash
 # Install to personal skills directory
-curl -L https://github.com/obeone/claude-skill/releases/latest/download/helm-chart-generator.skill \
-  | tar -xz -C ~/.claude/skills/
+mkdir -p ~/.claude/skills
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-chart-generator.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 
 # Or install to current project only
-curl -L https://github.com/obeone/claude-skill/releases/latest/download/helm-chart-generator.skill \
-  | tar -xz -C .claude/skills/
+mkdir -p .claude/skills
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-chart-generator.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
 ```
 
 ### Claude.ai (Web)
 
-1. Download [`helm-chart-generator.skill`](https://github.com/obeone/claude-skill/releases/latest/download/helm-chart-generator.skill)
+1. Download [`helm-chart-generator.skill`](https://github.com/obeone/claude-skills/releases/latest/download/helm-chart-generator.skill)
 2. Go to **Settings** → **Skills** → **Upload skill**
 
 ### From Source
 
 ```bash
-git clone https://github.com/obeone/claude-skill.git
-cp -r claude-skill/skills/helm-chart-generator/helm-chart-generator ~/.claude/skills/
+git clone https://github.com/obeone/claude-skills.git
+cp -r claude-skills/skills/helm-chart-generator/helm-chart-generator ~/.claude/skills/
 ```
 
 > Skills are packaged using [Skill Pack](https://github.com/marketplace/actions/skill-pack) on every release.

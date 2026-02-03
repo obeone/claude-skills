@@ -24,6 +24,16 @@ jobs:
           upload: false
           announce: false
 
+      - name: Create stable-named copies (without version)
+        run: |
+          for skill in skills/**/*.skill; do
+            # Extract skill name without version: name-1.0.0.skill -> name.skill
+            dir=$(dirname "$skill")
+            base=$(basename "$skill")
+            stable_name=$(echo "$base" | sed 's/-[0-9]*\.[0-9]*\.[0-9]*\.skill$/.skill/')
+            cp "$skill" "$dir/$stable_name"
+          done
+
       - name: Create GitHub release with skill packages
         uses: softprops/action-gh-release@v2
         with:
