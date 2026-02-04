@@ -208,13 +208,23 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 
 ### Mandatory Requirements
 
-1. **SKILL.md YAML front-matter**: Every skill must have `name`, `description`, and `tools` fields
+1. **SKILL.md YAML front-matter**: Every skill must have `name`, `description`, and `tools` fields. The `tools` field must be a YAML list:
+   ```yaml
+   ---
+   name: my-skill
+   description: "Skill description"
+   tools:
+     - Read
+     - Write
+     - Edit
+   ---
+   ```
 2. **POSIX compliance**: All files must end with newline (`\n`) and use LF line endings
 3. **Python via uv**: Use `uv` for dependency management
 
 ### Adding a New Skill
 
-1. Create `skills/<skill-name>/SKILL.md` with required front-matter
+1. Create `skills/<skill-name>/SKILL.md` with required front-matter (see format above)
 2. Add `scripts/` with validators and analyzers
 3. Add `references/` with deep-dive documentation
 4. Add `assets/` with templates if needed

@@ -3,7 +3,13 @@ name: dockerfile-best-practices
 description: "Create and optimize Dockerfiles with BuildKit, multi-stage builds, advanced caching, and security. Use when: (1) Creating new Dockerfile, (2) Optimizing existing Dockerfile, (3) Reducing image size, (4) Improving security, (5) Using Python with uv, (6) Resolving cache or slow build issues, (7) Setting up CI/CD builds"
 license: MIT
 compatibility: "Claude Code, Claude.ai"
-tools: "Read Grep Glob Bash Write Edit"
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - Write
+  - Edit
 metadata:
   version: "1.0.1"
   category: development
