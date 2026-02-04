@@ -10,8 +10,18 @@ This repository implements a decentralized "Claude Agent Skills" architecture. E
 
 - **Python Scripts**: Use `uv` for dependency management whenever possible. Scripts should be executable via `python <script_path>`.
 - **Mandatory Requirements**:
-  - All `SKILL.md` files MUST contain a YAML front-matter with `name`, `description`, and `tools`.
+  - All `SKILL.md` files MUST contain a YAML front-matter with `name`, `description`, and `tools` (as a YAML list).
   - POSIX compliance: All text files must end with a newline (`\n`) and use LF line endings.
+  - Example front-matter:
+    ```yaml
+    ---
+    name: my-skill
+    description: "Skill description"
+    tools:
+      - Read
+      - Write
+    ---
+    ```
 
 ## Key Paths
 
