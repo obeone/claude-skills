@@ -99,7 +99,7 @@ python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfi
 python skills/dockerfile-best-practices/scripts/analyze_compose.py ./compose.yaml
 
 # Validate a Helm chart
-python skills/helm-chart-generator/helm-chart-generator/scripts/validate_chart.py ./my-chart/
+python skills/helm-chart-generator/scripts/validate_chart.py ./my-chart/
 ```
 
 ## 🎯 Available Skills
@@ -107,14 +107,14 @@ python skills/helm-chart-generator/helm-chart-generator/scripts/validate_chart.p
 | Skill | Description | Key Features |
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
-| [**helm-chart-generator**](./skills/helm-chart-generator/helm-chart-generator/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
+| [**helm-chart-generator**](./skills/helm-chart-generator/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
 
 ## 🏗️ Architecture
 
 ```
 skills/<skill-name>/
 ├── SKILL.md              # Entry point with YAML front-matter
-│                         # Contains: name, description, tools list
+│                         # Contains: name, description
 │
 ├── scripts/              # Python validation tools
 │   ├── analyze_*.py      # Static analyzers
@@ -208,15 +208,11 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 
 ### Mandatory Requirements
 
-1. **SKILL.md YAML front-matter**: Every skill must have `name`, `description`, and `tools` fields. The `tools` field must be a YAML list:
+1. **SKILL.md YAML front-matter**: Every skill must have `name` and `description` fields only:
    ```yaml
    ---
    name: my-skill
    description: "Skill description"
-   tools:
-     - Read
-     - Write
-     - Edit
    ---
    ```
 2. **POSIX compliance**: All files must end with newline (`\n`) and use LF line endings
