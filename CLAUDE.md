@@ -21,7 +21,7 @@ skills/<skill-name>/
 | Skill                     | Entry Point                                                    | Validators                                    |
 | :------------------------ | :------------------------------------------------------------- | :-------------------------------------------- |
 | dockerfile-best-practices | `skills/dockerfile-best-practices/SKILL.md`                    | `analyze_dockerfile.py`, `analyze_compose.py` |
-| helm-chart-generator      | `skills/helm-chart-generator/helm-chart-generator/SKILL.md`    | `validate_chart.py`                           |
+| helm-chart-generator      | `skills/helm-chart-generator/SKILL.md`                         | `validate_chart.py`                           |
 
 ## Commands
 
@@ -39,7 +39,7 @@ python skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/comp
 
 ```bash
 # Validate a bjw-s common library chart
-python skills/helm-chart-generator/helm-chart-generator/scripts/validate_chart.py <path/to/chart/>
+python skills/helm-chart-generator/scripts/validate_chart.py <path/to/chart/>
 ```
 
 ### Dependencies
@@ -48,15 +48,13 @@ Scripts use `uv` for Python execution. The `analyze_compose.py` and `validate_ch
 
 ## Mandatory Requirements
 
-1. **SKILL.md YAML front-matter**: Every skill must have `name`, `description`, and `tools` fields. The `tools` field must be a YAML list:
+1. **SKILL.md YAML front-matter**: Every skill must have `name`, `description`, and `metadata.version`:
    ```yaml
    ---
    name: my-skill
    description: "Skill description"
-   tools:
-     - Read
-     - Write
-     - Edit
+   metadata:
+     version: "1.0.0"
    ---
    ```
 2. **POSIX compliance**: All text files must end with newline (`\n`) and use LF line endings
