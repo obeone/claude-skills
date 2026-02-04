@@ -48,11 +48,13 @@ Scripts use `uv` for Python execution. The `analyze_compose.py` and `validate_ch
 
 ## Mandatory Requirements
 
-1. **SKILL.md YAML front-matter**: Every skill must have `name` and `description` fields only:
+1. **SKILL.md YAML front-matter**: Every skill must have `name`, `description`, and `metadata.version`:
    ```yaml
    ---
    name: my-skill
    description: "Skill description"
+   metadata:
+     version: "1.0.0"
    ---
    ```
 2. **POSIX compliance**: All text files must end with newline (`\n`) and use LF line endings

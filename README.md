@@ -208,11 +208,13 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 
 ### Mandatory Requirements
 
-1. **SKILL.md YAML front-matter**: Every skill must have `name` and `description` fields only:
+1. **SKILL.md YAML front-matter**: Every skill must have `name`, `description`, and `metadata.version`:
    ```yaml
    ---
    name: my-skill
    description: "Skill description"
+   metadata:
+     version: "1.0.0"
    ---
    ```
 2. **POSIX compliance**: All files must end with newline (`\n`) and use LF line endings
