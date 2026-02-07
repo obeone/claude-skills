@@ -113,7 +113,7 @@ python skills/helm-chart-generator/scripts/validate_chart.py ./my-chart/
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-chart-generator**](./skills/helm-chart-generator/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
 
-## 🏗️ Architecture
+## 🧩 Architecture
 
 ```
 skills/<skill-name>/
@@ -194,7 +194,7 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 - **Best practices**: Resource limits, security contexts, health probes
 - **Chart validator**: Verifies structure and bjw-s compatibility
 
-## 🛠️ Development
+## 🔨 Development
 
 ### Repository Structure
 
