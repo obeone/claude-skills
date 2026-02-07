@@ -1,23 +1,13 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/Claude-Skills-5A67D8?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Skills"/>
-  <img src="https://img.shields.io/badge/Docker-Best_Practices-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
-  <img src="https://img.shields.io/badge/Helm-Charts-0F1689?style=for-the-badge&logo=helm&logoColor=white" alt="Helm"/>
-</p>
+![Claude Skills](https://img.shields.io/badge/Claude-Skills-5A67D8?style=for-the-badge&logo=anthropic&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Best_Practices-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Helm](https://img.shields.io/badge/Helm-Charts-0F1689?style=for-the-badge&logo=helm&logoColor=white)
 
-<h1 align="center">🤖 Claude Agent Skills Stack</h1>
+# 🤖 Claude Agent Skills Stack
 
-<p align="center">
-  <strong>Self-contained skills for autonomous AI agents</strong><br/>
-  <em>Production-ready tools, templates, and validators for Docker and Kubernetes</em>
-</p>
+**Self-contained skills for autonomous AI agents**
+*Production-ready tools, templates, and validators for Docker and Kubernetes*
 
-<p align="center">
-  <a href="#-installation">Installation</a> •
-  <a href="#-available-skills">Skills</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-development">Development</a>
-</p>
+[Installation](#-installation) • [Skills](#-available-skills) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Development](#-development)
 
 ---
 
@@ -28,20 +18,33 @@
 ```bash
 # Personal skills (available in all projects)
 mkdir -p ~/.claude/skills
+
+# Install dockerfile-best-practices
 curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 
-# Or project-specific skills
+# Install helm-chart-generator
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-chart-generator.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+```
+
+For project-specific skills, use `.claude/skills` instead of `~/.claude/skills`:
+
+```bash
 mkdir -p .claude/skills
+
 curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
+
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-chart-generator.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
 ```
 
 ### Claude.ai (Web)
 
-1. Download the `.skill` bundle from [Releases](../../releases)
+1. Download the `.skill` bundles from [Releases](../../releases)
 2. Go to **Settings** → **Skills**
-3. Click **Upload skill** and select the `.skill` file
+3. Click **Upload skill** and select each `.skill` file
 
 ### From Source
 
@@ -50,8 +53,9 @@ Clone the repository to use skills directly:
 ```bash
 git clone https://github.com/obeone/claude-skills.git
 
-# Copy to your skills directory
+# Copy all skills to your skills directory
 cp -r claude-skills/skills/dockerfile-best-practices ~/.claude/skills/
+cp -r claude-skills/skills/helm-chart-generator ~/.claude/skills/
 ```
 
 ### Other Platforms
@@ -240,6 +244,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-<p align="center">
-  <sub>Built with 🤖 by autonomous agents, for autonomous agents</sub>
-</p>
+*Built with 🤖 by autonomous agents, for autonomous agents*
