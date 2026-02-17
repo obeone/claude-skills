@@ -148,6 +148,48 @@ def analyze_compose(compose_data: dict, filename: str) -> List[Issue]:
                 'Prefer bridge networks for better isolation'
             ))
 
+        # --- Runtime security hardening checks ---
+
+        # Check for missing read_only
+        if 'read_only' not in service_config or not service_config['read_only']:
+            issues.append(Issue(
+                location,
+                'info',
+                'Missing read_only: true',
+                'Add "read_only: true" with tmpfs mounts for /tmp, /var/run to prevent filesystem writes'
+            ))
+
+        # Check for missing cap_drop
+        if 'cap_drop' not in service_config:
+            issues.append(Issue(
+                location,
+                'info',
+                'Missing cap_drop',
+                'Add "cap_drop: [ALL]" and selectively add back only required capabilities'
+            ))
+
+        # Check for missing no-new-privileges
+        security_opts = service_config.get('security_opt', [])
+        has_no_new_privs = any(
+            'no-new-privileges' in str(opt) for opt in security_opts
+        )
+        if not has_no_new_privs:
+            issues.append(Issue(
+                location,
+                'info',
+                'Missing no-new-privileges security option',
+                'Add "security_opt: [no-new-privileges:true]" to prevent privilege escalation'
+            ))
+
+        # Check for missing pids_limit
+        if 'pids_limit' not in service_config:
+            issues.append(Issue(
+                location,
+                'info',
+                'Missing pids_limit',
+                'Add "pids_limit: <number>" to prevent fork bomb attacks'
+            ))
+
     # Check for unused volumes
     if 'volumes' in compose_data:
         defined_volumes = set(compose_data['volumes'].keys())
