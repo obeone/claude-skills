@@ -248,6 +248,84 @@ secrets:
 - Use environment variables for secrets
 - Hardcode passwords in compose files
 
+## Runtime Security Hardening
+
+Minimize the attack surface of running containers with these Compose options.
+
+### Read-Only Filesystem
+
+```yaml
+services:
+  app:
+    image: myapp:1.2.3
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+```
+
+Use `tmpfs` for directories the app needs to write to temporarily.
+
+### Drop All Capabilities
+
+```yaml
+services:
+  app:
+    image: myapp:1.2.3
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Only if binding to ports < 1024
+```
+
+### Prevent Privilege Escalation
+
+```yaml
+services:
+  app:
+    image: myapp:1.2.3
+    security_opt:
+      - no-new-privileges:true
+```
+
+### Limit PIDs (Prevent Fork Bombs)
+
+```yaml
+services:
+  app:
+    image: myapp:1.2.3
+    pids_limit: 100
+```
+
+### Complete Hardened Service Example
+
+```yaml
+services:
+  web:
+    image: myapp:1.2.3
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+```
+
 ## Complete Example: Modern Compose File
 
 ```yaml
@@ -274,6 +352,14 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
     networks:
       - frontend-network
     deploy:
@@ -303,6 +389,15 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     networks:
       - frontend-network
       - backend-network
@@ -373,6 +468,10 @@ Before deploying your Compose file:
 - [ ] Networks for service isolation
 - [ ] `.env` file in `.gitignore`
 - [ ] `depends_on` with `condition: service_healthy` for ordered startup
+- [ ] `read_only: true` with `tmpfs` for writable directories
+- [ ] `cap_drop: [ALL]` with selective `cap_add`
+- [ ] `security_opt: [no-new-privileges:true]`
+- [ ] `pids_limit` to prevent fork bombs
 
 ## Common Patterns
 

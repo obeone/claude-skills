@@ -61,7 +61,27 @@ When working with Dockerfiles, follow this decision tree:
    RUN groupadd -r app && useradd -r -g app app
 
    # Or use UID/GID >10000 for consistency across environments
-   RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app
+   RUN groupadd -r -g 10001 app && useradd -r -l -u 10001 -g app app
+   ```
+
+8. **Use exec form for CMD/ENTRYPOINT (signal handling):**
+   ```dockerfile
+   # ✅ GOOD - Exec form, PID 1 receives signals
+   CMD ["python", "-m", "myapp"]
+
+   # ❌ BAD - Shell form, signals go to /bin/sh
+   CMD python -m myapp
+   ```
+   For apps that need graceful shutdown, use `tini` or `dumb-init`. See `references/best_practices.md`.
+
+9. **Use COPY --chmod to avoid extra layers:**
+   ```dockerfile
+   # ✅ GOOD - Single layer
+   COPY --chmod=755 entrypoint.sh /entrypoint.sh
+
+   # ❌ BAD - Two layers, doubles file size on disk
+   COPY entrypoint.sh /entrypoint.sh
+   RUN chmod 755 /entrypoint.sh
    ```
 
 ## Language-Specific Templates
@@ -91,7 +111,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Security: non-root user with UID/GID >10000
 RUN groupadd -r -g 10001 app && \
-    useradd -r -u 10001 -g app app && \
+    useradd -r -l -u 10001 -g app app && \
     chown -R app:app /app
 USER app
 
@@ -176,7 +196,7 @@ COPY . .
 
 # Security: non-root user with UID/GID >10000
 RUN groupadd -r -g 10001 app && \
-    useradd -r -u 10001 -g app app && \
+    useradd -r -l -u 10001 -g app app && \
     chown -R app:app /app
 USER app
 
@@ -221,8 +241,11 @@ CMD ["php-fpm"]
 - [ ] Create and use non-root user
 - [ ] Never expose secrets via ARG/ENV
 - [ ] Use `RUN --mount=type=secret` for sensitive data
+- [ ] Use exec form for ENTRYPOINT/CMD (signal handling)
+- [ ] Use `COPY --chmod` instead of separate `RUN chmod`
+- [ ] Add OCI labels (`org.opencontainers.image.*`) for traceability
 - [ ] Add HEALTHCHECK instruction
-- [ ] Scan image for vulnerabilities (`docker scan`)
+- [ ] Scan image for vulnerabilities (`docker scout cves`)
 
 ## Performance Checklist
 
@@ -233,6 +256,7 @@ CMD ["php-fpm"]
 - [ ] Implement multi-stage builds for compiled languages
 - [ ] Chain RUN commands with `&&`
 - [ ] Clean up in same RUN instruction
+- [ ] Use `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` when using pipes in RUN
 
 ## Size Optimization
 
@@ -242,6 +266,8 @@ CMD ["php-fpm"]
 3. Remove unnecessary files in same layer
 4. Use `--no-install-recommends` with apt
 5. Consider distroless for runtime
+
+**Alpine/musl caveat:** Alpine uses musl libc instead of glibc. This can cause issues with Python C extensions, DNS resolution, and locale handling. Prefer `-slim` variants for Python/Java workloads. See `references/best_practices.md` for details.
 
 ## Common Patterns
 
@@ -295,6 +321,14 @@ Detects common anti-patterns:
 - Missing non-root USER
 - apt-get without cleanup
 
+### Lint with Docker Build Checks
+
+```bash
+docker buildx build --check .
+```
+
+Add `# check=error=true` at the top of a Dockerfile to make checks fail the build. See `references/best_practices.md`.
+
 ### Generate .dockerignore
 
 ```bash
@@ -315,22 +349,21 @@ For multi-container applications, follow modern Compose practices:
        image: myapp:1.0.0
    ```
 
-2. **Never use `container_name:`** - Prevents scaling and parallel environments
-   ```yaml
-   # ✅ GOOD - Let Compose generate names
-   services:
-     app:
-       image: myapp:1.0.0
-       # No container_name - allows scaling with --scale
-
-   # Use project names for environment isolation:
-   # docker compose -p myapp-dev up
-   # docker compose -p myapp-test up
-   ```
+2. **Never use `container_name:`** - Prevents scaling and parallel environments. Use project names for isolation: `docker compose -p myapp-dev up`
 
 3. **Use specific image tags** - Not `:latest`
 4. **Define health checks** - For service dependencies
 5. **Set resource limits** - Prevent resource exhaustion
+
+6. **Harden runtime security** - Drop capabilities and restrict filesystem
+   ```yaml
+   services:
+     app:
+       read_only: true
+       cap_drop: [ALL]
+       security_opt: [no-new-privileges:true]
+   ```
+   For complete hardening guide, see `references/compose_best_practices.md`.
 
 For complete Compose guide, see `references/compose_best_practices.md`.
 
@@ -361,11 +394,10 @@ For detailed information, consult these references:
 
 ### Security concerns
 
-- Pin versions with SHA256
-- Use non-root USER
+- Use non-root USER with exec form CMD/ENTRYPOINT
 - Never use ARG/ENV for secrets
 - Use BuildKit secret mounts
-- Scan with `docker scan`
+- Scan with `docker scout cves`
 
 ### Cache invalidation
 

@@ -106,6 +106,18 @@ __pycache__/
 | Distroless      | 2-100MB | glibc | Max security, no shell      |
 | Scratch         | 0MB     | none  | Static binaries only        |
 
+**Alpine/musl Gotchas:**
+
+Alpine uses musl libc, which can cause subtle issues:
+
+- Python C extensions (numpy, pandas) may fail to compile or crash at runtime
+- DNS resolution behaves differently (no mDNS, different resolver)
+- No full locale support (affects string sorting, encoding)
+- Default stack size is 80KB vs 8MB in glibc (can cause segfaults)
+
+**Safe for Alpine:** Go (static), Node.js, Nginx, Rust (musl target), simple CLI tools.
+**Prefer `-slim` instead:** Python with C deps, Java, apps needing locale/full glibc.
+
 **Pin versions for reproducibility:**
 
 ```dockerfile
@@ -283,6 +295,26 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 ```
 
+**Reduce log noise with wget:**
+
+```dockerfile
+# ✅ Condensed progress output (useful in CI)
+RUN wget --progress=dot:giga https://example.com/large-file.tar.gz
+```
+
+**Non-APT package manager cleanup:**
+
+```dockerfile
+# yum/dnf (RHEL/Fedora)
+RUN dnf install -y curl && dnf clean all && rm -rf /var/cache/dnf
+
+# zypper (SUSE)
+RUN zypper install -y curl && zypper clean --all
+
+# apk (Alpine) - always use --no-cache
+RUN apk add --no-cache curl
+```
+
 **Use heredocs for complex scripts:**
 ```dockerfile
 RUN <<EOF
@@ -301,6 +333,20 @@ EOF
 | ADD        | ✅    | ✅  | ✅           | Avoid          |
 
 **Always use COPY** unless you specifically need URL download or tar extraction.
+
+**COPY --chmod (BuildKit):**
+
+Avoid separate `RUN chmod` after `COPY` — it creates a duplicate layer. Use `--chmod` directly:
+
+```dockerfile
+# ✅ Single layer with correct permissions
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
+COPY --chown=app:app --chmod=644 config.yaml /app/config.yaml
+
+# ❌ Two layers, file stored twice on disk
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+```
 
 **COPY --link (BuildKit):**
 ```dockerfile
@@ -415,6 +461,10 @@ docker buildx build --secret id=api_token,env=API_TOKEN .
 | Layer ordering | - | 🔥🔥 | - |
 | Secret mounts | - | - | 🛡️🛡️🛡️ |
 | Non-root user | - | - | 🛡️🛡️ |
+| COPY --chmod | ⚡ | - | - |
+| Exec form CMD | - | - | 🛡️🛡️ |
+| Pipefail | - | - | 🛡️ |
+| Build parallelization | - | 🔥🔥 | - |
 | Remote cache | - | 🔥🔥🔥 | - |
 
 Legend: 🔥 = Impact level (1-3)
@@ -958,6 +1008,34 @@ docker buildx build --progress=plain . 2>&1 | \
   grep "done" | \
   grep -oP "\d+\.\d+s" | \
   awk '{s+=$1} END {print "Total: " s "s"}'
+```
+
+### Build Parallelization
+
+**Parallel compilation inside containers:**
+
+```dockerfile
+# Use all available CPUs for make
+RUN make -j$(nproc)
+
+# Same for cmake
+RUN cmake --build . --parallel $(nproc)
+```
+
+**Parallel BuildKit stages:**
+
+BuildKit automatically builds independent stages in parallel. Structure your Dockerfile with separate stages for independent work:
+
+```dockerfile
+FROM node:20-alpine AS frontend
+# ... builds in parallel with backend
+
+FROM python:3.12-slim AS backend
+# ... builds in parallel with frontend
+
+FROM python:3.12-slim
+COPY --from=frontend /app/dist /app/static
+COPY --from=backend /app /app
 ```
 
 ### Best Practices Summary

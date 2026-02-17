@@ -540,3 +540,193 @@ CMD ["app.py"]
 ```dockerfile
 FROM gcr.io/distroless/python3:debug  # Includes busybox shell
 ```
+
+---
+
+## 🔔 14. PID 1 signal handling with tini
+
+**Input (signals not forwarded):**
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+# Shell form: /bin/sh -c wraps the process, signals lost
+CMD python -m myapp
+```
+
+**Optimized Output:**
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+FROM python:3.12-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tini && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+COPY . .
+
+# tini handles signal forwarding and zombie reaping
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["python", "-m", "myapp"]
+```
+
+**Why it's better:**
+
+- **Exec form** ensures the app (or tini) runs as PID 1
+- **tini** forwards SIGTERM/SIGINT to the child process for graceful shutdown
+- **Zombie reaping** — tini properly reaps orphaned child processes
+- Without this, `docker stop` waits 10s then sends SIGKILL (data loss risk)
+
+---
+
+## 📝 15. COPY --chmod avoids extra layer
+
+**Input (two layers for one file):**
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+COPY . .
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
+**Optimized Output:**
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+FROM python:3.12-slim
+WORKDIR /app
+
+# Single layer with correct permissions (BuildKit)
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
+COPY . .
+
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
+**Why it's better:**
+
+- **One layer instead of two** — `COPY` + `RUN chmod` stores the file twice in OverlayFS
+- Reduces image size (especially for large files)
+- Requires BuildKit (`# syntax=docker/dockerfile:1`)
+
+---
+
+## 🛡️ 16. Runtime hardening in Docker Compose
+
+**Input (minimal security):**
+
+```yaml
+services:
+  web:
+    image: myapp:1.2.3
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+```
+
+**Optimized Output:**
+
+```yaml
+services:
+  web:
+    image: myapp:1.2.3
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    # Runtime hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+```
+
+**Why it's better:**
+
+- **`read_only`** — filesystem is immutable, attackers cannot write to disk
+- **`cap_drop: [ALL]`** — removes all Linux capabilities (least privilege)
+- **`no-new-privileges`** — prevents processes from gaining extra privileges via setuid/setgid
+- **`pids_limit`** — prevents fork bomb attacks
+- **`tmpfs`** — writable directories exist only in memory
+
+---
+
+## 🏷️ 17. OCI labels with dynamic build args
+
+**Input (no metadata):**
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY . .
+CMD ["python", "app.py"]
+```
+
+**Optimized Output:**
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+FROM python:3.12-slim
+
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=dev
+
+LABEL org.opencontainers.image.title="My App" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/org/repo" \
+      org.opencontainers.image.licenses="MIT"
+
+WORKDIR /app
+COPY . .
+CMD ["python", "app.py"]
+```
+
+**Build command:**
+
+```bash
+docker buildx build \
+  --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --build-arg VCS_REF=$(git rev-parse --short HEAD) \
+  --build-arg VERSION=1.2.3 \
+  -t myapp:1.2.3 .
+```
+
+**Why it's better:**
+
+- **Traceability** — every image carries its source commit, build time, and version
+- **OCI standard** — tools like Cosign, Trivy, and registries understand these labels
+- **Build args** — injected at build time, no manual updates needed
+- **Inspect with:** `docker inspect myapp:1.2.3 | jq '.[0].Config.Labels'`
