@@ -2,7 +2,7 @@
 name: dockerfile-best-practices
 description: "Create, review, optimize, and secure Dockerfiles and Docker Compose files using BuildKit, multi-stage builds, caching strategies, and runtime hardening. Use when: (1) creating a new Dockerfile or containerizing an application, (2) optimizing or auditing an existing Dockerfile for size, speed, or security, (3) working with Docker Compose files (adding services, fixing anti-patterns, runtime hardening), (4) setting up CI/CD Docker builds with registry caching, (5) applying security hardening (non-root users, secret mounts, capability drops), (6) diagnosing slow builds or cache invalidation issues. Do NOT trigger for: Kubernetes manifests or Helm charts (use helm-chart-generator instead), questions about running containers with no build context, general app development unrelated to containerization."
 metadata:
-  version: "1.2.0"
+  version: "1.2.1"
 ---
 
 # Dockerfile Best Practices
