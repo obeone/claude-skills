@@ -1,94 +1,141 @@
 ---
 name: dockerfile-best-practices
-description: "Create, review, optimize, and secure Dockerfiles and Docker Compose files using BuildKit, multi-stage builds, caching strategies, and runtime hardening. Use when: (1) creating a new Dockerfile or containerizing an application, (2) optimizing or auditing an existing Dockerfile for size, speed, or security, (3) working with Docker Compose files (adding services, fixing anti-patterns, runtime hardening), (4) setting up CI/CD Docker builds with registry caching, (5) applying security hardening (non-root users, secret mounts, capability drops), (6) diagnosing slow builds or cache invalidation issues. Do NOT trigger for: Kubernetes manifests or Helm charts (use helm-chart-generator instead), questions about running containers with no build context, general app development unrelated to containerization."
+description: "Create and optimize Dockerfiles with BuildKit, multi-stage builds, advanced caching, and security. Use this skill whenever you need to create, modify, or optimize a Dockerfile or a Docker Compose file. Also trigger when the user discusses container images, build performance, or Docker security — even if they don't explicitly mention 'Dockerfile'."
 metadata:
-  version: "1.2.1"
+  version: "2.0.0"
 ---
 
 # Dockerfile Best Practices
 
 Comprehensive guide for creating optimized, secure, and fast Docker images using modern BuildKit features.
 
-## Quick Start Workflow
+## Workflow
 
-When working with Dockerfiles, follow this decision tree:
-
-1. **Choose your language/framework** → Use appropriate template below
-2. **Apply security hardening** → Non-root user, pin versions, secrets management
-3. **Optimize for cache** → Separate deps from code, use cache mounts
-4. **Multi-stage if needed** → Separate build from runtime for compiled languages
-5. **Review with analyzer** → Run `scripts/analyze_dockerfile.py`
+1. **Identify language/framework** → Pick template from [Language Templates](#language-templates)
+2. **Apply essential rules** → Every Dockerfile must follow [Essential Rules](#essential-rules)
+3. **Security hardening** → Non-root user, pin versions, secrets management
+4. **Optimize for cache** → Separate deps from code, use cache mounts
+5. **Multi-stage if needed** → Compiled languages or distroless runtime
+6. **Add metadata** → OCI labels, HEALTHCHECK, STOPSIGNAL
+7. **Review** → Run `scripts/analyze_dockerfile.py` or `scripts/analyze_compose.py`
 
 ## Essential Rules (Always Apply)
 
-1. **Start with BuildKit syntax:**
-   ```dockerfile
-   # syntax=docker/dockerfile:1
-   ```
+### 1. BuildKit syntax directive (first line, always)
 
-2. **Pin runtime versions, not OS versions:**
-   ```dockerfile
-   # ✅ GOOD - Pin runtime, let OS update
-   FROM python:3.12-slim
+```dockerfile
+# syntax=docker/dockerfile:1
+```
 
-   # ❌ BAD - Pins OS version (bookworm), prevents security updates
-   FROM python:3.12-slim-bookworm
-   ```
-   **Why?** OS versions update with security patches. Pin runtime (python:3.12) for reproducible behavior.
+### 2. Pin runtime versions, NOT OS versions
 
-3. **Create `.dockerignore`:**
-   Use template from `assets/dockerignore-template`
+```dockerfile
+# ✅ GOOD
+FROM python:3.12-slim
+FROM node:22-alpine
+FROM golang:1-alpine
 
-4. **Use cache mounts for package managers:**
-   ```dockerfile
-   RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
-   ```
+# ❌ BAD - pins OS, blocks security updates
+FROM python:3.12-slim-bookworm
+FROM node:22-alpine3.19
+```
 
-5. **APT cache setup (before any apt operations):**
-   ```dockerfile
-   RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
-       echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
-   ```
+### 3. Cache mounts for all package managers
 
-6. **Never use ARG/ENV for secrets:**
-   ```dockerfile
-   RUN --mount=type=secret,id=api_key curl -H "Authorization: $(cat /run/secrets/api_key)" https://api.example.com
-   ```
+```dockerfile
+# pip
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 
-7. **Use non-root user with safe UID/GID:**
-   ```dockerfile
-   # Let system auto-assign (simple)
-   RUN groupadd -r app && useradd -r -g app app
+# npm
+RUN --mount=type=cache,target=/root/.npm npm ci
 
-   # Or use UID/GID >10000 for consistency across environments
-   RUN groupadd -r -g 10001 app && useradd -r -l -u 10001 -g app app
-   ```
+# yarn
+RUN --mount=type=cache,target=/root/.yarn yarn install --frozen-lockfile
 
-8. **Use exec form for CMD/ENTRYPOINT (signal handling):**
-   ```dockerfile
-   # ✅ GOOD - Exec form, PID 1 receives signals
-   CMD ["python", "-m", "myapp"]
+# go
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-   # ❌ BAD - Shell form, signals go to /bin/sh
-   CMD python -m myapp
-   ```
-   For apps that need graceful shutdown, use `tini` or `dumb-init`. See `references/best_practices.md`.
+# cargo
+RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
 
-9. **Use COPY --chmod to avoid extra layers:**
-   ```dockerfile
-   # ✅ GOOD - Single layer
-   COPY --chmod=755 entrypoint.sh /entrypoint.sh
+# composer
+RUN --mount=type=cache,target=/tmp/cache composer install --no-dev
 
-   # ❌ BAD - Two layers, doubles file size on disk
-   COPY entrypoint.sh /entrypoint.sh
-   RUN chmod 755 /entrypoint.sh
-   ```
+# maven
+RUN --mount=type=cache,target=/root/.m2 mvn package -DskipTests
+```
 
-## Language-Specific Templates
+### 4. APT cache setup (before any apt operation on Debian-based images)
+
+```dockerfile
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends curl
+```
+
+### 5. Never use ARG/ENV for secrets
+
+```dockerfile
+# ✅ GOOD - secret mount
+RUN --mount=type=secret,id=api_key \
+    curl -H "Authorization: $(cat /run/secrets/api_key)" https://api.example.com
+
+# ❌ BAD - exposed in image history
+ARG API_KEY
+```
+
+### 6. Non-root user with UID/GID >10000
+
+```dockerfile
+# Debian/Ubuntu
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app
+
+# Alpine
+RUN addgroup -g 10001 app && adduser -u 10001 -G app -S app
+```
+
+### 7. Use COPY, never ADD
+
+`ADD` has implicit behaviors (auto-extraction, URL downloads). Always use `COPY`.
+
+### 8. Use COPY --chown instead of separate RUN chown
+
+```dockerfile
+# ✅ GOOD - single layer, no extra overhead
+COPY --chown=app:app . .
+
+# ❌ BAD - doubles layer size
+COPY . .
+RUN chown -R app:app /app
+```
+
+### 9. OCI labels for metadata
+
+```dockerfile
+LABEL org.opencontainers.image.source="https://github.com/org/repo" \
+      org.opencontainers.image.description="My application" \
+      org.opencontainers.image.version="1.0.0"
+```
+
+### 10. HEALTHCHECK for long-running services
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:8000/health || exit 1
+```
+
+### 11. Create .dockerignore
+
+Use template from `assets/dockerignore-template`. Critical for build context size and security.
+
+## Language Templates
 
 ### Python (with uv - Recommended)
 
-For detailed Python/uv integration, see `references/uv_integration.md`.
+For detailed uv patterns, see `references/uv_integration.md`.
 
 ```dockerfile
 # syntax=docker/dockerfile:1
@@ -98,21 +145,18 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install dependencies (separate layer for caching)
+# Install dependencies (cached layer)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project
 
 # Copy and install project
-COPY . .
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+COPY --chown=app:app . .
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked
 
-# Security: non-root user with UID/GID >10000
-RUN groupadd -r -g 10001 app && \
-    useradd -r -l -u 10001 -g app app && \
-    chown -R app:app /app
+# Security
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app
 USER app
 
 ENV PATH="/app/.venv/bin:$PATH"
@@ -124,25 +168,20 @@ CMD ["python", "-m", "myapp"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine
-
+FROM node:22-alpine
 WORKDIR /app
 
-# Install dependencies
 COPY package.json yarn.lock ./
 RUN --mount=type=cache,target=/root/.yarn \
     yarn install --frozen-lockfile --production
 
-# Copy source
-COPY . .
+COPY --chown=app:app . .
 
-# Security: non-root user with UID/GID >10000
-RUN addgroup -g 10001 app && \
-    adduser -u 10001 -G app -S app && \
-    chown -R app:app /app
+RUN addgroup -g 10001 app && adduser -u 10001 -G app -S app
 USER app
 
 EXPOSE 3000
+HEALTHCHECK --interval=30s CMD wget -qO- http://localhost:3000/health || exit 1
 CMD ["node", "index.js"]
 ```
 
@@ -151,25 +190,68 @@ CMD ["node", "index.js"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-# Build stage
 FROM golang:1-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main
 
-# Runtime stage
-FROM alpine:3
-RUN addgroup -g 10001 app && adduser -u 10001 -G app -S app
-USER app
+FROM gcr.io/distroless/static
 COPY --from=builder /app/main /main
 ENTRYPOINT ["/main"]
+```
+
+### Rust (Multi-stage)
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+FROM rust:1-slim AS builder
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release
+
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && cp target/release/myapp /usr/local/bin/
+
+FROM gcr.io/distroless/cc
+COPY --from=builder /usr/local/bin/myapp /myapp
+ENTRYPOINT ["/myapp"]
+```
+
+### PHP (with Composer)
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+FROM php:8-fpm-alpine
+WORKDIR /app
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+COPY composer.json composer.lock ./
+RUN --mount=type=cache,target=/tmp/cache \
+    composer install --no-dev --optimize-autoloader --no-scripts
+
+COPY --chown=app:app . .
+RUN composer dump-autoload --optimize
+
+RUN addgroup -g 10001 app && adduser -u 10001 -G app -S app
+USER app
+
+EXPOSE 9000
+CMD ["php-fpm"]
 ```
 
 ### Debian-based (with APT cache)
@@ -179,317 +261,72 @@ ENTRYPOINT ["/main"]
 
 FROM debian:stable-slim
 
-# Configure APT for cache reuse
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
     echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
 WORKDIR /app
 
-# Install dependencies with cache mount
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates
+    apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
 
-# Copy application
-COPY . .
+COPY --chown=app:app . .
 
-# Security: non-root user with UID/GID >10000
-RUN groupadd -r -g 10001 app && \
-    useradd -r -l -u 10001 -g app app && \
-    chown -R app:app /app
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app
 USER app
 
 CMD ["./app"]
 ```
 
-### PHP (with Composer)
+## Docker Compose Rules
 
-```dockerfile
-# syntax=docker/dockerfile:1
+**Critical rules** (always enforce):
 
-FROM php:8-fpm-alpine
+1. **Never use `version:`** — Deprecated since Compose V2
+2. **Never use `container_name:`** — Prevents scaling and parallel environments
+3. **Never use `links:`** — Deprecated, use networks instead
+4. **Use specific image tags** — Never `:latest`
+5. **Use `depends_on` with `condition: service_healthy`** — Not bare `depends_on`
 
-WORKDIR /app
-
-# Install Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# Install dependencies
-COPY composer.json composer.lock ./
-RUN --mount=type=cache,target=/tmp/cache \
-    composer install --no-dev --optimize-autoloader --no-scripts
-
-# Copy source
-COPY . .
-RUN composer dump-autoload --optimize
-
-# Security: non-root user with UID/GID >10000
-RUN addgroup -g 10001 app && \
-    adduser -u 10001 -G app -S app && \
-    chown -R app:app /app
-USER app
-
-EXPOSE 9000
-CMD ["php-fpm"]
-```
-
-## Security Checklist
-
-- [ ] Use specific version tags for base images
-- [ ] Use minimal base image (alpine, slim, distroless)
-- [ ] Create and use non-root user
-- [ ] Never expose secrets via ARG/ENV
-- [ ] Use `RUN --mount=type=secret` for sensitive data
-- [ ] Use exec form for ENTRYPOINT/CMD (signal handling)
-- [ ] Use `COPY --chmod` instead of separate `RUN chmod`
-- [ ] Add OCI labels (`org.opencontainers.image.*`) for traceability
-- [ ] Add HEALTHCHECK instruction
-- [ ] Scan image for vulnerabilities (`docker scout cves`)
-
-## Performance Checklist
-
-- [ ] Add BuildKit syntax directive
-- [ ] Create comprehensive `.dockerignore`
-- [ ] Order instructions: manifests → deps → code
-- [ ] Use `--mount=type=cache` for all package managers
-- [ ] Implement multi-stage builds for compiled languages
-- [ ] Chain RUN commands with `&&`
-- [ ] Clean up in same RUN instruction
-- [ ] Use `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` when using pipes in RUN
-
-## Size Optimization
-
-**Quick wins:**
-1. Use alpine or slim variants
-2. Multi-stage builds
-3. Remove unnecessary files in same layer
-4. Use `--no-install-recommends` with apt
-5. Consider distroless for runtime
-
-**Alpine/musl caveat:** Alpine uses musl libc instead of glibc. This can cause issues with Python C extensions, DNS resolution, and locale handling. Prefer `-slim` variants for Python/Java workloads. See `references/best_practices.md` for details.
-
-## Common Patterns
-
-### Intermediate Layers (Faster Rebuilds)
-
-Separate dependency installation from code copy:
-
-```dockerfile
-# Install deps first (rarely changes)
-COPY package.json package-lock.json ./
-RUN npm ci --production
-
-# Copy code (changes frequently)
-COPY . .
-```
-
-### Remote Cache (CI/CD)
-
-```bash
-docker buildx build \
-  --cache-from=type=registry,ref=myregistry.com/app:cache \
-  --cache-to=type=registry,ref=myregistry.com/app:cache,mode=max \
-  --push \
-  -t myregistry.com/app:latest .
-```
-
-### Secret Management
-
-```bash
-# Build with secret
-docker buildx build --secret id=api_key,src=./key.txt .
-
-# Or from environment
-docker buildx build --secret id=api_key,env=API_KEY .
-```
-
-## Tools and Scripts
-
-### Analyze Dockerfile
-
-```bash
-python scripts/analyze_dockerfile.py ./Dockerfile
-```
-
-Detects common anti-patterns:
-- Missing BuildKit syntax
-- Using :latest tags
-- ADD instead of COPY
-- Missing cache mounts
-- Secrets in ARG/ENV
-- Missing non-root USER
-- apt-get without cleanup
-
-### Lint with Docker Build Checks
-
-```bash
-docker buildx build --check .
-```
-
-Add `# check=error=true` at the top of a Dockerfile to make checks fail the build. See `references/best_practices.md`.
-
-### Generate .dockerignore
-
-```bash
-cp assets/dockerignore-template .dockerignore
-```
-
-## Docker Compose Best Practices
-
-For multi-container applications, follow modern Compose practices:
-
-### Key Rules
-
-1. **Don't use `version:` field** - Deprecated since Compose V2
-   ```yaml
-   # ✅ GOOD - No version field
-   services:
-     app:
-       image: myapp:1.0.0
-   ```
-
-2. **Never use `container_name:`** - Prevents scaling and parallel environments. Use project names for isolation: `docker compose -p myapp-dev up`
-
-3. **Use specific image tags** - Not `:latest`
-4. **Define health checks** - For service dependencies
-5. **Set resource limits** - Prevent resource exhaustion
-
-6. **Harden runtime security** - Drop capabilities and restrict filesystem
-   ```yaml
-   services:
-     app:
-       read_only: true
-       cap_drop: [ALL]
-       security_opt: [no-new-privileges:true]
-   ```
-   For complete hardening guide, see `references/compose_best_practices.md`.
-
-For complete Compose guide, see `references/compose_best_practices.md`.
-
-## Reference Documentation
-
-For detailed information, consult these references:
-
-1. **`references/optimization_guide.md`** - Complete optimization guide with BuildKit, caching, multi-stage builds
-2. **`references/best_practices.md`** - Checklist of all best practices with impact levels
-3. **`references/examples.md`** - Real-world before/after optimization examples
-4. **`references/uv_integration.md`** - Python with uv package manager (recommended for Python)
-5. **`references/compose_best_practices.md`** - Docker Compose modern practices (no version:, no container_name:)
-
-## Common Issues and Solutions
-
-### Slow builds
-
-- Add cache mounts: `RUN --mount=type=cache,target=...`
-- Optimize layer ordering: deps before code
-- Use remote cache in CI/CD
-
-### Large images
-
-- Use multi-stage builds
-- Switch to alpine/slim base images
-- Clean up in same RUN instruction
-- Remove dev dependencies
-
-### Security concerns
-
-- Use non-root USER with exec form CMD/ENTRYPOINT
-- Never use ARG/ENV for secrets
-- Use BuildKit secret mounts
-- Scan with `docker scout cves`
-
-### Cache invalidation
-
-- Separate dependency installation from code
-- Use `--mount=type=bind` for manifests
-- Order instructions correctly
-
-## Examples by Use Case
-
-### CLI Tool
-
-```dockerfile
-# syntax=docker/dockerfile:1
-FROM python:3.12-alpine
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
-WORKDIR /app
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project
-COPY . .
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked
-ENV PATH="/app/.venv/bin:$PATH"
-ENTRYPOINT ["mytool"]
-```
-
-### Web API
-
-```dockerfile
-# syntax=docker/dockerfile:1
-FROM node:20-alpine
-WORKDIR /app
-COPY package.json yarn.lock ./
-RUN --mount=type=cache,target=/root/.yarn yarn install --frozen-lockfile --production
-COPY . .
-RUN addgroup -g 10001 app && \
-    adduser -u 10001 -G app -S app && \
-    chown -R app:app /app
-USER app
-EXPOSE 3000
-HEALTHCHECK --interval=30s CMD wget -qO- http://localhost:3000/health || exit 1
-CMD ["node", "server.js"]
-```
-
-### Static Site
-
-```dockerfile
-# syntax=docker/dockerfile:1
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package.json yarn.lock ./
-RUN --mount=type=cache,target=/root/.yarn yarn install --frozen-lockfile
-COPY . .
-RUN yarn build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-EXPOSE 80
-```
+For complete Compose guide with examples, see `references/compose_best_practices.md`.
 
 ## Build Commands Reference
 
 ```bash
 # Basic build
-docker buildx build -t myapp:latest .
+docker buildx build -t myapp:1.0.0 .
 
-# With cache from registry
+# With remote cache (CI/CD)
 docker buildx build \
   --cache-from=type=registry,ref=registry.com/myapp:cache \
   --cache-to=type=registry,ref=registry.com/myapp:cache,mode=max \
-  -t myapp:latest .
+  -t myapp:1.0.0 .
 
 # With secrets
-docker buildx build \
-  --secret id=api_key,src=./key.txt \
-  -t myapp:latest .
+docker buildx build --secret id=api_key,src=./key.txt -t myapp:1.0.0 .
 
 # Multi-platform
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -t myapp:latest --push .
-
-# Target specific stage
-docker buildx build --target builder -t myapp:builder .
+docker buildx build --platform linux/amd64,linux/arm64 -t myapp:1.0.0 --push .
 ```
 
-## Next Steps
+## Analysis Tools
 
-After creating your Dockerfile:
+```bash
+# Analyze Dockerfile
+python scripts/analyze_dockerfile.py ./Dockerfile
 
-1. Run analyzer: `python scripts/analyze_dockerfile.py Dockerfile`
-2. Test locally: `docker buildx build -t test .`
-3. Check size: `docker images test`
-4. Scan for vulnerabilities: `docker scout cves test`
-5. Profile build: `docker buildx build --progress=plain . 2>&1 | less`
+# Analyze docker-compose.yml
+python scripts/analyze_compose.py ./docker-compose.yml
+```
+
+## Reference Documentation
+
+For detailed information beyond what's covered here:
+
+| Reference | Content |
+|-----------|---------|
+| `references/optimization_guide.md` | BuildKit internals, caching strategies, multi-stage patterns, distroless, profiling |
+| `references/best_practices.md` | Complete checklist with impact levels, version pinning philosophy, UID/GID strategy |
+| `references/examples.md` | Real-world before/after optimization examples (13+ scenarios) |
+| `references/uv_integration.md` | Python with uv: installation methods, workspaces, multi-stage, all patterns |
+| `references/compose_best_practices.md` | Complete Compose guide: networks, volumes, secrets, dev vs prod, scaling |
