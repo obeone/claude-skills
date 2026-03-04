@@ -87,6 +87,30 @@ secrets:
       password: "<sealed or templated>"
 ```
 
+### Private Registries (imagePullSecrets)
+
+Reference pull secrets at the pod level to avoid repeating on each container:
+
+```yaml
+defaultPodOptions:
+  imagePullSecrets:
+    - name: registry-credentials  # External secret or created separately
+
+# ❌ BAD - Hardcoding credentials in the chart
+secrets:
+  registry-credentials:
+    stringData:
+      .dockerconfigjson: '{"auths": {"registry.example.com": {"auth": "base64-creds"}}}'
+
+# ✅ GOOD - Use an external secret operator to inject the secret
+# ExternalSecret or SealedSecret pointing to registry-credentials
+```
+
+**Guidelines:**
+- Create the pull secret outside the chart (e.g., via CI/CD pipeline or external secret operator)
+- Reference it with `imagePullSecrets` in `defaultPodOptions` to apply globally
+- Never commit raw registry credentials to version control
+
 ### Read-Only Root Filesystem
 
 Enforce when possible:
@@ -524,7 +548,7 @@ helm install myapp . -f values-prod.yaml
 
 When to use:
 
-- Stable network identities required
+- Stable network identities required (peer discovery, clustering)
 - Ordered deployment/scaling needed
 - Persistent storage per pod
 
@@ -532,16 +556,38 @@ When to use:
 controllers:
   database:
     type: statefulset
-    
+
     statefulset:
-      podManagementPolicy: OrderedReady
+      podManagementPolicy: OrderedReady  # Ordered startup (use Parallel for independent pods)
       volumeClaimTemplates:
         - name: data
           accessMode: ReadWriteOnce
           size: 20Gi
           globalMounts:
             - path: /var/lib/postgresql/data
+
+service:
+  database:
+    controller: database
+    ports:
+      db:
+        port: 5432
+
+  # Headless service: gives each pod a stable DNS name
+  # Pod 0: database-0.database-headless.<namespace>.svc.cluster.local
+  # Pod 1: database-1.database-headless.<namespace>.svc.cluster.local
+  database-headless:
+    controller: database
+    type: ClusterIP
+    clusterIP: None
+    ports:
+      db:
+        port: 5432
 ```
+
+**volumeClaimTemplates vs persistence:**
+- Use `statefulset.volumeClaimTemplates`: each pod gets its own PVC (pod-0-data, pod-1-data...)
+- Use `persistence`: shared PVC mounted on all pods (single-pod StatefulSets or read-only sharing)
 
 ## Jobs and CronJobs
 
