@@ -337,9 +337,46 @@ def validate_values(chart_path: Path) -> List[Issue]:
                         'Use specific version tag for reproducibility'
                     ))
 
+            # Check resource requests/limits
+            resources = container_config.get('resources', {})
+            if not resources:
+                issues.append(Issue(
+                    f'{cont_location}.resources',
+                    'warning',
+                    'No resource requests or limits defined',
+                    'Add resources.requests (cpu, memory) and resources.limits.memory'
+                ))
+            else:
+                requests = resources.get('requests', {})
+                limits = resources.get('limits', {})
+                if not requests.get('memory'):
+                    issues.append(Issue(
+                        f'{cont_location}.resources',
+                        'warning',
+                        'No memory request defined',
+                        'Add resources.requests.memory (e.g. 128Mi)'
+                    ))
+                if not limits.get('memory'):
+                    issues.append(Issue(
+                        f'{cont_location}.resources',
+                        'warning',
+                        'No memory limit defined',
+                        'Add resources.limits.memory to prevent OOM kills'
+                    ))
+
             # Check probes
-            if 'probes' in container_config:
-                probes = container_config['probes']
+            probes = container_config.get('probes', {})
+            replicas = ctrl_config.get('replicas', 1)
+            if replicas and int(replicas) > 1:
+                readiness = probes.get('readiness', {})
+                if not readiness.get('enabled'):
+                    issues.append(Issue(
+                        f'{cont_location}.probes.readiness',
+                        'warning',
+                        f'No readiness probe with replicas={replicas} — RollingUpdate may route traffic to unready pods',
+                        'Enable readiness probe to ensure zero-downtime deployments'
+                    ))
+            if probes:
                 for probe_type in ['liveness', 'readiness', 'startup']:
                     if probe_type in probes:
                         probe = probes[probe_type]
