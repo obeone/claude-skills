@@ -35,12 +35,13 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Environment files
+# Environment and secrets
 .env
 .env.local
 .env.*.local
 *.key
 *.pem
+*.crt
 
 # Test coverage
 coverage/
@@ -48,6 +49,7 @@ coverage/
 htmlcov/
 .pytest_cache/
 .tox/
+.ruff_cache/
 
 # Build artifacts
 *.o
@@ -56,19 +58,18 @@ htmlcov/
 *.exe
 *.dll
 
-# Documentation
-README.md
-CHANGELOG.md
+# Documentation (keep README for reference if needed)
 docs/
-*.md
-!README.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
 
 # CI/CD
 .github/
 .gitlab-ci.yml
 Jenkinsfile
 
-# Docker
+# Docker (avoid recursive inclusion)
 Dockerfile*
 docker-compose*.yml
 .dockerignore
