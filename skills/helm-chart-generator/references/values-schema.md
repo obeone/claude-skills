@@ -278,7 +278,10 @@ defaultPodOptions:
   # Applied to all controllers
   automountServiceAccountToken: true
   enableServiceLinks: false
-  
+
+  imagePullSecrets:
+    - name: registry-credentials      # Secret of type kubernetes.io/dockerconfigjson
+
   securityContext:
     runAsUser: 10001
     runAsGroup: 10001
