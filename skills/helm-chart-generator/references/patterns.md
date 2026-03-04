@@ -218,20 +218,23 @@ ingress:
               port: http
 ```
 
-## StatefulSet with Init Container
+## StatefulSet with Init Container and Headless Service
 
-Database with initialization:
+Database with initialization and stable network identity (required for clustering):
 
 ```yaml
 controllers:
   db:
     type: statefulset
-    
+
+    statefulset:
+      podManagementPolicy: OrderedReady  # Ordered startup for clustered DBs
+
     initContainers:
       init-permissions:
         image:
           repository: busybox
-          tag: latest
+          tag: "1.36"
         command:
           - sh
           - -c
@@ -251,6 +254,18 @@ controllers:
                 name: postgres-secret
                 key: password
 
+        probes:
+          liveness:
+            enabled: true
+            type: EXEC
+            spec:
+              command:
+                - pg_isready
+                - -U
+                - myuser
+              initialDelaySeconds: 30
+              periodSeconds: 10
+
     statefulset:
       volumeClaimTemplates:
         - name: data
@@ -259,9 +274,20 @@ controllers:
           globalMounts:
             - path: /var/lib/postgresql/data
 
+# Regular service for client connections
 service:
   db:
     controller: db
+    ports:
+      postgres:
+        port: 5432
+
+  # Headless service for stable DNS per pod (pod-0.db-headless, pod-1.db-headless, ...)
+  # Required for clustered databases and peer discovery
+  db-headless:
+    controller: db
+    type: ClusterIP
+    clusterIP: None  # Makes it headless
     ports:
       postgres:
         port: 5432
@@ -510,6 +536,49 @@ controllers:
               timeoutSeconds: 3
               failureThreshold: 30
 ```
+
+## Private Registry with imagePullSecrets
+
+Pull images from a private container registry:
+
+```yaml
+# Step 1: Create the pull secret (outside the chart, or via secrets: below)
+# kubectl create secret docker-registry registry-credentials \
+#   --docker-server=registry.example.com \
+#   --docker-username=myuser \
+#   --docker-password=mytoken
+
+# Step 2: Reference in defaultPodOptions (applies to all pods)
+defaultPodOptions:
+  imagePullSecrets:
+    - name: registry-credentials
+
+controllers:
+  app:
+    containers:
+      app:
+        image:
+          repository: registry.example.com/myapp
+          tag: "1.0.0"
+          pullPolicy: IfNotPresent
+
+# Alternative: Create the secret inline (stored in values.yaml — avoid for sensitive data)
+secrets:
+  registry-credentials:
+    type: kubernetes.io/dockerconfigjson
+    stringData:
+      .dockerconfigjson: |
+        {
+          "auths": {
+            "registry.example.com": {
+              "auth": "<base64-encoded user:token>"
+            }
+          }
+        }
+```
+
+> Use an external secret operator (e.g., External Secrets Operator, Sealed Secrets) to
+> avoid committing credentials to version control.
 
 ## Advanced Mounts Pattern
 
