@@ -1,8 +1,8 @@
 ---
 name: helm-chart-generator
-description: "Generate complete Helm charts using the bjw-s-labs common library (app-template). Use when: (1) Creating a new Helm chart for Kubernetes applications, (2) Converting Docker Compose to Helm charts, (3) Setting up controllers with sidecars/init containers, (4) Configuring services, ingress, persistence, or networking, (5) Creating charts with multiple controllers or complex setups. Generates Chart.yaml, values.yaml, templates/common.yaml, and templates/NOTES.txt following bjw-s patterns."
+description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v4+). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, or handling StatefulSets and multi-controller deployments."
 metadata:
-  version: "1.0.1"
+  version: "2.0.0"
 ---
 
 # Helm Chart Generator (bjw-s Common Library)
@@ -31,6 +31,7 @@ Generate production-ready Helm charts using the bjw-s-labs common library (app-t
    - Secrets/ConfigMaps if needed
 
 4. **Validate and refine**
+   - Run `helm dependency update` to fetch dependencies (generates Chart.lock)
    - Use `scripts/validate_chart.py` to check structure
    - Review against `references/best-practices.md`
    - Test with `helm template` and `helm lint`
@@ -130,7 +131,7 @@ controllers:
       main:
         image:
           repository: nginx
-          tag: alpine
+          tag: "1.25-alpine"
           pullPolicy: IfNotPresent
 
 service:
@@ -164,7 +165,7 @@ controllers:
         dependsOn: main
         image:
           repository: sidecar-image
-          tag: latest
+          tag: "1.0.0"
 ```
 
 See `references/patterns.md` for more examples:
@@ -174,6 +175,8 @@ See `references/patterns.md` for more examples:
 - VPN sidecars (gluetun)
 - Code-server sidecars
 - Shared volumes between containers
+- Private registries with `imagePullSecrets`
+- StatefulSets with headless service
 
 ## Best Practices
 
@@ -196,6 +199,7 @@ See `references/patterns.md` for more examples:
 - Set `automountServiceAccountToken: false` unless needed
 - Configure proper `securityContext`
 - Use secrets for sensitive data
+- Use `imagePullSecrets` for private registries (see `references/patterns.md`)
 
 **Persistence:**
 
@@ -205,33 +209,40 @@ See `references/patterns.md` for more examples:
 
 See `references/best-practices.md` for comprehensive guidelines.
 
-## Key Differences from v3.x
-
-If migrating from app-template v3:
-
-1. **No default objects**: Must explicitly name all controllers, services, etc.
-2. **Service references**: Use `identifier` instead of `name`
-3. **Resource naming**: New consistent naming scheme
-4. **ServiceAccount syntax**: Changed from single `default` to multiple named accounts
-
-See chart upgrade documentation for full migration guide.
-
 ## Validation
 
 After generating a chart:
 
 ```bash
-# Validate structure
-python scripts/validate_chart.py /path/to/chart
-
-# Helm validation
+# 1. Fetch dependencies (required before helm commands)
 cd /path/to/chart
+helm dependency update
+
+# 2. Validate structure
+python scripts/validate_chart.py /path/to/chart
+# Or with JSON output for CI:
+python scripts/validate_chart.py --json /path/to/chart
+
+# 3. Helm validation
 helm lint .
 helm template . --debug
 
-# Dry-run installation
+# 4. Dry-run installation
 helm install --dry-run --debug my-release .
 ```
+
+## Pre-Deploy Checklist
+
+Before deploying to a cluster, verify:
+
+- [ ] All image tags are pinned (no `:latest`)
+- [ ] Resources (requests + memory limits) are set on every container
+- [ ] Health probes configured (liveness + readiness minimum)
+- [ ] `securityContext` set: non-root, `readOnlyRootFilesystem`, drop ALL capabilities
+- [ ] `automountServiceAccountToken: false` unless explicitly needed
+- [ ] Secrets reference external sources, not hardcoded values
+- [ ] `helm dependency update` run and `Chart.lock` committed
+- [ ] `helm lint` passes with no errors
 
 ## Common Issues
 
