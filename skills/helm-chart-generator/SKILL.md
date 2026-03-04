@@ -131,7 +131,7 @@ controllers:
       main:
         image:
           repository: nginx
-          tag: alpine
+          tag: "1.25-alpine"
           pullPolicy: IfNotPresent
 
 service:
@@ -165,7 +165,7 @@ controllers:
         dependsOn: main
         image:
           repository: sidecar-image
-          tag: latest
+          tag: "1.0.0"
 ```
 
 See `references/patterns.md` for more examples:
@@ -208,17 +208,6 @@ See `references/patterns.md` for more examples:
 - Specify `existingClaim` for pre-created PVCs
 
 See `references/best-practices.md` for comprehensive guidelines.
-
-## Key Differences from v3.x
-
-If migrating from app-template v3:
-
-1. **No default objects**: Must explicitly name all controllers, services, etc.
-2. **Service references**: Use `identifier` instead of `name`
-3. **Resource naming**: New consistent naming scheme
-4. **ServiceAccount syntax**: Changed from single `default` to multiple named accounts
-
-See chart upgrade documentation for full migration guide.
 
 ## Validation
 
