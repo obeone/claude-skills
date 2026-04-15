@@ -12,7 +12,7 @@ API call itself succeeded (pass or clean fail), exit ``2`` means the call
 raised (spike inconclusive).
 
 Usage:
-    uv run --with "google-genai>=0.8,<1" \\
+    uv run --with "google-genai>=1.0" \\
         python skills/tts-duet/scripts/lib/_spike_system_instruction.py
 """
 

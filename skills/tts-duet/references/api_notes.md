@@ -75,7 +75,7 @@ Spike `_spike_system_instruction.py` determines the flag value in
 duplication.
 
 **Current status**: spike **FAILED** against `gemini-2.5-flash-preview-tts`
-(SDK `google-genai>=0.8,<1`). Baseline TTS calls (no
+(SDK `google-genai>=1.0`). Baseline TTS calls (no
 `system_instruction`) return audio normally; adding `system_instruction`
 alongside `response_modalities=["AUDIO"]` causes consistent
 `ServerError: 500 INTERNAL` across retries. The flag

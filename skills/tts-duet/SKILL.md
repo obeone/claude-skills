@@ -232,7 +232,7 @@ The notifier never raises; failures are logged at DEBUG.
   `OUTPUT_TOKENS_PER_SECOND` constant in `scripts/lib/pricing.py` with
   a ±30 % band (recalibrate after 10 real runs — see
   `references/api_notes.md`).
-- SDK pinned to `google-genai>=0.8,<1`; unpin once a GA ≥ 1.0 ships
+- SDK pinned to `google-genai>=1.0`; `MultiSpeakerVoiceConfig` is only in the 1.x series (0.8.x rejects dual-voice).
   and the `system_instruction` spike is re-validated.
 - **Linux without `notify-send`**: no notifier path is attempted (the
   Kitty route still works if applicable); rely on the `status` file.

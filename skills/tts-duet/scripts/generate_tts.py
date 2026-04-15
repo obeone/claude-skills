@@ -464,7 +464,14 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
         print(audio_io.FFMPEG_MISSING_WARNING, file=sys.stderr)
 
     genai, types_mod = _import_genai()
-    client = genai.Client()
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        print(
+            "ERROR: GEMINI_API_KEY / GOOGLE_API_KEY not set; cannot generate.",
+            file=sys.stderr,
+        )
+        return 1
+    client = genai.Client(api_key=api_key)
     config_obj = _build_config(
         types_mod,
         voice_a,
