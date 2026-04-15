@@ -3,7 +3,7 @@ name: tts-duet
 description: "Author mono or dual-voice audio scripts and generate them with Gemini TTS. Use when you need to produce a podcast-style clip, voice-over, or narrated dialogue from text, estimate generation cost, audition voices, or run long TTS jobs in the background with notification. Triggers on: TTS, text-to-speech, podcast script, dialogue audio, voiceover, gemini-tts."
 metadata:
   version: "1.0.0"
-tools:
+allowed-tools:
   - Read
   - Write
   - Edit
