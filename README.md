@@ -23,8 +23,8 @@ mkdir -p ~/.claude/skills
 curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 
-# Install helm-chart-generator
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-chart-generator.skill \
+# Install helm-bjw-s-chart
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 ```
 
@@ -36,7 +36,7 @@ mkdir -p .claude/skills
 curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
 
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-chart-generator.skill \
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
 ```
 
@@ -55,7 +55,7 @@ git clone https://github.com/obeone/claude-skills.git
 
 # Copy all skills to your skills directory
 cp -r claude-skills/skills/dockerfile-best-practices ~/.claude/skills/
-cp -r claude-skills/skills/helm-chart-generator ~/.claude/skills/
+cp -r claude-skills/skills/helm-bjw-s-chart ~/.claude/skills/
 ```
 
 ### Other Platforms
@@ -103,7 +103,7 @@ python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfi
 python skills/dockerfile-best-practices/scripts/analyze_compose.py ./compose.yaml
 
 # Validate a Helm chart
-python skills/helm-chart-generator/scripts/validate_chart.py ./my-chart/
+python skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
 ```
 
 ## 🎯 Available Skills
@@ -111,7 +111,7 @@ python skills/helm-chart-generator/scripts/validate_chart.py ./my-chart/
 | Skill | Description | Key Features |
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
-| [**helm-chart-generator**](./skills/helm-chart-generator/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
+| [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
 
 ## 🧩 Architecture
 
@@ -186,7 +186,7 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 - **Static analyzer**: Detects 15+ anti-patterns automatically
 - **Compose support**: Modern V2 practices (no `version:`, no `container_name:`)
 
-### helm-chart-generator
+### helm-bjw-s-chart
 
 - **bjw-s common library**: app-template v4+ patterns
 - **Complete chart structure**: Chart.yaml, values.yaml, common.yaml, NOTES.txt
@@ -207,7 +207,7 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 │   └── workflows/        # CI/CD automation
 └── skills/
     ├── dockerfile-best-practices/
-    └── helm-chart-generator/
+    └── helm-bjw-s-chart/
 ```
 
 ### Mandatory Requirements
