@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -155,6 +156,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Warn (only) if estimated duration exceeds this many seconds.",
     )
     parser.add_argument("--background", action="store_true", help="Run in background.")
+    parser.add_argument(
+        "--progress",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Render a tqdm progress bar on stderr with per-chunk in-flight elapsed + ETA. "
+             "Defaults to on when stderr is a TTY, off when piped or redirected. "
+             "Use --no-progress to force-disable.",
+    )
     parser.add_argument(
         "--chunk-if-over-output-seconds",
         type=float,
@@ -413,6 +422,82 @@ def _maybe_cost_drift(
     raise SystemExit(2)
 
 
+def _resolve_progress(flag: bool | None) -> bool:
+    """Auto-enable progress when stderr is an interactive TTY; None=auto."""
+    if flag is not None:
+        return flag
+    return sys.stderr.isatty()
+
+
+class _Progress:
+    """tqdm-based progress bar for the per-chunk API loop.
+
+    Renders a stderr bar with elapsed + ETA across chunks, and a ``postfix``
+    showing the current chunk's in-flight seconds, refreshed every second
+    by a daemon thread while the API call is running. Safe to ``end_chunk``
+    after an exception; ``close`` is idempotent.
+
+    Falls back to a no-op if ``tqdm`` is unavailable (logs a single warning).
+    """
+
+    def __init__(self, enabled: bool, total: int, tick_seconds: float = 1.0) -> None:
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._t_chunk_start = 0.0
+        self._pbar: Any = None
+        if not enabled:
+            return
+        try:
+            from tqdm import tqdm  # noqa: PLC0415 — optional dep
+        except ImportError:
+            LOG.warning("tqdm not installed; install with 'uv pip install tqdm' to enable --progress.")
+            return
+        self._pbar = tqdm(
+            total=total, desc="chunks", unit="chunk",
+            dynamic_ncols=True, mininterval=0.5, file=sys.stderr,
+        )
+        self._tick_seconds = tick_seconds
+
+    def start_chunk(self, idx: int) -> None:
+        if self._pbar is None:
+            return
+        self._t_chunk_start = time.monotonic()
+        self._pbar.set_postfix_str(f"chunk {idx} in flight 0.0s", refresh=True)
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._tick, daemon=True)
+        self._thread.start()
+
+    def _tick(self) -> None:
+        while not self._stop.wait(self._tick_seconds):
+            dt = time.monotonic() - self._t_chunk_start
+            if self._pbar is not None:
+                self._pbar.set_postfix_str(f"in flight {dt:.1f}s", refresh=True)
+
+    def end_chunk(self, ok: bool = True) -> None:
+        if self._pbar is None:
+            return
+        self._stop.set()
+        thread = self._thread
+        self._thread = None
+        if thread is not None:
+            thread.join(timeout=1.0)
+        dt = time.monotonic() - self._t_chunk_start
+        status = "ok" if ok else "failed"
+        self._pbar.set_postfix_str(f"last {dt:.1f}s ({status})", refresh=False)
+        if ok:
+            self._pbar.update(1)
+
+    def close(self) -> None:
+        if self._pbar is None:
+            return
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
+        self._pbar.close()
+        self._pbar = None
+
+
 def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pipeline
     """Execute the full generation pipeline in the current process."""
     script = parse_script(args.script)
@@ -507,28 +592,36 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
     chunk_wavs: list[Path] = []
-    for idx, chunk_content in enumerate(chunks_content, start=1):
-        chunk_path = chunks_dir / f"{output_stem.stem}.chunk{idx:03d}.wav"
-        LOG.info("Generating chunk %d/%d (%d bytes)", idx, len(chunks_content), len(chunk_content))
-        try:
-            response = client.models.generate_content(
-                model=model.id,
-                contents=chunk_content,
-                config=config_obj,
-            )
-        except Exception as exc:  # noqa: BLE001 — surface SDK churn cleanly
-            LOG.error("Chunk %d generation failed: %s", idx, exc)
-            if args.job_dir is not None:
-                _write_status(args.job_dir, "failed", failure_reason="chunk_failed")
-            return 3
-        pcm = _extract_pcm(response)
-        if not pcm:
-            LOG.error("Chunk %d returned no audio.", idx)
-            if args.job_dir is not None:
-                _write_status(args.job_dir, "failed", failure_reason="chunk_failed")
-            return 3
-        audio_io.pcm_to_wav(pcm, chunk_path)
-        chunk_wavs.append(chunk_path)
+    progress = _Progress(_resolve_progress(args.progress), len(chunks_content))
+    try:
+        for idx, chunk_content in enumerate(chunks_content, start=1):
+            chunk_path = chunks_dir / f"{output_stem.stem}.chunk{idx:03d}.wav"
+            LOG.info("Generating chunk %d/%d (%d bytes)", idx, len(chunks_content), len(chunk_content))
+            progress.start_chunk(idx)
+            try:
+                response = client.models.generate_content(
+                    model=model.id,
+                    contents=chunk_content,
+                    config=config_obj,
+                )
+            except Exception as exc:  # noqa: BLE001 — surface SDK churn cleanly
+                progress.end_chunk(ok=False)
+                LOG.error("Chunk %d generation failed: %s", idx, exc)
+                if args.job_dir is not None:
+                    _write_status(args.job_dir, "failed", failure_reason="chunk_failed")
+                return 3
+            pcm = _extract_pcm(response)
+            if not pcm:
+                progress.end_chunk(ok=False)
+                LOG.error("Chunk %d returned no audio.", idx)
+                if args.job_dir is not None:
+                    _write_status(args.job_dir, "failed", failure_reason="chunk_failed")
+                return 3
+            audio_io.pcm_to_wav(pcm, chunk_path)
+            chunk_wavs.append(chunk_path)
+            progress.end_chunk(ok=True)
+    finally:
+        progress.close()
 
     final_wav = output_stem.with_suffix(".wav")
     try:

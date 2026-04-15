@@ -137,6 +137,7 @@ generate_tts.py --script SCRIPT.md --output NAME
   [--style "warm tone, calm pace"]
   [--max-duration SECONDS]
   [--background]
+  [--progress | --no-progress]        # auto-on when stderr is a TTY
   [--chunk-if-over-output-seconds 480]
   [--max-input-tokens 30000]
   [--job-dir ./.tts-jobs/<uuid>/]
