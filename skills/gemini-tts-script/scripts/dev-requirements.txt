@@ -1,0 +1,2 @@
+# Dev-only: used by the STT leakage E2E test (§5.3). Not installed for runtime.
+openai-whisper>=20231117
