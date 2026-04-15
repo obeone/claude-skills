@@ -11,6 +11,34 @@
 
 ---
 
+## 🔄 Breaking Change — `helm-chart-generator` renamed to `helm-bjw-s-chart` (v3.0.0)
+
+Starting with release **v3.0.0**, the skill formerly known as **`helm-chart-generator`** is now called **`helm-bjw-s-chart`** to make its scope explicit (it targets the `bjw-s` common library, not generic Helm charts).
+
+**What changes for you:**
+
+| Before (<= v2.x) | After (>= v3.0.0) |
+|---|---|
+| Skill directory: `skills/helm-chart-generator/` | `skills/helm-bjw-s-chart/` |
+| Release asset: `helm-chart-generator.skill` | `helm-bjw-s-chart.skill` |
+| Install path: `~/.claude/skills/helm-chart-generator/` | `~/.claude/skills/helm-bjw-s-chart/` |
+| Agent/skill reference: `helm-chart-generator` | `helm-bjw-s-chart` |
+
+**Migration:**
+
+```bash
+# 1. Remove the old skill
+rm -rf ~/.claude/skills/helm-chart-generator
+
+# 2. Install the new one (see Installation section below)
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+```
+
+Any automation, doc, or agent still pointing to the old URL or name will break at the first install/refresh after v3.0.0 ships.
+
+---
+
 ## 📦 Installation
 
 ### Claude Code (CLI)

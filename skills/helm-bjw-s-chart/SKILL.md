@@ -7,6 +7,8 @@ metadata:
 
 # Helm bjw-s Chart Generator
 
+> **🔄 Renamed in v3.0.0** — This skill was previously published as `helm-chart-generator`. If an agent, automation, or documentation still references the old name (`helm-chart-generator`, `helm-chart-generator.skill`, `skills/helm-chart-generator/`), update it to `helm-bjw-s-chart`. The old asset URL will 404 from v3.0.0 onward.
+
 Generate production-ready Helm charts using the bjw-s-labs common library (app-template v4+).
 
 ## Quick Start Workflow
