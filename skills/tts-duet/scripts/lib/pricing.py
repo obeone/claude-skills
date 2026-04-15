@@ -79,11 +79,14 @@ FLASH: ModelPricing = ModelPricing(
 #: Canonical registry keyed by the CLI alias.
 MODELS: dict[str, ModelPricing] = {"pro": PRO, "flash": FLASH}
 
-#: Rough conversion from output-token count to audio seconds.
+#: Audio-output tokens per second of generated speech.
 #:
-#: This is a best-effort constant; recalibrate after 10 real runs per ADR
-#: follow-up (e) if the observed mean deviates by more than ±10 %.
-OUTPUT_TOKENS_PER_SECOND: int = 1000
+#: Empirically measured against ``gemini-2.5-flash-preview-tts``:
+#: 55 audio tokens for 2.21 s of 24 kHz PCM output → 24.89 tok/s, which
+#: also matches the natural 24 kHz / ~960-sample-per-token granularity.
+#: Keep widening via the ±``ESTIMATE_BAND_PCT`` band until more runs are
+#: sampled; bump this constant only if the observed mean drifts > ±10 %.
+OUTPUT_TOKENS_PER_SECOND: int = 25
 
 #: Default uncertainty band (percent) surfaced by ``estimate_cost.py --json``.
 #:
