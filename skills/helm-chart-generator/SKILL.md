@@ -1,259 +1,64 @@
 ---
 name: helm-chart-generator
-description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v4+). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, or handling StatefulSets and multi-controller deployments."
+description: "[DEPRECATED — DO NOT USE] This skill has been renamed to `helm-bjw-s-chart` in v3.0.0. If you loaded this skill, install and trigger `helm-bjw-s-chart` instead. Do not invoke this package — it only contains a deprecation notice."
 metadata:
-  version: "2.0.0"
+  version: "3.0.0"
+  deprecated: true
+  superseded_by: "helm-bjw-s-chart"
 ---
 
-# Helm Chart Generator (bjw-s Common Library)
+# ⚠️ DEPRECATED — This skill has been renamed
 
-Generate production-ready Helm charts using the bjw-s-labs common library (app-template v4+).
+**`helm-chart-generator` was renamed to [`helm-bjw-s-chart`](../helm-bjw-s-chart/) in v3.0.0.**
 
-## Quick Start Workflow
+The new name makes the scope explicit: this skill targets the
+[bjw-s common library](https://github.com/bjw-s-labs/helm-charts) (app-template
+v4+), not generic Helm charts.
 
-1. **Understand the application**
-   - Ask about the container image, ports, environment variables
-   - Identify if sidecars/init containers are needed
-   - Determine storage requirements (config, data, logs)
-   - Check if ingress/networking is required
+This package is kept only as a deprecation shim so that stale install URLs
+and cloned paths land on a clear redirect instead of silently breaking.
 
-2. **Generate base structure**
-   - Use templates from `assets/templates/`
-   - Start with Chart.yaml and basic values.yaml
-   - Add templates/common.yaml (minimal, just includes library)
-   - Create templates/NOTES.txt for post-install instructions
+## If you are a human
 
-3. **Build values.yaml progressively**
-   - Controllers and containers (main app + sidecars if needed)
-   - Services (one per controller or port)
-   - Ingress if web-accessible
-   - Persistence for stateful data
-   - Secrets/ConfigMaps if needed
-
-4. **Validate and refine**
-   - Run `helm dependency update` to fetch dependencies (generates Chart.lock)
-   - Use `scripts/validate_chart.py` to check structure
-   - Review against `references/best-practices.md`
-   - Test with `helm template` and `helm lint`
-
-## Core Structure
-
-Every chart consists of:
-
-```text
-my-app/
-├── Chart.yaml           # Chart metadata and dependencies
-├── values.yaml          # Configuration values
-└── templates/
-    ├── common.yaml      # Includes the bjw-s library
-    └── NOTES.txt        # Post-install instructions
-```
-
-### Chart.yaml Template
-
-```yaml
-apiVersion: v2
-name: <app-name>
-description: <brief description>
-type: application
-version: 1.0.0
-appVersion: "<app version>"
-dependencies:
-  - name: common
-    repository: https://bjw-s-labs.github.io/helm-charts
-    version: 4.6.0  # Latest stable version
-```
-
-### templates/common.yaml (Always the same)
-
-```yaml
-{{- include "bjw-s.common.loader.all" . }}
-```
-
-### templates/NOTES.txt
-
-Provide useful post-install information:
-
-- How to access the application
-- Default credentials if any
-- Next steps for configuration
-
-## values.yaml Structure
-
-Follow this order for clarity:
-
-```yaml
-# 1. Default Pod options (optional)
-defaultPodOptions:
-  securityContext: {}
-  annotations: {}
-
-# 2. Controllers (required)
-controllers:
-  main:  # or custom name
-    containers:
-      main:  # or custom name
-        image: {}
-        env: {}
-        probes: {}
-
-# 3. Service (required if exposing)
-service:
-  main:
-    controller: main
-    ports: {}
-
-# 4. Ingress (optional)
-ingress:
-  main:
-    className: ""
-    hosts: []
-
-# 5. Persistence (optional)
-persistence:
-  config:
-    type: persistentVolumeClaim
-    # or: emptyDir, configMap, secret, nfs, hostPath
-
-# 6. ConfigMaps/Secrets (optional)
-configMaps: {}
-secrets: {}
-```
-
-## Common Patterns
-
-### Single Container Application
-
-```yaml
-controllers:
-  main:
-    containers:
-      main:
-        image:
-          repository: nginx
-          tag: "1.25-alpine"
-          pullPolicy: IfNotPresent
-
-service:
-  main:
-    controller: main
-    ports:
-      http:
-        port: 80
-
-persistence:
-  config:
-    type: persistentVolumeClaim
-    accessMode: ReadWriteOnce
-    size: 1Gi
-    globalMounts:
-      - path: /config
-```
-
-### Application with Sidecar
-
-```yaml
-controllers:
-  main:
-    containers:
-      main:
-        image:
-          repository: myapp
-          tag: latest
-      
-      sidecar:
-        dependsOn: main
-        image:
-          repository: sidecar-image
-          tag: "1.0.0"
-```
-
-See `references/patterns.md` for more examples:
-
-- Multi-controller setups
-- Init containers
-- VPN sidecars (gluetun)
-- Code-server sidecars
-- Shared volumes between containers
-- Private registries with `imagePullSecrets`
-- StatefulSets with headless service
-
-## Best Practices
-
-**Always:**
-
-- Use specific image tags, never `:latest`
-- Set resource limits and requests
-- Configure health checks (liveness, readiness, startup)
-- Use non-root security contexts when possible
-- Reference services by identifier, not name
-
-**Naming:**
-
-- Controllers: Use descriptive names (not just "main")
-- Containers: Use descriptive names (not just "main")
-- Services: Match controller name or purpose
-
-**Security:**
-
-- Set `automountServiceAccountToken: false` unless needed
-- Configure proper `securityContext`
-- Use secrets for sensitive data
-- Use `imagePullSecrets` for private registries (see `references/patterns.md`)
-
-**Persistence:**
-
-- Use `globalMounts` for simple cases
-- Use `advancedMounts` for complex multi-container scenarios
-- Specify `existingClaim` for pre-created PVCs
-
-See `references/best-practices.md` for comprehensive guidelines.
-
-## Validation
-
-After generating a chart:
+You probably got here because you followed a stale URL or cloned the old
+directory path. Replace your installation:
 
 ```bash
-# 1. Fetch dependencies (required before helm commands)
-cd /path/to/chart
-helm dependency update
+# Remove the old skill
+rm -rf ~/.claude/skills/helm-chart-generator
+rm -rf .claude/skills/helm-chart-generator
 
-# 2. Validate structure
-python scripts/validate_chart.py /path/to/chart
-# Or with JSON output for CI:
-python scripts/validate_chart.py --json /path/to/chart
-
-# 3. Helm validation
-helm lint .
-helm template . --debug
-
-# 4. Dry-run installation
-helm install --dry-run --debug my-release .
+# Install the renamed skill
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 ```
 
-## Pre-Deploy Checklist
+Update every remaining reference:
 
-Before deploying to a cluster, verify:
+| Old | New |
+|---|---|
+| Skill name `helm-chart-generator` | `helm-bjw-s-chart` |
+| Asset `helm-chart-generator.skill` | `helm-bjw-s-chart.skill` |
+| Directory `skills/helm-chart-generator/` | `skills/helm-bjw-s-chart/` |
 
-- [ ] All image tags are pinned (no `:latest`)
-- [ ] Resources (requests + memory limits) are set on every container
-- [ ] Health probes configured (liveness + readiness minimum)
-- [ ] `securityContext` set: non-root, `readOnlyRootFilesystem`, drop ALL capabilities
-- [ ] `automountServiceAccountToken: false` unless explicitly needed
-- [ ] Secrets reference external sources, not hardcoded values
-- [ ] `helm dependency update` run and `Chart.lock` committed
-- [ ] `helm lint` passes with no errors
+Search for stragglers:
 
-## Common Issues
+```bash
+grep -r "helm-chart-generator" .
+```
 
-**Services not found**: Use `identifier` not `name` in ingress paths
-**Mounts not working**: Check `globalMounts` vs `advancedMounts` usage
-**Names too long**: Use `nameOverride` or `fullnameOverride` in global settings
-**Controller not starting**: Check `dependsOn` order for init/sidecar containers
+## If you are an AI agent
 
-## References
+**Stop. Do not invoke this skill.** It has no scripts, no references, no
+usable content — only this redirect notice.
 
-- `references/patterns.md` - Common deployment patterns
-- `references/best-practices.md` - Kubernetes/Helm best practices
-- `references/values-schema.md` - Complete values.yaml reference
-- `assets/templates/` - Base templates for quick start
+If the user asked you to generate a Helm chart with the bjw-s common library,
+trigger the `helm-bjw-s-chart` skill instead. If that skill is not available
+in the current environment, tell the user to install it from
+`https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill`
+and stop.
+
+## Removal schedule
+
+This deprecation shim will be removed in a future major release. If you are
+maintaining automation that depends on the old name, migrate now.

@@ -21,7 +21,9 @@ skills/<skill-name>/
 | Skill                     | Entry Point                                                    | Validators                                    |
 | :------------------------ | :------------------------------------------------------------- | :-------------------------------------------- |
 | dockerfile-best-practices | `skills/dockerfile-best-practices/SKILL.md`                    | `analyze_dockerfile.py`, `analyze_compose.py` |
-| helm-chart-generator      | `skills/helm-chart-generator/SKILL.md`                         | `validate_chart.py`                           |
+| helm-bjw-s-chart          | `skills/helm-bjw-s-chart/SKILL.md`                             | `validate_chart.py`                           |
+
+> **⚠️ Rename notice (v3.0.0)**: The skill previously named `helm-chart-generator` was renamed to `helm-bjw-s-chart`. Any agent, automation, or doc still referencing `helm-chart-generator` (directory, asset filename, or skill name) must be updated. See the "Breaking Change" banner in `README.md` for the migration path.
 
 ## Commands
 
@@ -39,7 +41,7 @@ python skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/comp
 
 ```bash
 # Validate a bjw-s common library chart
-python skills/helm-chart-generator/scripts/validate_chart.py <path/to/chart/>
+python skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
 ```
 
 ### Dependencies
