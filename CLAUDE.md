@@ -21,7 +21,7 @@ skills/<skill-name>/
 | Skill                     | Entry Point                                                    | Validators                                    |
 | :------------------------ | :------------------------------------------------------------- | :-------------------------------------------- |
 | dockerfile-best-practices | `skills/dockerfile-best-practices/SKILL.md`                    | `analyze_dockerfile.py`, `analyze_compose.py` |
-| helm-chart-generator      | `skills/helm-chart-generator/SKILL.md`                         | `validate_chart.py`                           |
+| helm-bjw-s-chart          | `skills/helm-bjw-s-chart/SKILL.md`                             | `validate_chart.py`                           |
 
 ## Commands
 
@@ -39,7 +39,7 @@ python skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/comp
 
 ```bash
 # Validate a bjw-s common library chart
-python skills/helm-chart-generator/scripts/validate_chart.py <path/to/chart/>
+python skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
 ```
 
 ### Dependencies
