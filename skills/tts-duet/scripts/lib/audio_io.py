@@ -1,4 +1,4 @@
-"""Audio I/O helpers for the gemini-tts-script skill.
+"""Audio I/O helpers for the tts-duet skill.
 
 The Gemini TTS preview models return **raw PCM** (little-endian signed
 16-bit, 24 kHz, mono) rather than a WAV file; this module handles the

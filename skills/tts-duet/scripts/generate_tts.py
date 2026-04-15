@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate TTS audio from a script file using Gemini TTS.
 
-Primary CLI for the ``gemini-tts-script`` skill. See
+Primary CLI for the ``tts-duet`` skill. See
 ``SKILL.md`` §7 for the full exit-code table and §3.3 of the plan for
 the behavioural contract.
 

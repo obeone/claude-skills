@@ -140,7 +140,7 @@ python skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
-| [**gemini-tts-script**](./skills/gemini-tts-script/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS | Offline cost estimate, voice audition, background jobs, notification chain |
+| [**tts-duet**](./skills/tts-duet/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS | Offline cost estimate, voice audition, background jobs, notification chain |
 
 ## 🧩 Architecture
 

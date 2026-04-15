@@ -22,7 +22,7 @@ skills/<skill-name>/
 | :------------------------ | :------------------------------------------------------------- | :-------------------------------------------- |
 | dockerfile-best-practices | `skills/dockerfile-best-practices/SKILL.md`                    | `analyze_dockerfile.py`, `analyze_compose.py` |
 | helm-bjw-s-chart          | `skills/helm-bjw-s-chart/SKILL.md`                             | `validate_chart.py`                           |
-| gemini-tts-script         | `skills/gemini-tts-script/SKILL.md`                            | `list_voices.py --validate`, `_gen_api_notes_pricing.py --check` |
+| tts-duet                  | `skills/tts-duet/SKILL.md`                                     | `list_voices.py --validate`, `_gen_api_notes_pricing.py --check` |
 
 > **⚠️ Rename notice (v3.0.0)**: The skill previously named `helm-chart-generator` was renamed to `helm-bjw-s-chart`. Any agent, automation, or doc still referencing `helm-chart-generator` (directory, asset filename, or skill name) must be updated. See the "Breaking Change" banner in `README.md` for the migration path.
 
@@ -49,15 +49,15 @@ python skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
 
 ```bash
 # List voices / presets (and validate preset coverage)
-python skills/gemini-tts-script/scripts/list_voices.py --validate
+python skills/tts-duet/scripts/list_voices.py --validate
 
 # Estimate cost offline
-python skills/gemini-tts-script/scripts/estimate_cost.py \
-  --script skills/gemini-tts-script/assets/script_template.md --model flash --json
+python skills/tts-duet/scripts/estimate_cost.py \
+  --script skills/tts-duet/assets/script_template.md --model flash --json
 
 # Generate (requires GEMINI_API_KEY)
-python skills/gemini-tts-script/scripts/generate_tts.py \
-  --script skills/gemini-tts-script/assets/script_template.md \
+python skills/tts-duet/scripts/generate_tts.py \
+  --script skills/tts-duet/assets/script_template.md \
   --preset podcast-chill --output /tmp/demo --format mp3 --yes
 ```
 

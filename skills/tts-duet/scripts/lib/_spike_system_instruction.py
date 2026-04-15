@@ -13,7 +13,7 @@ raised (spike inconclusive).
 
 Usage:
     uv run --with "google-genai>=0.8,<1" \\
-        python skills/gemini-tts-script/scripts/lib/_spike_system_instruction.py
+        python skills/tts-duet/scripts/lib/_spike_system_instruction.py
 """
 
 from __future__ import annotations

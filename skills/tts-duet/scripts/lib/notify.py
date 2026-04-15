@@ -1,4 +1,4 @@
-"""Cross-platform notification chain for the gemini-tts-script skill.
+"""Cross-platform notification chain for the tts-duet skill.
 
 A single entry point, :func:`notify`, tries notifiers in order and
 returns the name of the first one that succeeded:

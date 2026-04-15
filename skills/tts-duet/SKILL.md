@@ -1,5 +1,5 @@
 ---
-name: gemini-tts-script
+name: tts-duet
 description: "Author mono or dual-voice audio scripts and generate them with Gemini TTS. Use when you need to produce a podcast-style clip, voice-over, or narrated dialogue from text, estimate generation cost, audition voices, or run long TTS jobs in the background with notification. Triggers on: TTS, text-to-speech, podcast script, dialogue audio, voiceover, gemini-tts."
 metadata:
   version: "1.0.0"
@@ -39,7 +39,7 @@ background-job lane for anything longer than a few minutes.
   generation only**. Parsing, estimation, voice listing and preset
   validation work offline.
 - Python 3.10+ and `uv` (recommended):
-  `uv pip install -r skills/gemini-tts-script/scripts/requirements.txt`.
+  `uv pip install -r skills/tts-duet/scripts/requirements.txt`.
 - Optional: `ffmpeg` (MP3 transcoding), `kitten` (Kitty notification),
   `alerter` (macOS actionable notifications).
 
@@ -66,7 +66,7 @@ background-job lane for anything longer than a few minutes.
 ## 4. Repository layout
 
 ```
-skills/gemini-tts-script/
+skills/tts-duet/
 ├── SKILL.md                              # this file
 ├── scripts/
 │   ├── generate_tts.py                   # primary CLI

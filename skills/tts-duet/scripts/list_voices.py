@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List voices and presets known to the gemini-tts-script skill.
+"""List voices and presets known to the tts-duet skill.
 
 Default output is a human-readable table; ``--json`` emits a stable
 JSON document with the full catalog. ``--preset NAME`` restricts the
@@ -123,7 +123,7 @@ def _format_text(
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. See module docstring."""
     parser = argparse.ArgumentParser(
-        description="List voices and presets for the gemini-tts-script skill.",
+        description="List voices and presets for the tts-duet skill.",
     )
     parser.add_argument(
         "--preset",
