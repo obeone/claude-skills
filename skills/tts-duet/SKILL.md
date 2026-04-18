@@ -43,6 +43,14 @@ background-job lane for anything longer than a few minutes.
 - Optional: `ffmpeg` (MP3 transcoding), `kitten` (Kitty notification),
   `alerter` (macOS actionable notifications).
 
+### Quick Start: Setup
+
+Run `/tts-duet-setup` in Claude Code to interactively generate a config file
+with your preferred model, format, preset, and director behavior. The
+command supports `--scope user` (default, writes `~/.config/tts-duet/config.yaml`)
+and `--scope project` (writes `./tts-duet.yaml`). CLI flags on `generate_tts.py`
+always override config values.
+
 ## 3. Workflow (agent-facing)
 
 1. **Write / normalize** the script. See §5 and
@@ -256,3 +264,5 @@ The notifier never raises; failures are logged at DEBUG.
   multi-speaker requirements, auto-generated pricing).
 - `assets/script_template.md` — runnable reference script.
 - `assets/preview_text.md` — default preview snippet.
+- `commands/tts-duet-setup.md` — `/tts-duet-setup` slash command: interactive
+  config wizard for `~/.config/tts-duet/config.yaml` or `./tts-duet.yaml`.
