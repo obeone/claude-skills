@@ -27,11 +27,13 @@ import sys
 import threading
 import time
 import uuid
+import wave
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import _config, audio_io, notify as notify_mod  # noqa: E402
+from lib.config import load_config  # noqa: E402
 from lib.pricing import (  # noqa: E402
     ESTIMATE_BAND_PCT,
     estimate_cost_usd,
@@ -124,7 +126,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--voice", help="Voice name for mono mode.")
     parser.add_argument(
         "--model",
-        default="pro",
+        default=None,
         help="Model alias (pro/flash) or full Gemini model ID.",
     )
     parser.add_argument(
@@ -138,7 +140,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--format",
         choices=("wav", "mp3", "both"),
-        default="mp3",
+        default=None,
         help="Output format. Default: mp3 if ffmpeg else wav + warning.",
     )
     parser.add_argument(
@@ -195,6 +197,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--keep-wav",
         action="store_true",
         help="Keep intermediate WAV after MP3 transcoding.",
+    )
+    parser.add_argument(
+        "--resume",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Reuse existing chunk WAVs in <chunks_dir>/ if present and valid. "
+            "Default off."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -402,6 +413,49 @@ def _reexec_in_background(
 # ---------------------------------------------------------------------------
 
 
+def _discover_valid_chunks(
+    chunks_dir: Path,
+    stem: str,
+    expected_count: int,
+) -> list[Path | None]:
+    """Scan chunks_dir for existing valid chunk WAVs.
+
+    For each expected index (1..expected_count) checks whether
+    ``<stem>.chunkNNN.wav`` exists and is a readable WAV with nframes > 0.
+
+    Parameters
+    ----------
+    chunks_dir : Path
+        Directory to scan.
+    stem : str
+        Output file stem (e.g. ``"output"``).
+    expected_count : int
+        Number of chunks in the current plan.
+
+    Returns
+    -------
+    list of Path or None
+        List of length ``expected_count``. Each element is either the
+        validated Path if the chunk exists and is valid, or ``None``.
+    """
+    result: list[Path | None] = []
+    for idx in range(1, expected_count + 1):
+        chunk_path = chunks_dir / f"{stem}.chunk{idx:03d}.wav"
+        if not chunk_path.exists() or chunk_path.stat().st_size == 0:
+            result.append(None)
+            continue
+        try:
+            with wave.open(str(chunk_path), "rb") as wf:
+                nframes = wf.getnframes()
+            if nframes > 0:
+                result.append(chunk_path)
+            else:
+                result.append(None)
+        except Exception:  # noqa: BLE001 — corrupt WAV, treat as missing
+            result.append(None)
+    return result
+
+
 def _maybe_cost_drift(
     estimated_cost: float,
     approved: float | None,
@@ -440,7 +494,13 @@ class _Progress:
     Falls back to a no-op if ``tqdm`` is unavailable (logs a single warning).
     """
 
-    def __init__(self, enabled: bool, total: int, tick_seconds: float = 1.0) -> None:
+    def __init__(
+        self,
+        enabled: bool,
+        total: int,
+        tick_seconds: float = 1.0,
+        initial: int = 0,
+    ) -> None:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._t_chunk_start = 0.0
@@ -453,7 +513,7 @@ class _Progress:
             LOG.warning("tqdm not installed; install with 'uv pip install tqdm' to enable --progress.")
             return
         self._pbar = tqdm(
-            total=total, desc="chunks", unit="chunk",
+            total=total, initial=initial, desc="chunks", unit="chunk",
             dynamic_ncols=True, mininterval=0.5, file=sys.stderr,
         )
         self._tick_seconds = tick_seconds
@@ -498,8 +558,56 @@ class _Progress:
         self._pbar = None
 
 
+def _cli_overrides_from_args(args: argparse.Namespace) -> dict:
+    """Build a config override dict from only the CLI flags the user explicitly set.
+
+    Uses ``None`` as a sentinel: argparse args that were not provided on
+    the CLI keep their ``default=None`` value and are therefore excluded
+    from the returned dict, so they never shadow config-file values.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed CLI namespace.
+
+    Returns
+    -------
+    dict
+        Nested dict in config-file shape (``{"defaults": {...}, ...}``),
+        containing only values explicitly supplied on the command line.
+    """
+    overrides: dict = {}
+    defaults_section: dict = {}
+    if args.model is not None:
+        defaults_section["model"] = args.model
+    if args.format is not None:
+        defaults_section["format"] = args.format
+    if args.preset is not None:
+        defaults_section["preset"] = args.preset
+    if args.approved_cost_usd is not None:
+        defaults_section["approved_cost_usd"] = args.approved_cost_usd
+    if defaults_section:
+        overrides["defaults"] = defaults_section
+    return overrides
+
+
 def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pipeline
     """Execute the full generation pipeline in the current process."""
+    # Load merged config; CLI flags override only when explicitly set.
+    config = load_config(cli_overrides=_cli_overrides_from_args(args))
+
+    # Resolve the four config-backed options: CLI value wins if set,
+    # otherwise fall back to the merged config.
+    model_alias: str = args.model if args.model is not None else config.defaults.model
+    output_format: str = args.format if args.format is not None else config.defaults.format
+    # Inject resolved values back so downstream helpers see consistent state.
+    args.model = model_alias
+    args.format = output_format
+    if args.preset is None:
+        args.preset = config.defaults.preset
+    if args.approved_cost_usd is None:
+        args.approved_cost_usd = config.defaults.approved_cost_usd
+
     script = parse_script(args.script)
     voice_a, voice_b, experimental = _resolve_voices(args)
     if experimental and args.preset:
@@ -591,12 +699,65 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
     chunks_dir = (args.job_dir or work_dir) / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
+    # ------------------------------------------------------------------
+    # Resume: mismatch guard + chunk discovery
+    # ------------------------------------------------------------------
+    expected_count = len(chunks_content)
+    discovered: list[Path | None] = [None] * expected_count
+    valid_count = 0
+
+    if args.resume:
+        # Count all *.chunkNNN.wav files present in chunks_dir.
+        import re as _re  # noqa: PLC0415
+        _chunk_re = _re.compile(r"\.chunk\d{3}\.wav$")
+        existing_chunk_files = [
+            p for p in chunks_dir.iterdir()
+            if p.is_file() and _chunk_re.search(p.name)
+        ]
+        if len(existing_chunk_files) > expected_count:
+            print(
+                f"Resume: {len(existing_chunk_files)} existing chunk WAVs in "
+                f"{chunks_dir} don't match current plan of {expected_count} chunks. "
+                f"Remove chunks/ or drop --resume.",
+                file=sys.stderr,
+            )
+            if args.job_dir is not None:
+                _write_status(args.job_dir, "failed", failure_reason="resume_mismatch")
+            return 1
+
+        discovered = _discover_valid_chunks(chunks_dir, output_stem.stem, expected_count)
+        valid_count = sum(1 for p in discovered if p is not None)
+        missing_count = expected_count - valid_count
+        LOG.info(
+            "Resume: %d/%d chunks discovered, %d to generate",
+            valid_count,
+            expected_count,
+            missing_count,
+        )
+
     chunk_wavs: list[Path] = []
-    progress = _Progress(_resolve_progress(args.progress), len(chunks_content))
+    progress = _Progress(
+        _resolve_progress(args.progress),
+        total=expected_count,
+        initial=valid_count,
+    )
     try:
         for idx, chunk_content in enumerate(chunks_content, start=1):
             chunk_path = chunks_dir / f"{output_stem.stem}.chunk{idx:03d}.wav"
-            LOG.info("Generating chunk %d/%d (%d bytes)", idx, len(chunks_content), len(chunk_content))
+
+            # Resume: reuse valid existing chunk.
+            if args.resume and discovered[idx - 1] is not None:
+                existing = discovered[idx - 1]
+                LOG.info(
+                    "Skipping chunk %d/%d (resume, valid WAV at %s)",
+                    idx,
+                    expected_count,
+                    existing,
+                )
+                chunk_wavs.append(existing)  # type: ignore[arg-type]
+                continue
+
+            LOG.info("Generating chunk %d/%d (%d bytes)", idx, expected_count, len(chunk_content))
             progress.start_chunk(idx)
             try:
                 response = client.models.generate_content(
