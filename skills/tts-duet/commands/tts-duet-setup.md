@@ -134,8 +134,8 @@ were not presented in the questions, e.g. future extension keys). If the
 file was new, build from scratch with only the two sections `defaults` and
 `director`.
 
-Construct the final YAML content. Use this exact structure (omit
-`approved_cost_usd` line if value is null/none):
+Construct the final YAML content. Use this exact structure (always write
+`approved_cost_usd: null` when no cap is set — do not omit the key):
 
 ```yaml
 defaults:
@@ -166,10 +166,10 @@ cleanly:
 
 ```bash
 uv run --with pyyaml python -c "
-import sys
-sys.path.insert(0, 'skills/tts-duet/scripts')
+import sys; sys.path.insert(0, 'skills/tts-duet/scripts')
+from pathlib import Path
 from lib.config import load_config
-cfg = load_config()
+cfg = load_config(project_path=Path('/nonexistent'))
 print('defaults.model =', cfg.defaults.model)
 print('defaults.format =', cfg.defaults.format)
 print('defaults.preset =', cfg.defaults.preset)

@@ -728,12 +728,25 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
                     os.environ.get("GEMINI_API_KEY")
                     or os.environ.get("GOOGLE_API_KEY")
                 )
-                _enriched_script_text = auto_direct(
-                    _script_for_director,
-                    model=_director_model_alias,
-                    genre=_genre,
-                    api_key=_api_key,
-                )
+                try:
+                    _enriched_script_text = auto_direct(
+                        _script_for_director,
+                        model=_director_model_alias,
+                        genre=_genre,
+                        api_key=_api_key,
+                    )
+                except (RuntimeError, SystemExit) as _director_exc:
+                    LOG.error("Director pass failed: %s", _director_exc)
+                    if args.job_dir is not None:
+                        _write_status(
+                            args.job_dir, "failed", failure_reason="director_failed"
+                        )
+                    print(
+                        "ERROR: director pass failed. Retry with --no-auto-direct to "
+                        "bypass, or re-run after investigating the LLM error above.",
+                        file=sys.stderr,
+                    )
+                    return 1
                 # Persist enriched script when we have a job dir.
                 if _enriched_script_path is not None:
                     _enriched_script_path.write_text(
@@ -748,14 +761,20 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
         return 0
 
     # Use enriched script if produced, otherwise the original.
+    _tmp_script_path: str | None = None
     if _enriched_script_text:
+        import atexit as _atexit  # noqa: PLC0415
         import tempfile as _tempfile  # noqa: PLC0415
         _tmp = _tempfile.NamedTemporaryFile(
             mode="w", suffix=".md", delete=False, encoding="utf-8"
         )
         _tmp.write(_enriched_script_text)
         _tmp.close()
-        _effective_script_path = _tmp.name
+        _tmp_script_path = _tmp.name
+        _effective_script_path = _tmp_script_path
+        # Register cleanup so the temp file is removed on exit even if we
+        # return early via an exception or error path below.
+        _atexit.register(os.unlink, _tmp_script_path)
     else:
         _effective_script_path = args.script
 
@@ -865,7 +884,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
             p for p in chunks_dir.iterdir()
             if p.is_file() and _chunk_re.search(p.name)
         ]
-        if len(existing_chunk_files) > expected_count:
+        if len(existing_chunk_files) != expected_count and len(existing_chunk_files) > 0:
             print(
                 f"Resume: {len(existing_chunk_files)} existing chunk WAVs in "
                 f"{chunks_dir} don't match current plan of {expected_count} chunks. "

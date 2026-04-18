@@ -185,8 +185,9 @@ def auto_direct(
     script_text : str
         The raw script text to enrich.
     model : {"flash", "pro"}
-        Model tier. ``"flash"`` maps to ``gemini-2.5-flash-preview-tts``;
-        ``"pro"`` maps to ``gemini-2.5-pro-preview-tts``.
+        Model tier. ``"flash"`` maps to ``gemini-2.5-flash``;
+        ``"pro"`` maps to ``gemini-2.5-pro`` (text-only models, not the
+        ``-preview-tts`` audio variants).
     genre : str or None
         Genre hint appended to the prompt (e.g. ``"pedagogical"``,
         ``"interview"``, ``"narrative"``). ``None`` omits the hint.
