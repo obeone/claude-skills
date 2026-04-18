@@ -246,6 +246,9 @@ The notifier never raises; failures are logged at DEBUG.
 
 ## 11. References
 
+- `references/voice_pairs_guide.md` — recommended voice pairs by use
+  case, inline-tag rules, Director's Notes structure, authoring
+  anti-patterns. **Read before picking `--preset` / `--voice1/2`.**
 - `references/script_format.md` — full input-format spec.
 - `references/voices_catalog.md` — 30-voice table + pre-tag audition
   checklist.
