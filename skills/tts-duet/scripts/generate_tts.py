@@ -41,6 +41,7 @@ from lib.pricing import (  # noqa: E402
     estimate_output_tokens,
     resolve_model,
 )
+from lib.director import auto_direct, has_director_notes  # noqa: E402
 from lib.script_parser import (  # noqa: E402
     ParsedScript,
     Turn,
@@ -206,6 +207,45 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
             "Reuse existing chunk WAVs in <chunks_dir>/ if present and valid. "
             "Default off."
         ),
+    )
+    # ------------------------------------------------------------------
+    # Director pass flags
+    # ------------------------------------------------------------------
+    parser.add_argument(
+        "--auto-direct",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="auto_direct",
+        help=(
+            "Run the Director LLM pre-TTS pass to enrich the script with "
+            "Director's Notes and inline [tag] directives. "
+            "Default: follows config director.mode (auto|always|off)."
+        ),
+    )
+    parser.add_argument(
+        "--show-directed-script",
+        action="store_true",
+        default=False,
+        dest="show_directed_script",
+        help=(
+            "Dry-run: print the enriched script to stdout after the director "
+            "pass and exit 0 without calling TTS."
+        ),
+    )
+    parser.add_argument(
+        "--genre",
+        default=None,
+        help=(
+            "Genre hint for the director pass (e.g. 'pedagogical', 'interview'). "
+            "Overrides config director.genre_default."
+        ),
+    )
+    parser.add_argument(
+        "--director-model",
+        choices=("flash", "pro"),
+        default=None,
+        dest="director_model",
+        help="Model tier for the director pass. Overrides config director.model.",
     )
     return parser.parse_args(argv)
 
@@ -608,7 +648,118 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
     if args.approved_cost_usd is None:
         args.approved_cost_usd = config.defaults.approved_cost_usd
 
-    script = parse_script(args.script)
+    # ------------------------------------------------------------------
+    # Director pass: enrich the script before parsing for TTS.
+    # ------------------------------------------------------------------
+    script_path = Path(args.script)
+    raw_script_text = script_path.read_text(encoding="utf-8")
+
+    # Resolve job dir early so we can use it for enriched_script.md.
+    # (The real job_dir creation happens later for non-background runs;
+    #  here we only use args.job_dir if already set, e.g. background child.)
+    _director_job_dir: Path | None = args.job_dir
+
+    # Determine whether to run the director.
+    _director_mode: str
+    if args.auto_direct is True:
+        _director_mode = "always"
+    elif args.auto_direct is False:
+        _director_mode = "off"
+    else:
+        # None means "not set on CLI" → fall back to config.
+        _director_mode = config.director.mode
+
+    _run_director = False
+    if _director_mode == "off":
+        _run_director = False
+    elif _director_mode == "always":
+        _run_director = True
+    else:  # "auto"
+        _run_director = not has_director_notes(raw_script_text)
+
+    _enriched_script_text: str | None = None
+
+    if _run_director:
+        _enriched_script_path: Path | None = (
+            _director_job_dir / "enriched_script.md" if _director_job_dir else None
+        )
+
+        # Resume: reuse existing enriched script if present.
+        if args.resume and _enriched_script_path and _enriched_script_path.exists():
+            LOG.info("Resume: reusing enriched_script.md")
+            _enriched_script_text = _enriched_script_path.read_text(encoding="utf-8")
+        else:
+            # Honour existing_notes policy.
+            _script_for_director = raw_script_text
+            _existing_notes_policy = config.director.existing_notes
+            if has_director_notes(raw_script_text):
+                if _existing_notes_policy == "keep":
+                    _run_director = False
+                    _enriched_script_text = None
+                elif _existing_notes_policy == "replace":
+                    # Strip the existing ## Director's Notes block.
+                    import re as _re_dn  # noqa: PLC0415
+                    _stripped = _re_dn.sub(
+                        r"(?im)^#{2,3}\s+Director'?s?\s+Notes.*?(?=^#{1,6}\s|\Z)",
+                        "",
+                        raw_script_text,
+                        flags=_re_dn.DOTALL | _re_dn.MULTILINE,
+                    ).lstrip()
+                    _script_for_director = _stripped
+                # else "enrich": pass as-is; genre hint tells director to enhance
+
+            if _run_director:
+                _director_model_alias = (
+                    args.director_model
+                    if args.director_model is not None
+                    else config.director.model
+                )
+                _genre = (
+                    args.genre
+                    if args.genre is not None
+                    else config.director.genre_default
+                )
+                LOG.info(
+                    "Running director pass (model=%s, genre=%s)",
+                    _director_model_alias,
+                    _genre,
+                )
+                _api_key = (
+                    os.environ.get("GEMINI_API_KEY")
+                    or os.environ.get("GOOGLE_API_KEY")
+                )
+                _enriched_script_text = auto_direct(
+                    _script_for_director,
+                    model=_director_model_alias,
+                    genre=_genre,
+                    api_key=_api_key,
+                )
+                # Persist enriched script when we have a job dir.
+                if _enriched_script_path is not None:
+                    _enriched_script_path.write_text(
+                        _enriched_script_text, encoding="utf-8"
+                    )
+                    LOG.info("Enriched script saved to %s", _enriched_script_path)
+
+    # --show-directed-script: print enriched script and exit without TTS.
+    if args.show_directed_script:
+        _output_text = _enriched_script_text if _enriched_script_text else raw_script_text
+        print(_output_text)
+        return 0
+
+    # Use enriched script if produced, otherwise the original.
+    if _enriched_script_text:
+        import tempfile as _tempfile  # noqa: PLC0415
+        _tmp = _tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False, encoding="utf-8"
+        )
+        _tmp.write(_enriched_script_text)
+        _tmp.close()
+        _effective_script_path = _tmp.name
+    else:
+        _effective_script_path = args.script
+
+    script = parse_script(_effective_script_path)
     voice_a, voice_b, experimental = _resolve_voices(args)
     if experimental and args.preset:
         print(
