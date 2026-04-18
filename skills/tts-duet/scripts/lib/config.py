@@ -37,19 +37,7 @@ __all__ = [
 
 @dataclass(frozen=True)
 class DefaultsConfig:
-    """Hardcoded defaults for the generation pipeline.
-
-    Parameters
-    ----------
-    model : str
-        Model alias (``"pro"`` / ``"flash"``) or full Gemini model ID.
-    format : str
-        Output format: ``"wav"``, ``"mp3"``, or ``"both"``.
-    preset : str
-        Named preset from ``assets/voice_pairs.yaml``.
-    approved_cost_usd : float or None
-        Hard cap on estimated cost in USD. ``None`` means no cap.
-    """
+    """Hardcoded defaults for the generation pipeline."""
 
     model: str = "pro"
     format: str = "mp3"
@@ -59,19 +47,7 @@ class DefaultsConfig:
 
 @dataclass(frozen=True)
 class DirectorConfig:
-    """Configuration for the Director LLM pre-TTS pass.
-
-    Parameters
-    ----------
-    mode : {"auto", "always", "off"}
-        When to invoke the director pass.
-    model : {"flash", "pro"}
-        Which model tier to use for the director pass.
-    existing_notes : {"keep", "replace", "enrich"}
-        How to handle a pre-existing ``## Director's Notes`` section.
-    genre_default : str
-        Default genre hint passed to the director prompt.
-    """
+    """Configuration for the Director LLM pre-TTS pass."""
 
     mode: Literal["auto", "always", "off"] = "auto"
     model: Literal["flash", "pro"] = "flash"
@@ -81,15 +57,7 @@ class DirectorConfig:
 
 @dataclass(frozen=True)
 class Config:
-    """Top-level frozen configuration object.
-
-    Parameters
-    ----------
-    defaults : DefaultsConfig
-        Generation-pipeline defaults.
-    director : DirectorConfig
-        Director-pass configuration.
-    """
+    """Top-level frozen configuration object."""
 
     defaults: DefaultsConfig
     director: DirectorConfig
@@ -101,23 +69,7 @@ class Config:
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
-    """Load a YAML file, returning ``{}`` for missing files.
-
-    Parameters
-    ----------
-    path : Path
-        Path to the YAML file.
-
-    Returns
-    -------
-    dict
-        Parsed YAML content, or an empty dict if the file does not exist.
-
-    Raises
-    ------
-    RuntimeError
-        If the file exists but cannot be parsed as valid YAML.
-    """
+    """Load a YAML file; return ``{}`` for missing files, raise :class:`RuntimeError` for malformed YAML."""
     if not path.exists():
         return {}
     try:
@@ -130,18 +82,7 @@ def _read_yaml(path: Path) -> dict[str, Any]:
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge *override* into *base*, returning a new dict.
 
-    Parameters
-    ----------
-    base : dict
-        Base dictionary (lower priority).
-    override : dict
-        Override dictionary (higher priority).
-
-    Returns
-    -------
-    dict
-        Merged dictionary. Nested dicts are merged recursively; all other
-        types are replaced by the override value.
+    Nested dicts are merged recursively; all other types are replaced by the override value.
     """
     result = copy.deepcopy(base)
     for key, value in override.items():
@@ -153,19 +94,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def _build_config(merged: dict[str, Any]) -> Config:
-    """Construct a frozen :class:`Config` from a merged dict.
-
-    Parameters
-    ----------
-    merged : dict
-        Fully merged configuration dict with optional ``defaults`` and
-        ``director`` sub-dicts.
-
-    Returns
-    -------
-    Config
-        Frozen config dataclass.
-    """
+    """Construct a frozen :class:`Config` from a fully merged dict."""
     d = merged.get("defaults") or {}
     director_d = merged.get("director") or {}
 

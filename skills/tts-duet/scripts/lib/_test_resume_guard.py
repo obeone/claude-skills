@@ -79,8 +79,7 @@ def _run_tests() -> int:
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             d = Path(tmpdir)
-            for i in range(1):
-                (d / f"output.chunk{i:03d}.wav").touch()
+            (d / "output.chunk000.wav").touch()
             result = _mismatch_detected(d, expected_count=3)
         assert result is True, "expected mismatch for 1 file vs 3 planned"
         print("OK: Test 2 — 1 file vs 3 planned → mismatch detected (was missed by old > guard)")

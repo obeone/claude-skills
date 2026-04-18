@@ -106,16 +106,6 @@ def has_director_notes(script_text: str) -> bool:
     Matches any level-2 or level-3 heading of the form ``## Director's Notes``
     or ``## Directors Notes`` (apostrophe optional), case-insensitive.
 
-    Parameters
-    ----------
-    script_text : str
-        Raw script content to inspect.
-
-    Returns
-    -------
-    bool
-        True when a Director's Notes section is detected.
-
     Examples
     --------
     >>> has_director_notes("## Director's Notes\\nWarm tone.")
@@ -160,6 +150,11 @@ def _strip_code_fences(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+_MODEL_MAP: dict[str, str] = {
+    "flash": "gemini-2.5-flash",
+    "pro": "gemini-2.5-pro",
+}
 
 
 def auto_direct(
@@ -225,8 +220,7 @@ def auto_direct(
             "No API key available. Set GEMINI_API_KEY or pass api_key= explicitly."
         )
 
-    # Import google-genai (optional dependency at module level to match the
-    # pattern used in generate_tts.py: fail loudly only when actually needed).
+    # google-genai is optional: fail loudly only when actually invoked.
     try:
         from google import genai  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -235,15 +229,9 @@ def auto_direct(
             "Install with: uv pip install 'google-genai>=1.0'"
         ) from exc
 
-    # Map alias to model ID. Use the standard text models (not the -tts variants
-    # which only accept AUDIO response modality).
-    _MODEL_MAP: dict[str, str] = {
-        "flash": "gemini-2.5-flash",
-        "pro": "gemini-2.5-pro",
-    }
+    # Use standard text models, not the -tts audio variants.
     model_id = _MODEL_MAP.get(model, _MODEL_MAP["flash"])
 
-    # Build the user prompt.
     genre_hint = (
         f"\nGENRE HINT: {genre}\n"
         "Use this to inform the Scene and Direction subsections, and to calibrate\n"
@@ -277,7 +265,6 @@ def auto_direct(
 
     enriched = _strip_code_fences(raw_response)
 
-    # Safety: verify all original speaker turns are still present.
     original_turn_count = _count_turns(script_text)
     enriched_turn_count = _count_turns(enriched)
     if original_turn_count > 0 and enriched_turn_count < original_turn_count:
@@ -287,7 +274,6 @@ def auto_direct(
             "Use --no-auto-direct to bypass."
         )
 
-    # Sanity: result should contain Director's Notes.
     if not has_director_notes(enriched):
         raise RuntimeError(
             "Director response is missing the '## Director's Notes' section. "

@@ -18,12 +18,15 @@ Exit codes
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -601,20 +604,8 @@ class _Progress:
 def _cli_overrides_from_args(args: argparse.Namespace) -> dict:
     """Build a config override dict from only the CLI flags the user explicitly set.
 
-    Uses ``None`` as a sentinel: argparse args that were not provided on
-    the CLI keep their ``default=None`` value and are therefore excluded
-    from the returned dict, so they never shadow config-file values.
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        Parsed CLI namespace.
-
-    Returns
-    -------
-    dict
-        Nested dict in config-file shape (``{"defaults": {...}, ...}``),
-        containing only values explicitly supplied on the command line.
+    Uses ``None`` as sentinel: flags not supplied on the CLI keep ``default=None``
+    and are excluded, so they never shadow config-file values.
     """
     overrides: dict = {}
     defaults_section: dict = {}
@@ -698,8 +689,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
                     _enriched_script_text = None
                 elif _existing_notes_policy == "replace":
                     # Strip the existing ## Director's Notes block.
-                    import re as _re_dn  # noqa: PLC0415
-                    _stripped = _re_dn.sub(
+                    _stripped = re.sub(
                         r"(?im)^#{2,3}\s+Director'?s?\s+Notes.*?(?=^#{1,6}\s|\Z)",
                         "",
                         raw_script_text,
@@ -763,9 +753,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
     # Use enriched script if produced, otherwise the original.
     _tmp_script_path: str | None = None
     if _enriched_script_text:
-        import atexit as _atexit  # noqa: PLC0415
-        import tempfile as _tempfile  # noqa: PLC0415
-        _tmp = _tempfile.NamedTemporaryFile(
+        _tmp = tempfile.NamedTemporaryFile(
             mode="w", suffix=".md", delete=False, encoding="utf-8"
         )
         _tmp.write(_enriched_script_text)
@@ -774,7 +762,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
         _effective_script_path = _tmp_script_path
         # Register cleanup so the temp file is removed on exit even if we
         # return early via an exception or error path below.
-        _atexit.register(os.unlink, _tmp_script_path)
+        atexit.register(os.unlink, _tmp_script_path)
     else:
         _effective_script_path = args.script
 
@@ -877,9 +865,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
     valid_count = 0
 
     if args.resume:
-        # Count all *.chunkNNN.wav files present in chunks_dir.
-        import re as _re  # noqa: PLC0415
-        _chunk_re = _re.compile(r"\.chunk\d{3}\.wav$")
+        _chunk_re = re.compile(r"\.chunk\d{3}\.wav$")
         existing_chunk_files = [
             p for p in chunks_dir.iterdir()
             if p.is_file() and _chunk_re.search(p.name)
