@@ -140,6 +140,7 @@ python skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
+| [**apple-shortcuts**](./skills/apple-shortcuts/) | Generate importable Apple Shortcuts (.shortcut / plist XML) for macOS and iOS | Native + third-party action catalogs, validator, inspector, App Intents discovery |
 
 ## 🧩 Architecture
 

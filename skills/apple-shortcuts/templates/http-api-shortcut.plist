@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  http-api-shortcut.plist
+
+  Calls a REST API with a bearer token, parses a JSON field, shows it.
+  Demonstrates: Get Contents of URL, JSON auto-coercion, Get Dictionary
+  Value, variable interpolation in headers, import questions for tokens.
+
+  Target API: GitHub user endpoint (returns the authenticated user).
+  Replace the URL and key path to adapt.
+
+  Customize via import questions:
+  - API Token: paste at import time; replaces REPLACE_WITH_API_TOKEN.
+
+  Sign and import:
+    mv http-api-shortcut.plist http-api.shortcut
+    shortcuts sign -i http-api.shortcut -o http-api.signed.shortcut -m anyone
+    open -a Shortcuts http-api.signed.shortcut
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>WFWorkflowClientVersion</key>
+  <string>2607.0.3</string>
+  <key>WFWorkflowMinimumClientVersion</key>
+  <integer>900</integer>
+  <key>WFWorkflowMinimumClientVersionString</key>
+  <string>900</string>
+  <key>WFWorkflowIcon</key>
+  <dict>
+    <key>WFWorkflowIconGlyphNumber</key>
+    <integer>59412</integer>
+    <key>WFWorkflowIconStartColor</key>
+    <integer>463140863</integer>
+  </dict>
+  <key>WFWorkflowImportQuestions</key>
+  <array>
+    <dict>
+      <key>ActionIndex</key>
+      <integer>0</integer>
+      <key>Category</key>
+      <string>Parameter</string>
+      <key>ParameterKey</key>
+      <string>WFTextActionText</string>
+      <key>DefaultValue</key>
+      <string></string>
+      <key>Text</key>
+      <string>Paste your API bearer token</string>
+    </dict>
+  </array>
+  <key>WFWorkflowInputContentItemClasses</key>
+  <array/>
+  <key>WFWorkflowTypes</key>
+  <array/>
+  <key>WFWorkflowActions</key>
+  <array>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.gettext</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>WFTextActionText</key>
+        <string>REPLACE_WITH_API_TOKEN</string>
+        <key>UUID</key>
+        <string>A1A1A1A1-A1A1-4A1A-8A1A-A1A1A1A1A1A1</string>
+        <key>CustomOutputName</key>
+        <string>API Token</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.downloadurl</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>WFURL</key>
+        <string>https://api.github.com/user</string>
+        <key>WFHTTPMethod</key>
+        <string>GET</string>
+        <key>WFHTTPHeaders</key>
+        <dict>
+          <key>Value</key>
+          <dict>
+            <key>WFDictionaryFieldValueItems</key>
+            <array>
+              <dict>
+                <key>WFItemType</key>
+                <integer>0</integer>
+                <key>WFKey</key>
+                <dict>
+                  <key>Value</key>
+                  <dict>
+                    <key>string</key>
+                    <string>Authorization</string>
+                    <key>attachmentsByRange</key>
+                    <dict/>
+                  </dict>
+                  <key>WFSerializationType</key>
+                  <string>WFTextTokenString</string>
+                </dict>
+                <key>WFValue</key>
+                <dict>
+                  <key>Value</key>
+                  <dict>
+                    <key>string</key>
+                    <string>Bearer &#xFFFC;</string>
+                    <key>attachmentsByRange</key>
+                    <dict>
+                      <key>{7, 1}</key>
+                      <dict>
+                        <key>Type</key>
+                        <string>ActionOutput</string>
+                        <key>OutputName</key>
+                        <string>API Token</string>
+                        <key>OutputUUID</key>
+                        <string>A1A1A1A1-A1A1-4A1A-8A1A-A1A1A1A1A1A1</string>
+                        <key>Aggrandizements</key>
+                        <array/>
+                      </dict>
+                    </dict>
+                  </dict>
+                  <key>WFSerializationType</key>
+                  <string>WFTextTokenString</string>
+                </dict>
+              </dict>
+              <dict>
+                <key>WFItemType</key>
+                <integer>0</integer>
+                <key>WFKey</key>
+                <dict>
+                  <key>Value</key>
+                  <dict>
+                    <key>string</key>
+                    <string>Accept</string>
+                    <key>attachmentsByRange</key>
+                    <dict/>
+                  </dict>
+                  <key>WFSerializationType</key>
+                  <string>WFTextTokenString</string>
+                </dict>
+                <key>WFValue</key>
+                <dict>
+                  <key>Value</key>
+                  <dict>
+                    <key>string</key>
+                    <string>application/json</string>
+                    <key>attachmentsByRange</key>
+                    <dict/>
+                  </dict>
+                  <key>WFSerializationType</key>
+                  <string>WFTextTokenString</string>
+                </dict>
+              </dict>
+            </array>
+          </dict>
+          <key>WFSerializationType</key>
+          <string>WFDictionaryFieldValue</string>
+        </dict>
+        <key>UUID</key>
+        <string>B2B2B2B2-B2B2-4B2B-8B2B-B2B2B2B2B2B2</string>
+        <key>CustomOutputName</key>
+        <string>API Response</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.getvalueforkey</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>WFGetDictionaryValueType</key>
+        <string>Value</string>
+        <key>WFDictionaryKey</key>
+        <string>login</string>
+        <key>UUID</key>
+        <string>C3C3C3C3-C3C3-4C3C-8C3C-C3C3C3C3C3C3</string>
+        <key>CustomOutputName</key>
+        <string>Login</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.showresult</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>Text</key>
+        <dict>
+          <key>Value</key>
+          <dict>
+            <key>string</key>
+            <string>Logged in as &#xFFFC;</string>
+            <key>attachmentsByRange</key>
+            <dict>
+              <key>{13, 1}</key>
+              <dict>
+                <key>Type</key>
+                <string>ActionOutput</string>
+                <key>OutputName</key>
+                <string>Login</string>
+                <key>OutputUUID</key>
+                <string>C3C3C3C3-C3C3-4C3C-8C3C-C3C3C3C3C3C3</string>
+                <key>Aggrandizements</key>
+                <array/>
+              </dict>
+            </dict>
+          </dict>
+          <key>WFSerializationType</key>
+          <string>WFTextTokenString</string>
+        </dict>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>

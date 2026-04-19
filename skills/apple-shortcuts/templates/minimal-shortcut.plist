@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  minimal-shortcut.plist
+
+  Hello World shortcut. Sets a text value and shows it as a result.
+  Demonstrates: envelope, icon dict, Text action, Show Result action.
+
+  Customize:
+  - WFTextActionText: the text to display.
+  - WFWorkflowIconGlyphNumber / WFWorkflowIconStartColor: the tile icon.
+
+  Sign and import on macOS 12+:
+    mv minimal-shortcut.plist minimal.shortcut
+    shortcuts sign -i minimal.shortcut -o minimal.signed.shortcut -m anyone
+    open -a Shortcuts minimal.signed.shortcut
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>WFWorkflowClientVersion</key>
+  <string>2607.0.3</string>
+  <key>WFWorkflowMinimumClientVersion</key>
+  <integer>900</integer>
+  <key>WFWorkflowMinimumClientVersionString</key>
+  <string>900</string>
+  <key>WFWorkflowIcon</key>
+  <dict>
+    <key>WFWorkflowIconGlyphNumber</key>
+    <integer>59511</integer>
+    <key>WFWorkflowIconStartColor</key>
+    <integer>463140863</integer>
+  </dict>
+  <key>WFWorkflowImportQuestions</key>
+  <array/>
+  <key>WFWorkflowInputContentItemClasses</key>
+  <array>
+    <string>WFStringContentItem</string>
+  </array>
+  <key>WFWorkflowTypes</key>
+  <array/>
+  <key>WFWorkflowActions</key>
+  <array>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.gettext</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>WFTextActionText</key>
+        <string>Hello from Claude</string>
+        <key>UUID</key>
+        <string>11111111-1111-4111-8111-111111111111</string>
+        <key>CustomOutputName</key>
+        <string>Greeting</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.showresult</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>Text</key>
+        <dict>
+          <key>Value</key>
+          <dict>
+            <key>string</key>
+            <string>&#xFFFC;</string>
+            <key>attachmentsByRange</key>
+            <dict>
+              <key>{0, 1}</key>
+              <dict>
+                <key>Type</key>
+                <string>ActionOutput</string>
+                <key>OutputName</key>
+                <string>Greeting</string>
+                <key>OutputUUID</key>
+                <string>11111111-1111-4111-8111-111111111111</string>
+                <key>Aggrandizements</key>
+                <array/>
+              </dict>
+            </dict>
+          </dict>
+          <key>WFSerializationType</key>
+          <string>WFTextTokenString</string>
+        </dict>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>
