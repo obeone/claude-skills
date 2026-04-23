@@ -9,6 +9,7 @@ integration test we can ship for the skeleton.
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 import pytest
@@ -22,10 +23,18 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_meta_health_roundtrip() -> None:
+    # The server lifespan constructs ``genai.Client()`` unconditionally;
+    # in CI we do not ship a real key, so inject a sentinel that keeps
+    # the client happy while the health probe reports
+    # ``model_availability=None`` when the fake key is rejected upstream.
+    env = {
+        **os.environ,
+        "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", "test-key-roundtrip"),
+    }
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "gemini_tts_mcp"],
-        env=None,
+        env=env,
     )
 
     async with stdio_client(params) as (read, write):
@@ -35,6 +44,10 @@ async def test_meta_health_roundtrip() -> None:
             tools = await session.list_tools()
             tool_names = {tool.name for tool in tools.tools}
             assert "meta.health" in tool_names
+            assert "tts.generate_chunk" in tool_names
+            assert "tts.preview_voice" in tool_names
+            assert "tts.count_tokens" in tool_names
+            assert "text.transform" in tool_names
 
             result = await session.call_tool("meta.health", {})
 
@@ -55,6 +68,10 @@ async def test_meta_health_roundtrip() -> None:
     assert payload["status"] == "ok"
     assert payload["package_version"] == __version__
     assert payload["protocol_version"] == "1"
-    assert payload["sdk_version"] == "stub"
+    assert payload["sdk_version"] != "stub"
     assert "mcp_version" in payload
-    assert payload["model_availability"] is None
+    # ``model_availability`` is either a dict (probe succeeded) or
+    # ``None`` (probe failed without an API key); both are acceptable.
+    assert payload["model_availability"] is None or isinstance(
+        payload["model_availability"], dict
+    )
