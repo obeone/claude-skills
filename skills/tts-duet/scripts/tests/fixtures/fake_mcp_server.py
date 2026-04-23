@@ -97,6 +97,11 @@ class _CallState:
         self.count_tokens_calls: int = 0
         self.text_transform_calls: int = 0
         self.health_calls: int = 0
+        # Set when ``FAKE_MCP_CRASH_AFTER`` trips. The next tool call
+        # received on stdio triggers ``os._exit(1)`` before it runs,
+        # giving the client a guaranteed BrokenPipe on the *next*
+        # ``generate_chunk`` (rather than relying on a timer race).
+        self.crash_pending: bool = False
 
     def snapshot(self) -> dict[str, int]:
         return {
@@ -222,6 +227,10 @@ def build_server() -> Server:
 
 
 def handle_generate_chunk(arguments: dict[str, Any]) -> dict[str, Any]:
+    # Honour a pending crash BEFORE incrementing the counter so the
+    # client sees a BrokenPipe on the very next call after crash_after.
+    if STATE.crash_pending:
+        os._exit(1)
     STATE.generate_chunk_calls += 1
     fail_after = _env_int("FAKE_MCP_FAIL_AFTER")
     if fail_after is not None and STATE.generate_chunk_calls > fail_after:
@@ -240,8 +249,8 @@ def handle_generate_chunk(arguments: dict[str, Any]) -> dict[str, Any]:
         "output_tokens": len(_CANNED_PCM) // 2,
     }
     if crash_after is not None and STATE.generate_chunk_calls >= crash_after:
-        # Schedule crash after response is flushed.
-        asyncio.get_event_loop().call_later(0.01, lambda: os._exit(1))
+        # Arm the crash for the NEXT call (after this response flushes).
+        STATE.crash_pending = True
     return response
 
 

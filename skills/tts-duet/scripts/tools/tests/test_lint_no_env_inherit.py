@@ -79,16 +79,52 @@ def test_flags_env_bare_environ(tmp_path: Path) -> None:
     assert "environ" in violations[0].message
 
 
-def test_flags_env_variable_reference(tmp_path: Path) -> None:
-    """``env=some_var`` is not provably safe; reject."""
+def test_accepts_env_variable_from_dict_literal(tmp_path: Path) -> None:
+    """``env=my_env`` where ``my_env`` is a Dict literal is allowed."""
     source = (
         "import subprocess\n"
         "my_env = {'PATH': '/usr/bin'}\n"
         "subprocess.run(['ls'], env=my_env)\n"
     )
     violations = _lint(source, tmp_path)
+    assert violations == []
+
+
+def test_accepts_env_variable_from_safe_env_call(tmp_path: Path) -> None:
+    """``env=my_env`` where ``my_env = safe_env(...)`` is allowed."""
+    source = (
+        "import subprocess\n"
+        "from lib._safe_env import safe_env\n"
+        "my_env = safe_env(for_mcp=False)\n"
+        "subprocess.run(['ls'], env=my_env)\n"
+    )
+    violations = _lint(source, tmp_path)
+    assert violations == []
+
+
+def test_flags_env_variable_from_untrusted_source(tmp_path: Path) -> None:
+    """``env=my_env`` where ``my_env = os.environ.copy()`` must still fail."""
+    source = (
+        "import os, subprocess\n"
+        "my_env = os.environ.copy()\n"
+        "subprocess.run(['ls'], env=my_env)\n"
+    )
+    violations = _lint(source, tmp_path)
     assert len(violations) == 1
     assert "must be a dict literal" in violations[0].message
+
+
+def test_flags_env_variable_from_augmented_assign(tmp_path: Path) -> None:
+    """``env += ...`` after a safe init is unprovable; reject."""
+    source = (
+        "import subprocess\n"
+        "my_env = {'PATH': '/usr/bin'}\n"
+        "my_env |= {'X': 'y'}\n"
+        "subprocess.run(['ls'], env=my_env)\n"
+    )
+    violations = _lint(source, tmp_path)
+    # ``|=`` is ast.AugAssign with sentinel; the name is still rejectable.
+    assert len(violations) == 1
 
 
 def test_flags_popen_and_friends(tmp_path: Path) -> None:

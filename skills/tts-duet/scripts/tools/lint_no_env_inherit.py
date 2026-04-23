@@ -15,7 +15,12 @@ Rules
    ``_safe_env._safe_env_nohup``.
 5. ``env=<Dict literal>`` is allowed (callers that build an allowlisted
    dict inline, e.g. tests).
-6. Files listed (one path per line) in ``_lint_exempt.txt`` next to this
+6. ``env=<Name>`` is allowed when every assignment to that name in the
+   enclosing function or module scope is itself an allowed source
+   (Dict literal, ``safe_env(...)`` call, or ``_safe_env_nohup(...)``
+   call). Augmented assignments (``env += ...``) or assignments from
+   any other source invalidate the name.
+7. Files listed (one path per line) in ``_lint_exempt.txt`` next to this
    script are skipped.
 
 Exit codes
@@ -150,6 +155,64 @@ def _is_allowed_env_value(value: ast.AST) -> bool:
     return False
 
 
+ScopeNode = ast.FunctionDef | ast.AsyncFunctionDef | ast.Module
+
+
+def _collect_scope_assigns(
+    scope: ScopeNode,
+) -> dict[str, list[ast.AST]]:
+    """Collect immediate (non-nested) simple-name assignments in ``scope``.
+
+    ``ast.Assign`` and ``ast.AnnAssign`` targeting a single ``ast.Name``
+    are indexed by the name. ``ast.AugAssign`` (``+=`` etc.) is recorded
+    with a sentinel — we cannot prove augmented assignments keep the
+    value safe, so any Name with an augmented update is rejected.
+
+    Nested function definitions are not descended into — their bodies
+    belong to their own scopes.
+    """
+    out: dict[str, list[ast.AST]] = {}
+    _AUG_SENTINEL = ast.Constant(value=object())
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node is not scope:
+            return
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    out.setdefault(target.id, []).append(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.value is not None:
+                out.setdefault(node.target.id, []).append(node.value)
+        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            out.setdefault(node.target.id, []).append(_AUG_SENTINEL)
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    for child in ast.iter_child_nodes(scope):
+        visit(child)
+    return out
+
+
+def _name_resolves_safely(
+    name_id: str,
+    call_node: ast.Call,
+    scope_stack: list[ScopeNode],
+) -> bool:
+    """Return True iff every assignment to ``name_id`` in any enclosing
+    scope is an allowed source."""
+    if not scope_stack:
+        return False
+    # Walk from the innermost enclosing scope outward. First scope that
+    # defines the name is the one that wins; if not defined anywhere, we
+    # cannot prove safety.
+    for scope in reversed(scope_stack):
+        assigns = _collect_scope_assigns(scope)
+        if name_id in assigns:
+            return all(_is_allowed_env_value(v) for v in assigns[name_id])
+    return False
+
+
 def _is_forbidden_env_value(value: ast.AST) -> tuple[bool, str]:
     """Return (is_forbidden, reason) for the common bad shapes."""
     if isinstance(value, ast.Constant) and value.value is None:
@@ -169,7 +232,11 @@ def _is_forbidden_env_value(value: ast.AST) -> tuple[bool, str]:
     return False, ""
 
 
-def _check_call(path: Path, node: ast.Call) -> list[Violation]:
+def _check_call(
+    path: Path,
+    node: ast.Call,
+    scope_stack: list[ScopeNode],
+) -> list[Violation]:
     violations: list[Violation] = []
     kwarg = _extract_kwarg(node, "env")
     if kwarg is None:
@@ -198,6 +265,10 @@ def _check_call(path: Path, node: ast.Call) -> list[Violation]:
         )
         return violations
     if _is_allowed_env_value(value):
+        return violations
+    # Name reference: accept when every assignment in the enclosing
+    # scope chain is itself an allowed source.
+    if isinstance(value, ast.Name) and _name_resolves_safely(value.id, node, scope_stack):
         return violations
     violations.append(
         Violation(
@@ -228,9 +299,21 @@ def lint_source(path: Path, source: str) -> list[Violation]:
             )
         ]
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    scope_stack: list[ScopeNode] = []
+
+    def visit(node: ast.AST) -> None:
+        pushed = False
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef)):
+            scope_stack.append(node)  # type: ignore[arg-type]
+            pushed = True
         if isinstance(node, ast.Call) and _is_subprocess_call(node):
-            violations.extend(_check_call(path, node))
+            violations.extend(_check_call(path, node, scope_stack))
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+        if pushed:
+            scope_stack.pop()
+
+    visit(tree)
     return violations
 
 
