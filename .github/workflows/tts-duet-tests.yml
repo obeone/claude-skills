@@ -1,0 +1,104 @@
+name: tts-duet tests
+
+on:
+  pull_request:
+    paths:
+      - 'skills/tts-duet/**'
+      - '.github/workflows/tts-duet-tests.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/tts-duet/**'
+      - '.github/workflows/tts-duet-tests.yml'
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-unit:
+    name: lint + unit + integration (fake MCP)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Sync MCP project
+        if: hashFiles('skills/tts-duet/mcp/pyproject.toml') != ''
+        run: uv sync --project skills/tts-duet/mcp
+
+      - name: Run MCP unit tests
+        if: hashFiles('skills/tts-duet/mcp/pyproject.toml') != ''
+        run: uv run --project skills/tts-duet/mcp pytest skills/tts-duet/mcp/tests -v
+
+      - name: Run env-inherit lint
+        run: uv run python skills/tts-duet/scripts/tools/lint_no_env_inherit.py skills/tts-duet/scripts/
+
+      - name: Run lint self-tests
+        run: uv run --with pytest python -m pytest skills/tts-duet/scripts/tools/tests/ -v
+
+      - name: Run skill-side tests
+        run: uv run --with pytest --with mcp --with pyyaml python -m pytest skills/tts-duet/scripts/tests/ -v
+
+  e2e-nightly:
+    name: e2e (real Gemini, budget-capped)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Gate on API key presence
+        id: gate
+        run: |
+          if [ -z "${GEMINI_API_KEY}" ]; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            echo "::notice::GEMINI_API_KEY not configured; skipping E2E job."
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Estimate cost (budget cap 0.10 USD)
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          uv run --with pyyaml python skills/tts-duet/scripts/estimate_cost.py \
+            --script skills/tts-duet/assets/script_template.md \
+            --model flash --json > /tmp/estimate.json
+          uv run python - <<'PY'
+          import json, sys
+          data = json.load(open('/tmp/estimate.json'))
+          total = float(data.get('usd_total') or data.get('total_usd') or 0)
+          if total > 0.10:
+              print(f"::error::estimated cost {total} USD exceeds 0.10 budget cap")
+              sys.exit(1)
+          print(f"estimated cost OK: {total} USD")
+          PY
+
+      - name: Run E2E smoke (flash)
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          uv run --with pyyaml --with mcp python -m pytest \
+            skills/tts-duet/scripts/tests/ -v -m e2e

@@ -1,0 +1,6 @@
+# Files exempt from env-inherit lint. One path per line, relative to
+# skills/tts-duet/scripts/tools/ (the directory containing this file).
+# Blank lines and lines starting with `#` are ignored.
+#
+# Keep empty by default. Add entries only with a plan reference explaining
+# why the callsite cannot use _safe_env.safe_env(...).
