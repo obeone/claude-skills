@@ -1,4 +1,4 @@
-"""Compile-time feature flags for the gemini-tts-script skill.
+"""Compile-time feature flags for the tts-duet skill.
 
 This module holds the small set of boolean/string constants that drive
 behaviour selection across the other helpers in :mod:`lib`. The most

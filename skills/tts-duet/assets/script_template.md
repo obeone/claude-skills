@@ -1,6 +1,6 @@
 # Sample TTS Script
 
-This file is the reference template for the `gemini-tts-script` skill.
+This file is the reference template for the `tts-duet` skill.
 The format has two sections: an optional `## Director's Notes` block at
 the top, followed by the `## Transcript` section with speaker turns.
 Inline directives such as `[ton: warm]` can be placed anywhere inside a

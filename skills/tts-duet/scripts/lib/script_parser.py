@@ -1,4 +1,4 @@
-"""Parser for the gemini-tts-script input format.
+"""Parser for the tts-duet input format.
 
 The format is intentionally minimal Markdown-ish:
 

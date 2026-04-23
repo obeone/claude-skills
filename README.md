@@ -39,6 +39,34 @@ Any automation, doc, or agent still pointing to the old URL or name will break a
 
 ---
 
+## 🔄 Breaking Change — `gemini-tts-script` renamed to `tts-duet` (v2.0.0)
+
+Starting with release **v2.0.0**, the skill formerly known as **`gemini-tts-script`** is now called **`tts-duet`** to better reflect its dual-voice and MCP-based architecture.
+
+**What changes for you:**
+
+| Before (<= v1.x) | After (>= v2.0.0) |
+|---|---|
+| Skill directory: `skills/gemini-tts-script/` | `skills/tts-duet/` |
+| Release asset: `gemini-tts-script.skill` | `tts-duet.skill` |
+| Install path: `~/.claude/skills/gemini-tts-script/` | `~/.claude/skills/tts-duet/` |
+| Agent/skill reference: `gemini-tts-script` | `tts-duet` |
+
+**Migration:**
+
+```bash
+# 1. Remove the old skill
+rm -rf ~/.claude/skills/gemini-tts-script
+
+# 2. Install the new one (see Installation section below)
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/tts-duet.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+```
+
+Any automation, doc, or agent still pointing to the old name will break at the first install/refresh after v2.0.0 ships.
+
+---
+
 ## 📦 Installation
 
 ### Claude Code (CLI)
@@ -140,7 +168,7 @@ python skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
-| [**gemini-tts-script**](./skills/gemini-tts-script/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS | Offline cost estimate, voice audition, background jobs, notification chain |
+| [**tts-duet**](./skills/tts-duet/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS | Offline cost estimate, voice audition, background jobs, notification chain |
 
 ## 🧩 Architecture
 

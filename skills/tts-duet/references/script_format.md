@@ -1,6 +1,6 @@
 # Script Format
 
-The `gemini-tts-script` skill reads a Markdown-ish text file with up to
+The `tts-duet` skill reads a Markdown-ish text file with up to
 two sections:
 
 1. An **optional** `## Director's Notes` heading. Text underneath is

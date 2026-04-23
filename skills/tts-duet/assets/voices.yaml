@@ -1,4 +1,4 @@
-# Voice catalog for the gemini-tts-script skill.
+# Voice catalog for the tts-duet skill.
 #
 # Only five voices are documentation-confirmed by Google (verified=true).
 # The remaining 25 are labelled (to verify) / tonal_hint=unknown until an
