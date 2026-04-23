@@ -8,6 +8,16 @@ tools:
   - Write
   - Edit
   - Bash
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
+  - mcp__gemini_tts__tts_generate_chunk
+  - mcp__gemini_tts__tts_preview_voice
+  - mcp__gemini_tts__tts_count_tokens
+  - mcp__gemini_tts__text_transform
+  - mcp__gemini_tts__meta_health
 ---
 
 # Gemini TTS Script

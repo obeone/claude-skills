@@ -31,6 +31,8 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from ._safe_env import safe_env
+
 __all__ = ["notify"]
 
 _LOG = logging.getLogger(__name__)
@@ -58,6 +60,7 @@ def _parent_tty() -> str | None:
             check=False,
             capture_output=True,
             timeout=5,
+            env=safe_env(for_mcp=False),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         _LOG.debug("ps lookup for parent TTY failed: %s", exc)
@@ -95,6 +98,7 @@ def _try_kitten(title: str, message: str, urgency: _Urgency) -> bool:
             check=False,
             capture_output=True,
             timeout=5,
+            env=safe_env(for_mcp=False),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         _LOG.debug("kitten notify failed: %s", exc)
@@ -130,6 +134,7 @@ def _try_alerter(title: str, message: str) -> bool:
             check=False,
             capture_output=True,
             timeout=5,
+            env=safe_env(for_mcp=False),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         _LOG.debug("alerter failed: %s", exc)
@@ -152,6 +157,7 @@ def _try_osascript(title: str, message: str) -> bool:
             check=False,
             capture_output=True,
             timeout=5,
+            env=safe_env(for_mcp=False),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         _LOG.debug("osascript failed: %s", exc)
@@ -195,7 +201,17 @@ def notify(
     """
     winner: _Tier = "not-available"
 
-    if _try_kitten(title, message, urgency):
+    # Suppress actual notification spawns inside test runs or when the
+    # caller opts out explicitly. The ``<job_dir>/notification`` file is
+    # still written below so downstream tooling can observe the outcome.
+    suppressed = bool(
+        os.environ.get("TTS_DUET_NO_NOTIFY")
+        or os.environ.get("PYTEST_CURRENT_TEST")
+    )
+
+    if suppressed:
+        pass
+    elif _try_kitten(title, message, urgency):
         winner = "kitten"
     elif _try_alerter(title, message):
         winner = "alerter"

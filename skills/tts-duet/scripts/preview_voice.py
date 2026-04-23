@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Generate a short preview clip for a single voice.
+"""Generate a short audio preview for a single voice via the MCP.
 
-Used for the pre-tag audition checklist (§3.4). Defaults to the
-``flash`` model (cheaper) and the bundled ``assets/preview_text.md``
-snippet. Output is written to ``$TMPDIR`` (or ``/tmp``) as MP3 when
-``ffmpeg`` is available, otherwise WAV. ``--play`` opens the resulting
-file via ``afplay`` on macOS or ``xdg-open`` on Linux so operators can
-audition without copy-pasting paths.
+Calls ``tts.preview_voice`` on the ``gemini-tts-mcp`` MCP; this script
+never reads ``GEMINI_API_KEY`` / ``GOOGLE_API_KEY`` and never imports
+``google-genai``. The MCP subprocess is responsible for the API call.
+
+Output is written to ``$TMPDIR`` (or ``/tmp``) as MP3 when ``ffmpeg``
+is available, otherwise WAV. ``--play`` opens the resulting file via
+``afplay`` on macOS or ``xdg-open`` on Linux.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import os
 import shutil
 import subprocess
@@ -21,6 +23,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import audio_io  # noqa: E402
+from lib._safe_env import safe_env  # noqa: E402
+from lib.config import load_user_config  # noqa: E402
+from lib.mcp_client import (  # noqa: E402
+    GeminiTTSMCPClient,
+    MCPConnectionError,
+    MCPToolError,
+    resolve_mcp_command,
+)
 from lib.pricing import resolve_model  # noqa: E402
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -32,73 +42,28 @@ def _load_default_text() -> str:
     return DEFAULT_TEXT_PATH.read_text(encoding="utf-8").strip()
 
 
-def _require_api_key() -> str:
-    """Return the Gemini API key or exit 1 with a clear message."""
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not key:
-        print(
-            "ERROR: GEMINI_API_KEY / GOOGLE_API_KEY not set; cannot preview.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    return key
-
-
-def _import_genai() -> tuple[object, object]:
-    """Import google-genai or exit 1 with an install hint."""
-    try:
-        from google import genai  # type: ignore[import-not-found]
-        from google.genai import types  # type: ignore[import-not-found]
-    except ImportError:
-        print(
-            "ERROR: google-genai is not installed. "
-            "Install with: uv pip install -r scripts/requirements.txt",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    return genai, types
-
-
 def _play(path: Path) -> None:
     """Open ``path`` in the platform's default audio player."""
+    env = safe_env(for_mcp=False)
     if sys.platform == "darwin" and shutil.which("afplay"):
-        subprocess.run(["afplay", str(path)], check=False)
+        subprocess.run(["afplay", str(path)], check=False, env=env)
     elif shutil.which("xdg-open"):
-        subprocess.run(["xdg-open", str(path)], check=False)
+        subprocess.run(["xdg-open", str(path)], check=False, env=env)
     else:
         print(f"(no player found — file written to {path})", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point. See module docstring."""
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Generate a short audio preview for a single voice.",
+        description="Generate a short audio preview for a single voice via MCP.",
     )
     parser.add_argument("voice", help="Voice name (case-sensitive).")
-    parser.add_argument(
-        "--text",
-        help="Override the default preview snippet with custom text.",
-    )
-    parser.add_argument(
-        "--seconds",
-        type=int,
-        default=30,
-        help="Advisory target length. The SDK is not asked to truncate.",
-    )
-    parser.add_argument(
-        "--model",
-        default="flash",
-        help="Model alias or full ID. Default: flash (cheaper).",
-    )
-    parser.add_argument(
-        "--play",
-        action="store_true",
-        help="Open the resulting file after generation.",
-    )
+    parser.add_argument("--text", help="Override the default preview snippet.")
+    parser.add_argument("--seconds", type=int, default=30)
+    parser.add_argument("--model", default="flash")
+    parser.add_argument("--play", action="store_true")
     args = parser.parse_args(argv)
-
-    _require_api_key()
-    genai, types = _import_genai()
 
     model = resolve_model(args.model)
     text = (args.text or _load_default_text()).strip()
@@ -111,36 +76,29 @@ def main(argv: list[str] | None = None) -> int:
     wav_path = tmp_dir / f"tts-preview-{args.voice}-{ts}.wav"
     mp3_path = tmp_dir / f"tts-preview-{args.voice}-{ts}.mp3"
 
-    speech_config = types.SpeechConfig(  # type: ignore[attr-defined]
-        voice_config=types.VoiceConfig(  # type: ignore[attr-defined]
-            prebuilt_voice_config=types.PrebuiltVoiceConfig(  # type: ignore[attr-defined]
-                voice_name=args.voice,
+    user_config = load_user_config()
+    mcp_command = resolve_mcp_command(
+        config=user_config.raw, env=dict(os.environ)
+    )
+    stderr_log = Path.home() / ".cache" / "tts-duet" / "mcp-stderr.log"
+
+    try:
+        with GeminiTTSMCPClient(command=mcp_command, stderr_log=stderr_log) as client:
+            out = client.tts_preview_voice(
+                voice=args.voice,
+                text=text,
+                model=model.id,
+                seconds_hint=float(args.seconds) if args.seconds else None,
             )
-        )
-    )
-    config = types.GenerateContentConfig(  # type: ignore[attr-defined]
-        response_modalities=["AUDIO"],
-        speech_config=speech_config,
-    )
+    except (MCPConnectionError, MCPToolError) as exc:
+        print(f"ERROR: MCP preview failed: {exc}", file=sys.stderr)
+        return 5
 
-    client = genai.Client()  # type: ignore[attr-defined]
-    response = client.models.generate_content(  # type: ignore[attr-defined]
-        model=model.id,
-        contents=text,
-        config=config,
-    )
-
-    pcm: bytes = b""
-    for candidate in getattr(response, "candidates", []) or []:
-        content = getattr(candidate, "content", None)
-        for part in getattr(content, "parts", []) or []:
-            inline = getattr(part, "inline_data", None)
-            if inline and getattr(inline, "data", None):
-                pcm += inline.data
-    if not pcm:
-        print("ERROR: no audio returned by the model.", file=sys.stderr)
+    pcm_b64 = out.get("pcm_base64") or out.get("pcm_b64")
+    if not pcm_b64:
+        print("ERROR: MCP returned no audio payload.", file=sys.stderr)
         return 1
-
+    pcm = base64.b64decode(pcm_b64)
     audio_io.pcm_to_wav(pcm, wav_path)
 
     final_path = wav_path
@@ -153,8 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(audio_io.FFMPEG_MISSING_WARNING, file=sys.stderr)
 
-    advisory = args.seconds
-    print(f"Preview written to {final_path} (~target {advisory}s advisory)")
+    print(f"Preview written to {final_path} (~target {args.seconds}s advisory)")
 
     if args.play:
         _play(final_path)

@@ -16,6 +16,8 @@ import wave
 from functools import cache
 from pathlib import Path
 
+from ._safe_env import safe_env
+
 __all__ = [
     "FFMPEG_MISSING_WARNING",
     "FFMPEG_REQUIRED_ERROR",
@@ -215,7 +217,9 @@ def wav_to_mp3(
         "2",
         str(mp3_path),
     ]
-    proc = subprocess.run(cmd, check=False, capture_output=True)
+    proc = subprocess.run(
+        cmd, check=False, capture_output=True, env=safe_env(for_mcp=False)
+    )
     if proc.returncode != 0:
         raise RuntimeError(
             f"ffmpeg failed ({proc.returncode}): "
