@@ -35,7 +35,7 @@ State the detected runtime in one sentence before proceeding.
 
 ```bash
 mkdir -p ~/.claude/skills
-curl -L https://github.com/obeone/claude-skills/releases/download/v2.1.0/tts-duet.skill \
+curl -L https://github.com/obeone/claude-skills/releases/download/v2.2.0/tts-duet.skill \
   -o /tmp/tts-duet.skill
 rm -rf ~/.claude/skills/tts-duet
 unzip -q /tmp/tts-duet.skill -d ~/.claude/skills/
@@ -43,7 +43,7 @@ rm /tmp/tts-duet.skill
 ```
 
 Verify install: `head -5 ~/.claude/skills/tts-duet/SKILL.md` should show
-`name: tts-duet` and a `metadata.version` of `2.0.0` or higher.
+`name: tts-duet` and a `metadata.version` of `2.2.0` or higher.
 
 Then register the MCP server (see §5) and restart Claude Code. The
 slash command `/tts-duet-setup` writes user defaults to
@@ -147,8 +147,8 @@ A working install returns:
 
 ## 7. Updating
 
-Bump the pinned tag in the registration snippet (`@v2.2.0` → `@v2.2.0`,
-etc.) and restart the host CLI. `uvx` re-resolves the new revision
+Bump the pinned tag in the registration snippet (e.g. `@v2.2.0` →
+`@v2.3.0`) and restart the host CLI. `uvx` re-resolves the new revision
 automatically. The `tts-duet.skill` bundle (Claude Code only) must be
 re-downloaded from the matching release.
 
