@@ -191,7 +191,15 @@ def _parse_director_defaults(raw: dict[str, Any]) -> DirectorDefaults:
     if not isinstance(section, dict):
         return DirectorDefaults()
 
-    backend = str(section.get("backend", "gemini") or "gemini").strip().lower()
+    raw_backend = section.get("backend", "gemini")
+    # YAML 1.1 parses bare ``off`` / ``on`` as bool — round-trip those
+    # back to strings so users can write ``backend: off`` naturally.
+    if isinstance(raw_backend, bool):
+        backend = "off" if raw_backend is False else "gemini"
+    else:
+        backend = str(raw_backend or "gemini").strip().lower()
+        if backend == "false":
+            backend = "off"
     if backend not in VALID_DIRECTOR_BACKENDS:
         backend = "gemini"
 
