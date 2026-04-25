@@ -19,7 +19,10 @@ Ask the user for:
 - Default output format (`wav` / `mp3` / `both`). Default: `mp3`.
 - Default preset (one of the `voice_pairs.yaml` entries, e.g.
   `podcast-chill`). Default: `podcast-chill`.
-- Director-pass toggle (`auto` / `off`). Default: `off`.
+- Director backend (`agent` / `gemini` / `off`). Default: `gemini`.
+  `agent` delegates the rewrite to the calling agent (incompatible
+  with background runs); `gemini` uses the MCP `text.transform` tool;
+  `off` skips the rewrite.
 - Notification preference (`auto` / `silent`). Default: `auto`.
 
 ## Step 2 — write `~/.config/tts-duet/config.yaml`
@@ -31,7 +34,11 @@ the new `mcp:` section. Minimal schema:
 model: flash
 format: mp3
 preset: podcast-chill
-director: off
+director:
+  backend: gemini   # agent | gemini | off — quote "off" to keep YAML 1.1 from coercing it to false
+  model: gemini-2.5-flash
+  temperature: 0.2
+  existing_notes_policy: preserve
 notify: auto
 mcp:
   # Either a list or a single string (shlex-split at load time).
@@ -46,6 +53,11 @@ mcp:
 ```
 
 `$TTS_DUET_MCP_COMMAND` always wins over `mcp.command` when set.
+
+When writing `director.backend: off`, quote it as `"off"` — bare `off`
+is coerced to `false` under YAML 1.1, which makes the file harder to
+read (the parser tolerates both, but the on-disk form should match what
+the user typed).
 
 ## Step 3 — probe `gemini-tts` MCP via `meta.health`
 
