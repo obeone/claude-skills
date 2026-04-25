@@ -27,6 +27,7 @@ __all__ = [
     "MCPDefaults",
     "UserConfig",
     "VALID_DIRECTOR_BACKENDS",
+    "VALID_PROMPT_AT_CALL_FIELDS",
     "load_user_config",
     "default_user_config_path",
     "write_job_config",
@@ -36,6 +37,14 @@ __all__ = [
 
 #: Allowed values for ``DirectorDefaults.backend``.
 VALID_DIRECTOR_BACKENDS: frozenset[str] = frozenset({"agent", "gemini", "off"})
+
+#: Fields the user can flag as "ask me at every /tts-duet call" instead
+#: of using the persisted default. Anything else in
+#: ``prompt_at_call`` is dropped silently to keep older configs forward
+#: compatible.
+VALID_PROMPT_AT_CALL_FIELDS: frozenset[str] = frozenset(
+    {"preset", "style", "director"}
+)
 
 JOB_CONFIG_VERSION: int = 1
 
@@ -122,11 +131,28 @@ class DirectorDefaults:
 
 @dataclass(frozen=True)
 class UserConfig:
-    """Parsed ``~/.config/tts-duet/config.yaml`` document."""
+    """Parsed ``~/.config/tts-duet/config.yaml`` document.
+
+    Parameters
+    ----------
+    raw : dict
+        The full parsed YAML document, kept verbatim for forward
+        compatibility with keys the skill does not yet understand.
+    mcp : MCPDefaults
+        Parsed ``mcp:`` section.
+    director : DirectorDefaults
+        Parsed ``director:`` section.
+    prompt_at_call : frozenset of str
+        Fields the user wants re-prompted at every ``/tts-duet``
+        invocation instead of taking the saved default. Each entry must
+        be in :data:`VALID_PROMPT_AT_CALL_FIELDS`. Empty set means
+        "use defaults silently" (legacy behaviour).
+    """
 
     raw: dict[str, Any] = field(default_factory=dict)
     mcp: MCPDefaults = field(default_factory=MCPDefaults)
     director: DirectorDefaults = field(default_factory=DirectorDefaults)
+    prompt_at_call: frozenset[str] = field(default_factory=frozenset)
 
 
 def default_user_config_path() -> Path:
@@ -234,6 +260,36 @@ def _parse_director_defaults(raw: dict[str, Any]) -> DirectorDefaults:
     )
 
 
+def _parse_prompt_at_call(raw: dict[str, Any]) -> frozenset[str]:
+    """Parse the top-level ``prompt_at_call:`` list.
+
+    Accepts a YAML list of strings, a single string (split on commas
+    and whitespace), or absent / null (returns the empty set). Unknown
+    or whitespace-only entries are dropped silently so older configs
+    keep loading after we add new fields.
+
+    Parameters
+    ----------
+    raw : dict
+        The full parsed YAML document.
+
+    Returns
+    -------
+    frozenset of str
+        Subset of :data:`VALID_PROMPT_AT_CALL_FIELDS`.
+    """
+    value = raw.get("prompt_at_call")
+    if value in (None, "", False):
+        return frozenset()
+    items: list[str] = []
+    if isinstance(value, str):
+        items = [tok.strip() for tok in value.replace(",", " ").split()]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        items = [str(tok).strip() for tok in value]
+    selected = {tok.lower() for tok in items if tok}
+    return frozenset(selected & VALID_PROMPT_AT_CALL_FIELDS)
+
+
 def load_user_config(path: Path | None = None) -> UserConfig:
     """Load the user-defaults YAML file.
 
@@ -277,7 +333,12 @@ def load_user_config(path: Path | None = None) -> UserConfig:
     if not isinstance(raw, dict):
         return UserConfig(director=_apply_env_override(DirectorDefaults()))
     director = _apply_env_override(_parse_director_defaults(raw))
-    return UserConfig(raw=raw, mcp=_parse_mcp_defaults(raw), director=director)
+    return UserConfig(
+        raw=raw,
+        mcp=_parse_mcp_defaults(raw),
+        director=director,
+        prompt_at_call=_parse_prompt_at_call(raw),
+    )
 
 
 # ---------------------------------------------------------------------------
