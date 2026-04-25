@@ -8,7 +8,7 @@ description: "Interactively configure tts-duet defaults and verify the gemini-tt
 Gather sane defaults for the `tts-duet` skill, persist them to
 `~/.config/tts-duet/config.yaml`, and probe the `gemini-tts` MCP via
 `meta.health`. Emit a copy-pasteable `~/.claude.json` registration
-snippet (pinned to `@v2.0.0`) when the MCP is missing. **This command
+snippet (pinned to `@v2.2.0`) when the MCP is missing. **This command
 never writes API keys and never mutates `~/.claude.json`.**
 
 ## Step 1 — gather defaults
@@ -70,7 +70,7 @@ mcp:
   command:
     - uvx
     - --from
-    - git+https://github.com/obeone/claude-skills@v2.0.0#subdirectory=skills/tts-duet/mcp
+    - git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp
     - gemini-tts-mcp
   chunk_retry_max: 2
   respawn_max: 3
@@ -104,7 +104,7 @@ user to paste it into their `~/.claude.json` and reload:
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/obeone/claude-skills@v2.0.0#subdirectory=skills/tts-duet/mcp",
+        "git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp",
         "gemini-tts-mcp"
       ],
       "env": { "GEMINI_API_KEY": "${GEMINI_API_KEY}" }

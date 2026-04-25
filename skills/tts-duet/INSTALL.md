@@ -71,7 +71,7 @@ After registration the following tools become available:
 
 ## 5. MCP server registration snippet
 
-The pin `@v2.1.0` is intentional. **Do not change it without a reason**
+The pin `@v2.2.0` is intentional. **Do not change it without a reason**
 — a floating `git+` ref breaks reproducibility (plan §6.4).
 
 ### JSON (Claude Code, Gemini CLI)
@@ -83,7 +83,7 @@ The pin `@v2.1.0` is intentional. **Do not change it without a reason**
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/obeone/claude-skills@v2.1.0#subdirectory=skills/tts-duet/mcp",
+        "git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp",
         "gemini-tts-mcp"
       ],
       "env": {
@@ -104,7 +104,7 @@ overwrite the file.
 command = "uvx"
 args = [
   "--from",
-  "git+https://github.com/obeone/claude-skills@v2.1.0#subdirectory=skills/tts-duet/mcp",
+  "git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp",
   "gemini-tts-mcp",
 ]
 env = { GEMINI_API_KEY = "<paste-or-use-secret-manager>" }
@@ -147,7 +147,7 @@ A working install returns:
 
 ## 7. Updating
 
-Bump the pinned tag in the registration snippet (`@v2.1.0` → `@v2.2.0`,
+Bump the pinned tag in the registration snippet (`@v2.2.0` → `@v2.2.0`,
 etc.) and restart the host CLI. `uvx` re-resolves the new revision
 automatically. The `tts-duet.skill` bundle (Claude Code only) must be
 re-downloaded from the matching release.
