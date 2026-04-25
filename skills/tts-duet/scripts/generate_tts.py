@@ -41,9 +41,11 @@ from lib._safe_env import _safe_env_nohup, safe_env  # noqa: E402
 from lib.config import (  # noqa: E402
     JOB_CONFIG_VERSION,
     MCPDefaults,
+    UserConfig,
     load_user_config,
     write_job_config,
 )
+from lib.director import auto_direct, compose_prompt  # noqa: E402
 from lib.finalize_audio import concat_wavs, wrap_pcm_to_wav  # noqa: E402
 from lib.mcp_client import (  # noqa: E402
     GeminiTTSMCPClient,
@@ -188,8 +190,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--keep-wav", action="store_true")
     parser.add_argument(
         "--director",
-        action="store_true",
-        help="Enable the director pass (text.transform enrichment).",
+        choices=("agent", "gemini", "off"),
+        default=None,
+        help=(
+            "Director-pass backend. 'agent' delegates the rewrite to the "
+            "calling agent (incompatible with --background); 'gemini' "
+            "uses the MCP text.transform tool; 'off' skips the rewrite. "
+            "Default: from user config (gemini if unset)."
+        ),
     )
     parser.add_argument(
         "--genre",
@@ -700,6 +708,212 @@ def _resolve_output_stem(args: argparse.Namespace) -> Path:
     return Path.cwd() / "final"
 
 
+def _resolve_director_backend(
+    args: argparse.Namespace, user_config: UserConfig
+) -> str:
+    """Return the effective director backend for this run.
+
+    CLI ``--director`` wins; otherwise fall back to the user config.
+    """
+    return args.director or user_config.director.backend
+
+
+def _run_director_agent_handoff(
+    *,
+    args: argparse.Namespace,
+    user_config: UserConfig,
+    script: ParsedScript,
+    model_id: str,
+    voice_a: str,
+    voice_b: str | None,
+    mcp_command: list[str],
+) -> int:
+    """Compose a director prompt to the job dir and stop.
+
+    Writes ``director-prompt.md``, ``director-input.md`` and
+    ``HANDOFF.md`` to ``args.job_dir`` so the calling agent can take
+    over the rewrite. The pipeline must be relaunched with
+    ``--director off`` against ``director-output.md`` to finish the
+    audio generation.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed CLI arguments. ``args.job_dir`` MUST be set.
+    user_config : UserConfig
+        Loaded user defaults (used for the director sub-options).
+    script : ParsedScript
+        The parsed script — used for ``existing_notes`` only.
+    model_id : str
+        Resolved model ID (recorded in ``config.json``).
+    voice_a, voice_b : str, str or None
+        Resolved voice selection (recorded in ``config.json``).
+    mcp_command : list of str
+        Resolved MCP spawn command (recorded in ``config.json``).
+
+    Returns
+    -------
+    int
+        Always ``0`` on success, or ``1`` on a filesystem error.
+    """
+    if args.job_dir is None:
+        print(
+            "ERROR: --director agent requires --job-dir",
+            file=sys.stderr,
+        )
+        return 2
+
+    job_dir: Path = args.job_dir
+    raw_script = Path(args.script).read_text(encoding="utf-8")
+    prompt = compose_prompt(
+        script=raw_script,
+        genre=args.preset or args.genre,
+        existing_notes=script.notes,
+        existing_notes_policy=user_config.director.existing_notes_policy,
+    )
+
+    handoff_text = (
+        "# Director handoff (agent mode)\n"
+        "\n"
+        "The skill stopped after composing a director-pass prompt. To "
+        "continue:\n"
+        "\n"
+        "1. Read `director-prompt.md` and produce a rewritten script that "
+        "follows the strict output format described in that prompt "
+        "(## Director's Notes block + ## Transcript block, preserving "
+        "all Speaker labels and turn count).\n"
+        "\n"
+        "2. Save the rewritten script to `director-output.md` in this "
+        "directory.\n"
+        "\n"
+        "3. Relaunch generation with the rewritten script and director "
+        "disabled:\n"
+        "\n"
+        "   python <skill>/scripts/generate_tts.py \\\n"
+        f"     --script {job_dir}/director-output.md \\\n"
+        "     --director off \\\n"
+        f"     --job-dir {job_dir} \\\n"
+        "     [other original flags]\n"
+    )
+
+    try:
+        (job_dir / "director-prompt.md").write_text(prompt, encoding="utf-8")
+        (job_dir / "director-input.md").write_text(raw_script, encoding="utf-8")
+        (job_dir / "HANDOFF.md").write_text(handoff_text, encoding="utf-8")
+    except OSError as exc:
+        print(f"ERROR: could not write director handoff: {exc}", file=sys.stderr)
+        return 1
+
+    # Stamp a partial config.json so observers see the awaiting state.
+    config_json_path = job_dir / "config.json"
+    script_bytes = Path(args.script).read_bytes()
+    snapshot = {
+        k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
+    }
+    snapshot.pop("env", None)
+    cfg_payload: dict[str, Any] = {
+        "version": JOB_CONFIG_VERSION,
+        "created_at": datetime.now(timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+        "script_path": str(Path(args.script).resolve()),
+        "script_hash": hashlib.sha256(script_bytes).hexdigest(),
+        "model": model_id,
+        "voices": {"voice_a": voice_a, "voice_b": voice_b},
+        "lang": args.lang,
+        "format": args.format,
+        "chunk_count": 0,
+        "chunks_done": 0,
+        "mcp_command": mcp_command,
+        "mcp_version": "unknown",
+        "protocol_version": "1",
+        "preset": args.preset,
+        "approved_cost_usd": args.approved_cost_usd,
+        "director": {"ran": False, "backend": "agent", "awaiting": True},
+        "cli_snapshot": snapshot,
+    }
+    write_job_config(config_json_path, cfg_payload)
+
+    _write_status(job_dir, "awaiting_director", handoff="director-prompt.md")
+    print(
+        f"Director handoff ready: {job_dir / 'HANDOFF.md'}",
+        file=sys.stdout,
+    )
+    return 0
+
+
+def _run_director_gemini_pass(
+    *,
+    script: ParsedScript,
+    args: argparse.Namespace,
+    user_config: UserConfig,
+    mcp_command: list[str],
+    stderr_log: Path,
+    job_dir: Path | None,
+) -> tuple[ParsedScript, dict[str, Any]]:
+    """Run the gemini director pass and return the (possibly enriched) script.
+
+    Returns
+    -------
+    (ParsedScript, dict)
+        The (possibly rewritten) script and a ``director`` payload to
+        stamp into ``config.json``. On failure the original script is
+        returned unchanged and the payload reflects the error.
+    """
+    raw_script = Path(args.script).read_text(encoding="utf-8")
+    try:
+        with GeminiTTSMCPClient(
+            command=mcp_command, stderr_log=stderr_log
+        ) as client:
+            result = auto_direct(
+                script=raw_script,
+                client=client,
+                model=user_config.director.model,
+                genre=args.preset or args.genre,
+                existing_notes=script.notes,
+                existing_notes_policy=user_config.director.existing_notes_policy,
+                temperature=user_config.director.temperature,
+                max_output_tokens=user_config.director.max_output_tokens,
+            )
+    except (MCPConnectionError, MCPToolError, OSError, ValueError) as exc:
+        LOG.warning(
+            "Director pass (gemini) failed; falling back to original script: %s",
+            exc,
+        )
+        return script, {"ran": False, "backend": "gemini", "error": str(exc)}
+
+    # Re-parse the enriched text so chunking sees the rewritten turns.
+    if job_dir is not None:
+        rewritten_path = job_dir / "director-output.md"
+    else:
+        rewritten_path = Path(args.script).with_suffix(".director.md")
+    try:
+        rewritten_path.write_text(result.text, encoding="utf-8")
+    except OSError as exc:
+        LOG.warning(
+            "Director pass (gemini) could not persist rewritten script: %s",
+            exc,
+        )
+        return script, {"ran": False, "backend": "gemini", "error": str(exc)}
+
+    try:
+        new_script = parse_script(rewritten_path)
+    except (FileNotFoundError, ValueError) as exc:
+        LOG.warning(
+            "Director pass (gemini) produced unparseable output: %s",
+            exc,
+        )
+        return script, {"ran": False, "backend": "gemini", "error": str(exc)}
+
+    return new_script, {
+        "ran": True,
+        "backend": "gemini",
+        "input_tokens": result.input_tokens,
+        "output_tokens": result.output_tokens,
+        "model_id": result.model_id,
+    }
+
+
 def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pipeline
     """Execute the full generation pipeline in the current process."""
     script = parse_script(args.script)
@@ -712,6 +926,51 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
         )
 
     model = resolve_model(args.model)
+
+    # Resolve user-config + MCP command up front so the director pass
+    # (which needs both) can run before chunking.
+    user_config = load_user_config()
+    mcp_defaults = user_config.mcp
+    mcp_command = resolve_mcp_command(config=user_config.raw, env=dict(os.environ))
+    director_backend = _resolve_director_backend(args, user_config)
+
+    # Director pass (agent mode = handoff and stop; gemini = MCP rewrite).
+    director_payload: dict[str, Any] | None = None
+    if director_backend == "agent":
+        return _run_director_agent_handoff(
+            args=args,
+            user_config=user_config,
+            script=script,
+            model_id=model.id,
+            voice_a=voice_a,
+            voice_b=voice_b,
+            mcp_command=mcp_command,
+        )
+    if director_backend == "gemini":
+        # Background-lane stderr would normally be co-located with the
+        # job dir; sync lane uses ``~/.cache/tts-duet/mcp-stderr.log``.
+        if args.job_dir is not None:
+            director_stderr_log = args.job_dir / "mcp-stderr.log"
+        else:
+            director_stderr_log = (
+                Path.home() / ".cache" / "tts-duet" / "mcp-stderr.log"
+            )
+        try:
+            director_stderr_log.parent.mkdir(parents=True, exist_ok=True)
+            director_stderr_log.touch(exist_ok=True)
+        except OSError:
+            pass
+        script, director_payload = _run_director_gemini_pass(
+            script=script,
+            args=args,
+            user_config=user_config,
+            mcp_command=mcp_command,
+            stderr_log=director_stderr_log,
+            job_dir=args.job_dir,
+        )
+    else:
+        LOG.info("Director pass: off (passthrough)")
+
     content = to_model_content(script)
     transcript_for_duration = "\n".join(turn.text for turn in script.turns)
     duration_s = estimate_duration_seconds(transcript_for_duration)
@@ -760,11 +1019,10 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
     chunks_dir = (args.job_dir or work_dir) / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
-    # Persist / update config.json for background runs.
+    # Persist / update config.json for background runs. ``user_config``,
+    # ``mcp_defaults`` and ``mcp_command`` are resolved earlier to feed
+    # the director pass.
     config_json_path: Path | None = None
-    user_config = load_user_config()
-    mcp_defaults = user_config.mcp
-    mcp_command = resolve_mcp_command(config=user_config.raw, env=dict(os.environ))
 
     if args.job_dir is not None:
         config_json_path = args.job_dir / "config.json"
@@ -790,7 +1048,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
             "protocol_version": "1",
             "preset": args.preset,
             "approved_cost_usd": args.approved_cost_usd,
-            "director": {"ran": False} if args.director else None,
+            "director": director_payload,
             "cli_snapshot": snapshot,
         }
         write_job_config(config_json_path, cfg_payload)
@@ -907,6 +1165,16 @@ def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
     if args.background:
+        # Reject the agent backend before allocating a job dir: we
+        # cannot detach the calling agent from a nohup child.
+        guard_user_config = load_user_config()
+        guard_backend = _resolve_director_backend(args, guard_user_config)
+        if guard_backend == "agent":
+            print(
+                "ERROR: --director agent is incompatible with --background",
+                file=sys.stderr,
+            )
+            return 2
         job_id, job_dir = _make_job_dir(args.job_dir)
         args.job_dir = job_dir
         try:
