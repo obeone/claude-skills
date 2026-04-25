@@ -2,7 +2,7 @@
 name: tts-duet
 description: "Author mono or dual-voice audio scripts and generate them with Gemini TTS. Use when you need to produce a podcast-style clip, voice-over, or narrated dialogue from text, estimate generation cost, audition voices, or run long TTS jobs in the background with notification. Triggers on: TTS, text-to-speech, podcast script, dialogue audio, voiceover, gemini-tts."
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
 tools:
   - Read
   - Write
@@ -55,6 +55,12 @@ background-job lane for anything longer than a few minutes.
 
 ## 3. Workflow (agent-facing)
 
+0. **Honour `prompt_at_call`** from `~/.config/tts-duet/config.yaml`.
+   If the list contains `preset`, `style`, or `director`, re-ask the
+   user for that field at the start of every invocation instead of
+   silently taking the saved default. The saved value is the
+   suggestion, not the answer. Empty list = take defaults silently
+   (legacy behaviour). See `commands/tts-duet-setup.md` Step 1bis.
 1. **Write / normalize** the script. See §5 and
    `references/script_format.md`.
 2. **Pick voices** — a `--preset` is the fastest path; otherwise

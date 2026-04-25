@@ -12,7 +12,7 @@ in the next commit.
 Pinned install (preferred for end users):
 
 ```bash
-uv tool install git+https://github.com/obeone/claude-skills@v2.0.0#subdirectory=skills/tts-duet/mcp
+uv tool install git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp
 ```
 
 Or register directly in `~/.claude.json` via `uvx`:
@@ -24,7 +24,7 @@ Or register directly in `~/.claude.json` via `uvx`:
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/obeone/claude-skills@v2.0.0#subdirectory=skills/tts-duet/mcp",
+        "git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp",
         "gemini-tts-mcp"
       ],
       "env": { "GEMINI_API_KEY": "${GEMINI_API_KEY}" }

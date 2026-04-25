@@ -8,7 +8,7 @@ description: "Interactively configure tts-duet defaults and verify the gemini-tt
 Gather sane defaults for the `tts-duet` skill, persist them to
 `~/.config/tts-duet/config.yaml`, and probe the `gemini-tts` MCP via
 `meta.health`. Emit a copy-pasteable `~/.claude.json` registration
-snippet (pinned to `@v2.0.0`) when the MCP is missing. **This command
+snippet (pinned to `@v2.2.0`) when the MCP is missing. **This command
 never writes API keys and never mutates `~/.claude.json`.**
 
 ## Step 1 — gather defaults
@@ -25,6 +25,27 @@ Ask the user for:
   `off` skips the rewrite.
 - Notification preference (`auto` / `silent`). Default: `auto`.
 
+## Step 1bis — call-time prompts
+
+Ask the user which fields the skill should **re-prompt at every
+`/tts-duet` invocation** instead of taking the saved default. Present
+this as a multi-select with the value of each field shown next to it
+so the user understands what they are overriding:
+
+- `preset` — re-pick the voice pair every time (defaults to the value
+  from Step 1 when not selected).
+- `style` — re-supply the freeform style hint passed via
+  `generate_tts.py --style "..."` every time (saved value remains as a
+  fallback when present).
+- `director` — re-pick the director backend (`agent` / `gemini` /
+  `off`) every time. Useful for users who alternate between background
+  jobs (which require `gemini` or `off`) and interactive runs.
+- `none` — keep the legacy behaviour: defaults are used silently.
+
+Persist the chosen subset as a YAML list under the top-level
+`prompt_at_call:` key (see Step 2). Selecting `none` (or making no
+selection) writes `prompt_at_call: []`.
+
 ## Step 2 — write `~/.config/tts-duet/config.yaml`
 
 Preserve any existing keys; only touch the fields gathered above and
@@ -40,12 +61,16 @@ director:
   temperature: 0.2
   existing_notes_policy: preserve
 notify: auto
+# Fields the skill re-prompts at every /tts-duet call instead of
+# taking the default above. Subset of {preset, style, director}.
+# Empty list = legacy "use defaults silently".
+prompt_at_call: []
 mcp:
   # Either a list or a single string (shlex-split at load time).
   command:
     - uvx
     - --from
-    - git+https://github.com/obeone/claude-skills@v2.0.0#subdirectory=skills/tts-duet/mcp
+    - git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp
     - gemini-tts-mcp
   chunk_retry_max: 2
   respawn_max: 3
@@ -79,7 +104,7 @@ user to paste it into their `~/.claude.json` and reload:
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/obeone/claude-skills@v2.0.0#subdirectory=skills/tts-duet/mcp",
+        "git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp",
         "gemini-tts-mcp"
       ],
       "env": { "GEMINI_API_KEY": "${GEMINI_API_KEY}" }
