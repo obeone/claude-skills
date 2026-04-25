@@ -14,6 +14,7 @@ Exposes two concerns:
 from __future__ import annotations
 
 import json
+import os
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,14 +23,19 @@ from typing import Any
 __all__ = [
     "JobConfig",
     "JOB_CONFIG_VERSION",
+    "DirectorDefaults",
     "MCPDefaults",
     "UserConfig",
+    "VALID_DIRECTOR_BACKENDS",
     "load_user_config",
     "default_user_config_path",
     "write_job_config",
     "read_job_config",
     "load_config_json",
 ]
+
+#: Allowed values for ``DirectorDefaults.backend``.
+VALID_DIRECTOR_BACKENDS: frozenset[str] = frozenset({"agent", "gemini", "off"})
 
 JOB_CONFIG_VERSION: int = 1
 
@@ -81,11 +87,46 @@ class MCPDefaults:
 
 
 @dataclass(frozen=True)
+class DirectorDefaults:
+    """Parsed contents of ``config.yaml`` ``director:`` section.
+
+    Parameters
+    ----------
+    backend : {"agent", "gemini", "off"}, optional
+        Which backend to use for the director rewrite pass.
+
+        * ``"gemini"`` — call the MCP ``text.transform`` tool (default).
+        * ``"agent"`` — write a handoff prompt to the job dir and stop;
+          the calling agent produces the rewritten script.
+        * ``"off"`` — skip the director pass entirely.
+    model : str, optional
+        Gemini model ID for the ``gemini`` backend. Default:
+        ``"gemini-2.5-flash"``.
+    temperature : float, optional
+        Sampling temperature forwarded to ``text.transform``. Default:
+        ``0.2``.
+    max_output_tokens : int, optional
+        Output-token budget forwarded to ``text.transform``. Default:
+        ``8192``.
+    existing_notes_policy : {"preserve", "replace"}, optional
+        How to handle pre-existing Director's Notes. Default:
+        ``"preserve"``.
+    """
+
+    backend: str = "gemini"
+    model: str = "gemini-2.5-flash"
+    temperature: float = 0.2
+    max_output_tokens: int = 8192
+    existing_notes_policy: str = "preserve"
+
+
+@dataclass(frozen=True)
 class UserConfig:
     """Parsed ``~/.config/tts-duet/config.yaml`` document."""
 
     raw: dict[str, Any] = field(default_factory=dict)
     mcp: MCPDefaults = field(default_factory=MCPDefaults)
+    director: DirectorDefaults = field(default_factory=DirectorDefaults)
 
 
 def default_user_config_path() -> Path:
@@ -127,6 +168,64 @@ def _parse_mcp_defaults(raw: dict[str, Any]) -> MCPDefaults:
     )
 
 
+def _parse_director_defaults(raw: dict[str, Any]) -> DirectorDefaults:
+    """Parse the top-level ``director:`` section of the user config.
+
+    The block lives at the YAML root (not under ``mcp:``) so the
+    skill's text-pass behaviour stays orthogonal to MCP transport
+    knobs.
+
+    Parameters
+    ----------
+    raw : dict
+        The full parsed YAML document.
+
+    Returns
+    -------
+    DirectorDefaults
+        Defaults populated from the document. Invalid backend values
+        silently fall back to ``"gemini"`` so a malformed config never
+        blocks a generation.
+    """
+    section = raw.get("director")
+    if not isinstance(section, dict):
+        return DirectorDefaults()
+
+    backend = str(section.get("backend", "gemini") or "gemini").strip().lower()
+    if backend not in VALID_DIRECTOR_BACKENDS:
+        backend = "gemini"
+
+    model = str(section.get("model", "gemini-2.5-flash") or "gemini-2.5-flash")
+
+    def _num(key: str, default: float) -> float:
+        value = section.get(key, default)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _intval(key: str, default: int) -> int:
+        value = section.get(key, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    notes_policy = str(
+        section.get("existing_notes_policy", "preserve") or "preserve"
+    ).strip().lower()
+    if notes_policy not in {"preserve", "replace"}:
+        notes_policy = "preserve"
+
+    return DirectorDefaults(
+        backend=backend,
+        model=model,
+        temperature=_num("temperature", 0.2),
+        max_output_tokens=_intval("max_output_tokens", 8192),
+        existing_notes_policy=notes_policy,
+    )
+
+
 def load_user_config(path: Path | None = None) -> UserConfig:
     """Load the user-defaults YAML file.
 
@@ -141,20 +240,36 @@ def load_user_config(path: Path | None = None) -> UserConfig:
         Empty config with defaults when the file does not exist, parses
         as non-mapping, or fails to parse.
     """
+    def _apply_env_override(director: DirectorDefaults) -> DirectorDefaults:
+        env_override = os.environ.get("TTS_DUET_DIRECTOR")
+        if not env_override:
+            return director
+        candidate = env_override.strip().lower()
+        if candidate not in VALID_DIRECTOR_BACKENDS:
+            return director
+        return DirectorDefaults(
+            backend=candidate,
+            model=director.model,
+            temperature=director.temperature,
+            max_output_tokens=director.max_output_tokens,
+            existing_notes_policy=director.existing_notes_policy,
+        )
+
     target = path if path is not None else default_user_config_path()
     if not target.is_file():
-        return UserConfig()
+        return UserConfig(director=_apply_env_override(DirectorDefaults()))
     try:
         import yaml  # type: ignore[import-not-found]
     except ImportError:
-        return UserConfig()
+        return UserConfig(director=_apply_env_override(DirectorDefaults()))
     try:
         raw = yaml.safe_load(target.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError):
-        return UserConfig()
+        return UserConfig(director=_apply_env_override(DirectorDefaults()))
     if not isinstance(raw, dict):
-        return UserConfig()
-    return UserConfig(raw=raw, mcp=_parse_mcp_defaults(raw))
+        return UserConfig(director=_apply_env_override(DirectorDefaults()))
+    director = _apply_env_override(_parse_director_defaults(raw))
+    return UserConfig(raw=raw, mcp=_parse_mcp_defaults(raw), director=director)
 
 
 # ---------------------------------------------------------------------------
