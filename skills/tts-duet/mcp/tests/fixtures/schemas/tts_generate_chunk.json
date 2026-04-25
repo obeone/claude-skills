@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "anthropic/maxResultSizeChars": 500000
+  },
+  "description": "Generate one PCM audio chunk via Gemini TTS. Returns base64-encoded raw PCM (24 kHz, 16-bit, mono). Use one or two voice names; the model expects matching ``Speaker:`` prefixes in ``content`` for multi-speaker output.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "content": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "request_timeout_s": {
+        "default": 300,
+        "type": "number"
+      },
+      "system_instruction": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "voice_a": {
+        "type": "string"
+      },
+      "voice_b": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "model",
+      "content",
+      "voice_a"
+    ],
+    "type": "object"
+  },
+  "name": "tts.generate_chunk",
+  "outputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "bits_per_sample": {
+        "type": "integer"
+      },
+      "channels": {
+        "type": "integer"
+      },
+      "input_tokens": {
+        "type": "integer"
+      },
+      "output_tokens": {
+        "type": "integer"
+      },
+      "pcm_base64": {
+        "type": "string"
+      },
+      "sample_rate_hz": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "pcm_base64",
+      "sample_rate_hz",
+      "bits_per_sample",
+      "channels",
+      "input_tokens",
+      "output_tokens"
+    ],
+    "type": "object"
+  }
+}

@@ -1,0 +1,138 @@
+# Voice catalog for the tts-duet skill.
+#
+# Only five voices are documentation-confirmed by Google (verified=true).
+# The remaining 25 are labelled (to verify) / tonal_hint=unknown until an
+# operator auditions them — see references/voices_catalog.md for the
+# pre-tag audition checklist that must be fully ticked before shipping
+# new voices as stable presets.
+#
+# Schema
+# ------
+# voices:
+#   - name: <canonical capitalized name expected by the Gemini SDK>
+#     descriptor: <one-word tonal description or "(to verify)">
+#     tonal_hint: low | mid | high | unknown
+#     verified: true | false
+#
+# The list is kept sorted alphabetically by `name` to keep diffs clean.
+voices:
+  - name: Achernar
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Achird
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Algenib
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Algieba
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Alnilam
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Aoede
+    descriptor: breezy
+    tonal_hint: mid
+    verified: true
+  - name: Autonoe
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Callirrhoe
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Charon
+    descriptor: informative
+    tonal_hint: low
+    verified: true
+  - name: Despina
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Enceladus
+    descriptor: breathy
+    tonal_hint: low
+    verified: true
+  - name: Erinome
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Fenrir
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Gacrux
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Iapetus
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Kore
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Laomedeia
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Leda
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Orus
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Puck
+    descriptor: upbeat
+    tonal_hint: high
+    verified: true
+  - name: Pulcherrima
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Rasalgethi
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Sadachbia
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Sadaltager
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Schedar
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Sulafat
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Umbriel
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Vindemiatrix
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
+  - name: Zephyr
+    descriptor: bright
+    tonal_hint: high
+    verified: true
+  - name: Zubenelgenubi
+    descriptor: "(to verify)"
+    tonal_hint: unknown
+    verified: false
