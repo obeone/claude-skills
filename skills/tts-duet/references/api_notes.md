@@ -83,6 +83,16 @@ alongside `response_modalities=["AUDIO"]` causes consistent
 the inline-sentinel fallback is in use. Re-run the spike after an SDK
 bump and flip the flag if the server accepts the combination.
 
+## Director pass: agent mode is free
+
+`--director agent` (or `director.backend: agent` in the user config)
+delegates the script rewrite to the calling agent. The skill writes a
+composed prompt to `<job_dir>/director-prompt.md` and stops. **Zero
+Gemini API tokens are spent on that pass.** Token costs only kick in
+when the rewritten script is fed back to `tts.generate_chunk` on the
+relaunch. See `references/director_handoff.md` for the artifact
+contract.
+
 ## Heuristic calibration
 
 `OUTPUT_TOKENS_PER_SECOND` in `scripts/lib/pricing.py` is a rough

@@ -2,7 +2,7 @@
 name: tts-duet
 description: "Author mono or dual-voice audio scripts and generate them with Gemini TTS. Use when you need to produce a podcast-style clip, voice-over, or narrated dialogue from text, estimate generation cost, audition voices, or run long TTS jobs in the background with notification. Triggers on: TTS, text-to-speech, podcast script, dialogue audio, voiceover, gemini-tts."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 tools:
   - Read
   - Write
@@ -151,6 +151,7 @@ generate_tts.py --script SCRIPT.md --output NAME
   [--max-input-tokens 30000]
   [--job-dir ./.tts-jobs/<uuid>/]
   [--approved-cost-usd FLOAT]
+  [--director agent|gemini|off] [--genre TAG]
   [--yes] [--keep-wav]
 ```
 
@@ -230,6 +231,48 @@ The authoritative exit-code table for `generate_tts.py`:
 
 The notifier never raises; failures are logged at DEBUG.
 
+## 9.5 Director pass
+
+`--director` is tri-state:
+
+- `gemini` (default) — call the MCP `text.transform` tool to rewrite
+  the script with explicit Director's Notes and per-turn cues. The
+  enriched script is persisted to `<job_dir>/director-output.md` (or
+  `<script>.director.md` on the sync lane) and re-parsed before
+  chunking. Failures fall back to the original script; the error is
+  stamped into `config.json`'s `director.error` field.
+- `agent` — the skill stops after composing the prompt, writes three
+  artifacts to the job dir, and exits 0 with `status=awaiting_director`.
+  The calling agent is expected to read `HANDOFF.md` and produce
+  `director-output.md`, then relaunch with `--director off`. Zero MCP
+  calls, zero Gemini API tokens. **Incompatible with `--background`** —
+  the calling agent cannot supervise a detached child.
+- `off` — no rewrite. The script is fed verbatim to the chunk loop.
+
+The default backend is read from
+`~/.config/tts-duet/config.yaml`'s top-level `director:` block, with
+`$TTS_DUET_DIRECTOR` overriding both:
+
+```yaml
+director:
+  backend: gemini       # agent | gemini | off
+  model: gemini-2.5-flash
+  temperature: 0.2
+  existing_notes_policy: preserve
+```
+
+### Agent-mode artifact contract
+
+When `--director agent` runs, the job dir gets:
+
+| File | Content |
+| :--- | :------ |
+| `director-prompt.md` | Composed prompt (genre vocab + script + strict output format). |
+| `director-input.md` | Verbatim copy of the input script. |
+| `HANDOFF.md` | Caller-facing instructions: read prompt, write `director-output.md`, relaunch with `--director off`. |
+
+See `references/director_handoff.md` for the full contract.
+
 ## 10. Limits & caveats
 
 - Preview models only (`gemini-2.5-pro-preview-tts`,
@@ -260,5 +303,7 @@ The notifier never raises; failures are logged at DEBUG.
   checklist.
 - `references/api_notes.md` — Gemini quirks (PCM response shape,
   multi-speaker requirements, auto-generated pricing).
+- `references/director_handoff.md` — agent-mode handoff contract
+  (artifact files, status transitions, expected output format).
 - `assets/script_template.md` — runnable reference script.
 - `assets/preview_text.md` — default preview snippet.
