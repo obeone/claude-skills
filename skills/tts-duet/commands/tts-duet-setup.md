@@ -19,6 +19,14 @@ Ask the user for:
 - Default output format (`wav` / `mp3` / `both`). Default: `mp3`.
 - Default preset (one of the `voice_pairs.yaml` entries, e.g.
   `podcast-chill`). Default: `podcast-chill`.
+- Default script shape (`dialogue` / `mono` / `interview`). Default:
+  `dialogue`. Used by the adaptation pre-pass when the user does not
+  explicitly request another shape. `dialogue` = two voices, lively
+  pacing; `mono` = single narrator; `interview` = Q&A turn-taking.
+- Default language (`auto` / `fr` / `en` / any BCP-47 tag). Default:
+  `auto`. Biases pronunciation during generation and tells the
+  adaptation pre-pass which language to write in. `auto` lets Gemini
+  detect from the input.
 - Adaptation backend (`agent` / `gemini`). Default: `agent`.
   Controls **who turns the user's raw input into a runnable script
   (summarisation + dialogue rewrite)** at the start of every
@@ -47,6 +55,10 @@ so the user understands what they are overriding:
 - `style` — re-supply the freeform style hint passed via
   `generate_tts.py --style "..."` every time (saved value remains as a
   fallback when present).
+- `shape` — re-pick the script shape every time. Useful when the
+  user mixes podcast-style content with mono narration.
+- `language` — re-pick the language every time. Useful for
+  multilingual users; the saved default still applies otherwise.
 - `adaptation` — re-pick the adaptation backend (`agent` / `gemini`)
   every time. Useful when the same user alternates between rich
   interactive sessions (where local-agent adaptation is best) and
@@ -69,6 +81,8 @@ the new `mcp:` section. Minimal schema:
 model: flash
 format: mp3
 preset: podcast-chill
+shape: dialogue       # dialogue | mono | interview — default script shape
+language: auto        # auto | fr | en | any BCP-47 tag
 adaptation:
   backend: agent    # agent | gemini — who turns raw input into a runnable script
 director:
@@ -78,7 +92,7 @@ director:
   existing_notes_policy: preserve
 notify: auto
 # Fields the skill re-prompts at every /tts-duet call instead of
-# taking the default above. Subset of {preset, style, adaptation, director}.
+# taking the default above. Subset of {preset, style, shape, language, adaptation, director}.
 # Empty list = legacy "use defaults silently".
 prompt_at_call: []
 mcp:
