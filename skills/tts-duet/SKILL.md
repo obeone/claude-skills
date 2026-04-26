@@ -47,9 +47,10 @@ script first. The user wants something listenable, not their own prose
 read aloud — and the model handles dialogue better than monologue.
 
 1. **Honour `prompt_at_call`** from `~/.config/tts-duet/config.yaml`
-   when present. If the list contains `preset`, `style`, or `director`,
-   re-ask the user for that field at call time instead of taking the
-   saved default. Empty list (or no config) = take defaults silently.
+   when present. If the list contains `preset`, `style`, `shape`,
+   `language`, `adaptation`, or `director`, re-ask the user for that
+   field at call time instead of taking the saved default. Empty list
+   (or no config) = take defaults silently.
 2. **Adapt the input into a script.** Default shape: a two-voice
    dialogue with `Speaker A:` / `Speaker B:` turns, lively pacing,
    natural turn-taking. Honour explicit user requests for other shapes
@@ -62,13 +63,24 @@ read aloud — and the model handles dialogue better than monologue.
    can review and iterate without round-tripping through the model.
 
    **Who does the adaptation** is read from
-   `~/.config/tts-duet/config.yaml`'s `adaptation.backend` field:
+   `~/.config/tts-duet/config.yaml`'s `adaptation.backend` field, with
+   `shape` and `language` defaults from the same file:
    - `agent` (default): you, the calling agent, do the summarisation
      and dialogue-writing using your own context. Free, no extra
      tokens, richer context than a one-shot transform.
-   - `gemini`: delegate to the `gemini-tts` MCP `text.transform` tool.
-     Useful when the calling agent is small, when the user wants
-     Gemini's editorial style end-to-end, or for unattended pipelines.
+   - `gemini`: invoke `scripts/adapt_script.py --backend gemini …` to
+     delegate the rewrite to the MCP `text.transform` tool. Useful
+     when the calling agent is small, when the user wants Gemini's
+     editorial style end-to-end, or for unattended pipelines.
+
+   `adapt_script.py` also accepts `--backend agent`, in which case it
+   writes a `HANDOFF.md` + `adaptation-prompt.md` + `adaptation-input.md`
+   triple to `--job-dir`, mirroring the director agent-mode contract.
+   Full handoff spec: `references/adaptation_handoff.md`.
+
+   Estimate the **target duration** from the input length before
+   calling: ~150 wpm spoken, so a 750-word source maps to ~5 min
+   audio. Confirm the figure with the user when unclear.
 
    If `adaptation` is listed in `prompt_at_call`, ask the user at every
    invocation instead of taking the default. The same trade-off applies
@@ -133,6 +145,13 @@ Catalog of 30 voices: `references/voices_catalog.md`.
 Typical end-to-end session:
 
 ```bash
+# 0. (optional) Adapt raw input via the MCP — only when
+#    adaptation.backend == gemini. Skip when the agent did it locally.
+uv run scripts/adapt_script.py \
+  --input raw.md --output script.md \
+  --backend gemini --shape dialogue --language auto \
+  --target-duration 300 --yes
+
 # 1. Estimate
 uv run scripts/estimate_cost.py --script script.md --model flash --json
 
@@ -151,6 +170,8 @@ uv run scripts/generate_tts.py [...] --background
 
 Entry points (run any with `--help` for the full flag set):
 
+- `adapt_script.py` — adaptation pre-pass (`--backend agent|gemini`).
+  Writes a runnable script from raw input.
 - `generate_tts.py` — primary CLI (sync or `--background`).
 - `preview_voice.py` — single-voice audition.
 - `estimate_cost.py` — offline heuristic; `--with-api` for exact count.
@@ -220,6 +241,9 @@ order, calibration constants) live in `references/api_notes.md`.
 - `references/script_format.md` — full input-format spec.
 - `references/voices_catalog.md` — 30-voice table + audition checklist.
 - `references/api_notes.md` — Gemini quirks, pricing, internal flags.
-- `references/director_handoff.md` — agent-mode artifact contract.
+- `references/director_handoff.md` — agent-mode artifact contract
+  (Director's Notes pass).
+- `references/adaptation_handoff.md` — agent-mode artifact contract
+  (raw-text-to-script adaptation pre-pass).
 - `assets/script_template.md` — runnable reference script.
 - `assets/preview_text.md` — default preview snippet.
