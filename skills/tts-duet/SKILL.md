@@ -2,7 +2,7 @@
 name: tts-duet
 description: "Author mono or dual-voice audio scripts and generate them with Gemini TTS. Use when you need to produce a podcast-style clip, voice-over, or narrated dialogue from text, estimate generation cost, audition voices, or run long TTS jobs in the background with notification. Triggers on: TTS, text-to-speech, podcast script, dialogue audio, voiceover, gemini-tts."
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
 tools:
   - Read
   - Write
@@ -61,8 +61,28 @@ background-job lane for anything longer than a few minutes.
    silently taking the saved default. The saved value is the
    suggestion, not the answer. Empty list = take defaults silently
    (legacy behaviour). See `commands/tts-duet-setup.md` Step 1bis.
-1. **Write / normalize** the script. See §5 and
-   `references/script_format.md`.
+1. **Adapt the input into a script — this step is mandatory.**
+   Never feed the user's raw text directly to TTS. Inspect the input
+   and produce a script that matches §5 and
+   `references/script_format.md`:
+   - Default shape: a **dual-voice dialogue / podcast** with
+     `Speaker A:` / `Speaker B:` turns. Two voices, lively pacing,
+     natural turn-taking — not the user's prose read aloud.
+   - If the user explicitly asks for another shape (mono narration,
+     interview Q&A, summary, condensed digest, translation, debate,
+     children's story, …), honour it. Mono mode collapses the
+     dialogue into a single `Mono` block; everything else still ships
+     as two voices unless impossible.
+   - When the input is long-form (article, transcript, paper, large
+     document), summarise / adapt to a runnable length first; do not
+     transcribe verbatim. Ask the user for the target duration when
+     unclear.
+   - Only skip adaptation when the input is **already** in the
+     `Speaker A:` / `Speaker B:` format described in
+     `references/script_format.md`. Even then, normalise speaker
+     labels and confirm with the user before generating.
+   - Persist the adapted script to disk before §5/§6 so the user can
+     review it (and re-run with edits without re-asking the model).
 2. **Pick voices** — a `--preset` is the fastest path; otherwise
    `--voice1 / --voice2` or `--mono --voice`. Experimental presets
    print a warning (§6).

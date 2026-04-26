@@ -1,6 +1,6 @@
 pyyaml>=6.0
 mcp>=1.14,<2
 # The skill talks to the gemini-tts-mcp server at ~=2.0. Install via
-#   uvx --from git+https://github.com/obeone/claude-skills@v2.2.0#subdirectory=skills/tts-duet/mcp gemini-tts-mcp
+#   uvx --from git+https://github.com/obeone/claude-skills@v2.3.0#subdirectory=skills/tts-duet/mcp gemini-tts-mcp
 # or
 #   uv tool install ./skills/tts-duet/mcp
