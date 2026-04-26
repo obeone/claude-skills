@@ -83,6 +83,38 @@ alongside `response_modalities=["AUDIO"]` causes consistent
 the inline-sentinel fallback is in use. Re-run the spike after an SDK
 bump and flip the flag if the server accepts the combination.
 
+## Adaptation pass: agent vs gemini
+
+`adapt_script.py` runs **before** any TTS call and turns raw text into
+a runnable `Speaker A:` / `Speaker B:` (or `Mono:`, or interview
+Q/A) script. Two backends mirror `--director`:
+
+- `--backend agent` — the calling agent does the rewrite locally; the
+  script writes a handoff prompt (`adaptation-prompt.md` +
+  `adaptation-input.md` + `HANDOFF.md`) to `--job-dir`, sets
+  `status=awaiting_adaptation`, and exits 0. **Zero Gemini API tokens
+  are spent on that pass.** The contract is described in
+  `references/adaptation_handoff.md`.
+- `--backend gemini` — the script calls the MCP `text.transform` tool
+  with a composed prompt (shape rule + target-duration hint at
+  ~150 wpm + language directive + optional style hint + raw input).
+  Default temperature is `0.3` — slightly higher than the director
+  pass's `0.2` because adaptation is creative (re-phrasing, summarising,
+  inventing turn-taking) while director enrichment is mostly additive.
+
+The output is the **adapted script itself**, not a directive list:
+the downstream `script_parser.py` consumes it directly. When
+`--backend gemini` produced the script, prefer running
+`generate_tts.py --director off` to avoid a double rewrite (the
+adaptation already enriched the script; running the director pass on
+top would either no-op or mangle the carefully-shaped turns).
+
+Token costs only kick in for `--backend gemini`; `agent` is free.
+Input is one `text.transform` request, output is roughly the
+target-duration × 4 words ≈ size of the request. For a 5 min target,
+expect ≈ 750 input + 750 output text tokens — a fraction of a cent at
+flash pricing.
+
 ## Director pass: agent mode is free
 
 `--director agent` (or `director.backend: agent` in the user config)

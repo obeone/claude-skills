@@ -51,6 +51,13 @@ uv run skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
 # List voices / presets (and validate preset coverage)
 uv run skills/tts-duet/scripts/list_voices.py --validate
 
+# Adapt raw text into a runnable Speaker A/B script (--backend gemini
+# routes through the MCP text.transform; --backend agent writes a
+# handoff prompt for the calling agent to fill).
+uv run skills/tts-duet/scripts/adapt_script.py \
+  --input raw.md --output script.md \
+  --backend gemini --shape dialogue --target-duration 300 --yes
+
 # Estimate cost offline
 uv run skills/tts-duet/scripts/estimate_cost.py \
   --script skills/tts-duet/assets/script_template.md --model flash --json

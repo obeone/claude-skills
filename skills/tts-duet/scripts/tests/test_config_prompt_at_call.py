@@ -79,4 +79,6 @@ def test_case_is_normalised_to_lower(tmp_path: Path) -> None:
 
 def test_valid_set_only_contains_documented_fields() -> None:
     """Pin the public allowlist — bumping it is a SKILL.md change."""
-    assert VALID_PROMPT_AT_CALL_FIELDS == frozenset({"preset", "style", "director"})
+    assert VALID_PROMPT_AT_CALL_FIELDS == frozenset(
+        {"preset", "style", "director", "shape", "language", "adaptation"}
+    )
