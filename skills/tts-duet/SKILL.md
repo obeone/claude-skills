@@ -245,5 +245,7 @@ order, calibration constants) live in `references/api_notes.md`.
   (Director's Notes pass).
 - `references/adaptation_handoff.md` — agent-mode artifact contract
   (raw-text-to-script adaptation pre-pass).
-- `assets/script_template.md` — runnable reference script.
+- `assets/script_template.md` — runnable reference script (dialogue).
+- `assets/script_examples.md` — one example per shape (dialogue, mono,
+  interview) for copy-paste starting points.
 - `assets/preview_text.md` — default preview snippet.

@@ -82,6 +82,7 @@ Speaker B: I've been reading about the history of standard time zones.
 
 ## See also
 
-- `assets/script_template.md` — runnable reference template.
+- `assets/script_template.md` — runnable reference template (dialogue).
+- `assets/script_examples.md` — one example per shape.
 - `references/voices_catalog.md` — the voices you can pair.
 - `references/api_notes.md` — Gemini quirks relevant to scripting.
