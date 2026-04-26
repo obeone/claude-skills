@@ -23,11 +23,14 @@ from typing import Any
 __all__ = [
     "JobConfig",
     "JOB_CONFIG_VERSION",
+    "AdaptationDefaults",
     "DirectorDefaults",
     "MCPDefaults",
     "UserConfig",
+    "VALID_ADAPTATION_BACKENDS",
     "VALID_DIRECTOR_BACKENDS",
     "VALID_PROMPT_AT_CALL_FIELDS",
+    "VALID_SHAPES",
     "load_user_config",
     "default_user_config_path",
     "write_job_config",
@@ -38,12 +41,21 @@ __all__ = [
 #: Allowed values for ``DirectorDefaults.backend``.
 VALID_DIRECTOR_BACKENDS: frozenset[str] = frozenset({"agent", "gemini", "off"})
 
+#: Allowed values for ``AdaptationDefaults.backend``. Adaptation has
+#: no ``"off"`` since the pre-pass is only invoked when the user
+#: explicitly asks for raw-text → script adaptation.
+VALID_ADAPTATION_BACKENDS: frozenset[str] = frozenset({"agent", "gemini"})
+
+#: Allowed values for ``UserConfig.shape`` / the adaptation ``--shape``
+#: CLI flag.
+VALID_SHAPES: frozenset[str] = frozenset({"dialogue", "mono", "interview"})
+
 #: Fields the user can flag as "ask me at every /tts-duet call" instead
 #: of using the persisted default. Anything else in
 #: ``prompt_at_call`` is dropped silently to keep older configs forward
 #: compatible.
 VALID_PROMPT_AT_CALL_FIELDS: frozenset[str] = frozenset(
-    {"preset", "style", "director"}
+    {"preset", "style", "director", "shape", "language", "adaptation"}
 )
 
 JOB_CONFIG_VERSION: int = 1
@@ -130,6 +142,37 @@ class DirectorDefaults:
 
 
 @dataclass(frozen=True)
+class AdaptationDefaults:
+    """Parsed contents of ``config.yaml`` ``adaptation:`` section.
+
+    Parameters
+    ----------
+    backend : {"agent", "gemini"}, optional
+        Which backend handles the raw-text -> script adaptation pre-pass.
+
+        * ``"agent"`` — the calling agent does it locally; the skill
+          writes a handoff prompt and exits (default).
+        * ``"gemini"`` — call the MCP ``text.transform`` tool with an
+          adaptation prompt.
+    model : str, optional
+        Gemini model ID for the ``gemini`` backend. Default:
+        ``"gemini-2.5-flash"``.
+    temperature : float, optional
+        Sampling temperature forwarded to ``text.transform``. Slightly
+        higher than the director's 0.2 because adaptation is creative.
+        Default: ``0.3``.
+    max_output_tokens : int, optional
+        Output-token budget forwarded to ``text.transform``. Default:
+        ``8192``.
+    """
+
+    backend: str = "agent"
+    model: str = "gemini-2.5-flash"
+    temperature: float = 0.3
+    max_output_tokens: int = 8192
+
+
+@dataclass(frozen=True)
 class UserConfig:
     """Parsed ``~/.config/tts-duet/config.yaml`` document.
 
@@ -142,6 +185,15 @@ class UserConfig:
         Parsed ``mcp:`` section.
     director : DirectorDefaults
         Parsed ``director:`` section.
+    adaptation : AdaptationDefaults
+        Parsed ``adaptation:`` section.
+    shape : {"dialogue", "mono", "interview"}, optional
+        Default script shape used by the adaptation pre-pass. Default:
+        ``"dialogue"``.
+    language : str, optional
+        Default language for adaptation. ``"auto"`` lets the model
+        match the input; otherwise a BCP-47 tag (``"fr"``, ``"en"``,
+        ...). Default: ``"auto"``.
     prompt_at_call : frozenset of str
         Fields the user wants re-prompted at every ``/tts-duet``
         invocation instead of taking the saved default. Each entry must
@@ -152,6 +204,9 @@ class UserConfig:
     raw: dict[str, Any] = field(default_factory=dict)
     mcp: MCPDefaults = field(default_factory=MCPDefaults)
     director: DirectorDefaults = field(default_factory=DirectorDefaults)
+    adaptation: AdaptationDefaults = field(default_factory=AdaptationDefaults)
+    shape: str = "dialogue"
+    language: str = "auto"
     prompt_at_call: frozenset[str] = field(default_factory=frozenset)
 
 
@@ -260,6 +315,82 @@ def _parse_director_defaults(raw: dict[str, Any]) -> DirectorDefaults:
     )
 
 
+def _parse_adaptation_defaults(raw: dict[str, Any]) -> AdaptationDefaults:
+    """Parse the top-level ``adaptation:`` section of the user config.
+
+    Mirrors :func:`_parse_director_defaults`: the block lives at the
+    YAML root and only the ``backend`` field is strictly validated.
+    Invalid backend values silently fall back to ``"agent"`` so a
+    malformed config never blocks an adaptation run.
+
+    Parameters
+    ----------
+    raw : dict
+        The full parsed YAML document.
+
+    Returns
+    -------
+    AdaptationDefaults
+        Defaults populated from the document.
+    """
+    section = raw.get("adaptation")
+    if not isinstance(section, dict):
+        return AdaptationDefaults()
+
+    raw_backend = section.get("backend", "agent")
+    if isinstance(raw_backend, bool):
+        backend = "agent"
+    else:
+        backend = str(raw_backend or "agent").strip().lower()
+    if backend not in VALID_ADAPTATION_BACKENDS:
+        backend = "agent"
+
+    model = str(section.get("model", "gemini-2.5-flash") or "gemini-2.5-flash")
+
+    def _num(key: str, default: float) -> float:
+        value = section.get(key, default)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _intval(key: str, default: int) -> int:
+        value = section.get(key, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    return AdaptationDefaults(
+        backend=backend,
+        model=model,
+        temperature=_num("temperature", 0.3),
+        max_output_tokens=_intval("max_output_tokens", 8192),
+    )
+
+
+def _parse_shape(raw: dict[str, Any]) -> str:
+    """Parse the top-level ``shape:`` field. Invalid -> ``"dialogue"``."""
+    value = raw.get("shape", "dialogue")
+    candidate = str(value or "dialogue").strip().lower()
+    if candidate not in VALID_SHAPES:
+        return "dialogue"
+    return candidate
+
+
+def _parse_language(raw: dict[str, Any]) -> str:
+    """Parse the top-level ``language:`` field.
+
+    Empty / missing values fall back to ``"auto"``. The skill does not
+    validate BCP-47 syntax — it forwards the tag verbatim to the
+    adaptation prompt.
+    """
+    value = raw.get("language", "auto")
+    if value in (None, "", False):
+        return "auto"
+    return str(value).strip() or "auto"
+
+
 def _parse_prompt_at_call(raw: dict[str, Any]) -> frozenset[str]:
     """Parse the top-level ``prompt_at_call:`` list.
 
@@ -337,6 +468,9 @@ def load_user_config(path: Path | None = None) -> UserConfig:
         raw=raw,
         mcp=_parse_mcp_defaults(raw),
         director=director,
+        adaptation=_parse_adaptation_defaults(raw),
+        shape=_parse_shape(raw),
+        language=_parse_language(raw),
         prompt_at_call=_parse_prompt_at_call(raw),
     )
 
