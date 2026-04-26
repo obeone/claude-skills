@@ -1,4 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "pyyaml>=6.0",
+#     "mcp>=1.14,<2",
+#     "coloredlogs>=15.0",
+# ]
+# ///
 """Generate TTS audio from a script file via the ``gemini-tts-mcp`` MCP.
 
 Primary CLI for the ``tts-duet`` skill. All Gemini API access happens

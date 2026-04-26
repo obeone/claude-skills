@@ -152,14 +152,14 @@ Skills are automatically discovered when you run Claude Code in this repository.
 ### Manual Usage
 
 ```bash
-# Analyze a Dockerfile
-python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
+# Analyze a Dockerfile (uv reads PEP 723 metadata in the script header)
+uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
 
 # Analyze a Docker Compose file
-python skills/dockerfile-best-practices/scripts/analyze_compose.py ./compose.yaml
+uv run skills/dockerfile-best-practices/scripts/analyze_compose.py ./compose.yaml
 
 # Validate a Helm chart
-python skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
 ```
 
 ## 🎯 Available Skills
@@ -178,9 +178,8 @@ skills/<skill-name>/
 │                         # Contains: name, description
 │
 ├── scripts/              # Python validation tools
-│   ├── analyze_*.py      # Static analyzers
-│   ├── validate_*.py     # Structure validators
-│   └── requirements.txt  # Dependencies (uv compatible)
+│   ├── analyze_*.py      # Static analyzers — PEP 723 inline deps
+│   └── validate_*.py     # Structure validators — PEP 723 inline deps
 │
 ├── assets/               # Templates and static files
 │   └── templates/        # Boilerplate code
@@ -223,14 +222,14 @@ This repository includes GitHub Actions workflows:
 
 ### Python Scripts
 
-All scripts use `uv` for dependency management:
+Every entry-point script declares its dependencies inline as a [PEP 723](https://peps.python.org/pep-0723/) header. `uv run path/to/script.py` resolves and caches them automatically — no `pip install` step.
 
 ```bash
 # Install uv if needed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Run a script (dependencies auto-installed)
-uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
+# Run a script (uv reads the script's PEP 723 header and prepares the env)
+uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
 ```
 
 ## 🔍 Key Features by Skill

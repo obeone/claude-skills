@@ -1,4 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "pyyaml>=6.0",
+#     "mcp>=1.14,<2",
+# ]
+# ///
 """Generate a short audio preview for a single voice via the MCP.
 
 Calls ``tts.preview_voice`` on the ``gemini-tts-mcp`` MCP; this script

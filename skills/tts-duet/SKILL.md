@@ -46,10 +46,14 @@ background-job lane for anything longer than a few minutes.
 ## 2. Prerequisites
 
 - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) in the environment **for
-  generation only**. Parsing, estimation, voice listing and preset
-  validation work offline.
-- Python 3.10+ and `uv` (recommended):
-  `uv pip install -r skills/tts-duet/scripts/requirements.txt`.
+  generation only**. The `gemini-tts-mcp` child reads it; this skill
+  never touches the secret. Parsing, estimation, voice listing and
+  preset validation work offline.
+- Python 3.10+ and `uv`. Each entry-point script (`generate_tts.py`,
+  `preview_voice.py`, `estimate_cost.py`, `list_voices.py`) declares
+  its dependencies inline as a [PEP 723](https://peps.python.org/pep-0723/)
+  header, so `uv run path/to/script.py …` resolves and caches them
+  automatically — no `pip install` step.
 - Optional: `ffmpeg` (MP3 transcoding), `kitten` (Kitty notification),
   `alerter` (macOS actionable notifications).
 
@@ -109,7 +113,6 @@ skills/tts-duet/
 │   ├── preview_voice.py                  # single-voice audition
 │   ├── estimate_cost.py                  # offline heuristic + --with-api
 │   ├── list_voices.py                    # --validate is a CI gate
-│   ├── requirements.txt
 │   ├── dev-requirements.txt              # STT leakage test only
 │   └── lib/                              # internal plumbing
 │       ├── script_parser.py

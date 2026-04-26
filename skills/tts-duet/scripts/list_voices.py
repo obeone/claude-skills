@@ -1,4 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "pyyaml>=6.0",
+# ]
+# ///
 """List voices and presets known to the tts-duet skill.
 
 Default output is a human-readable table; ``--json`` emits a stable
