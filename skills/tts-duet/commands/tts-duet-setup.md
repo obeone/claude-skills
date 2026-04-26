@@ -19,10 +19,20 @@ Ask the user for:
 - Default output format (`wav` / `mp3` / `both`). Default: `mp3`.
 - Default preset (one of the `voice_pairs.yaml` entries, e.g.
   `podcast-chill`). Default: `podcast-chill`.
+- Adaptation backend (`agent` / `gemini`). Default: `agent`.
+  Controls **who turns the user's raw input into a runnable script
+  (summarisation + dialogue rewrite)** at the start of every
+  `/tts-duet` call. `agent` = the calling agent does it locally
+  (free, richer context). `gemini` = delegate to the MCP
+  `text.transform` tool (useful for small agents or unattended
+  pipelines).
 - Director backend (`agent` / `gemini` / `off`). Default: `gemini`.
-  `agent` delegates the rewrite to the calling agent (incompatible
-  with background runs); `gemini` uses the MCP `text.transform` tool;
-  `off` skips the rewrite.
+  Runs **after** adaptation to add Director's Notes and per-turn
+  cues. `agent` delegates the rewrite to the calling agent
+  (incompatible with background runs); `gemini` uses the MCP
+  `text.transform` tool; `off` skips the rewrite. When
+  `adaptation: gemini` produced the script, prefer `director: off`
+  to avoid a double rewrite.
 - Notification preference (`auto` / `silent`). Default: `auto`.
 
 ## Step 1bis — call-time prompts
@@ -37,6 +47,10 @@ so the user understands what they are overriding:
 - `style` — re-supply the freeform style hint passed via
   `generate_tts.py --style "..."` every time (saved value remains as a
   fallback when present).
+- `adaptation` — re-pick the adaptation backend (`agent` / `gemini`)
+  every time. Useful when the same user alternates between rich
+  interactive sessions (where local-agent adaptation is best) and
+  thin orchestrator runs (where `gemini` saves their context).
 - `director` — re-pick the director backend (`agent` / `gemini` /
   `off`) every time. Useful for users who alternate between background
   jobs (which require `gemini` or `off`) and interactive runs.
@@ -55,6 +69,8 @@ the new `mcp:` section. Minimal schema:
 model: flash
 format: mp3
 preset: podcast-chill
+adaptation:
+  backend: agent    # agent | gemini — who turns raw input into a runnable script
 director:
   backend: gemini   # agent | gemini | off — quote "off" to keep YAML 1.1 from coercing it to false
   model: gemini-2.5-flash
@@ -62,7 +78,7 @@ director:
   existing_notes_policy: preserve
 notify: auto
 # Fields the skill re-prompts at every /tts-duet call instead of
-# taking the default above. Subset of {preset, style, director}.
+# taking the default above. Subset of {preset, style, adaptation, director}.
 # Empty list = legacy "use defaults silently".
 prompt_at_call: []
 mcp:

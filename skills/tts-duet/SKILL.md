@@ -2,13 +2,8 @@
 name: tts-duet
 description: "Author mono or dual-voice audio scripts and generate them with Gemini TTS. Use when you need to produce a podcast-style clip, voice-over, or narrated dialogue from text, estimate generation cost, audition voices, or run long TTS jobs in the background with notification. Triggers on: TTS, text-to-speech, podcast script, dialogue audio, voiceover, gemini-tts."
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
 tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-allowed-tools:
   - Read
   - Write
   - Edit
@@ -20,133 +15,105 @@ allowed-tools:
   - mcp__gemini_tts__meta_health
 ---
 
-# Gemini TTS Script
+# Gemini TTS — author and generate
 
-Author a mono- or dual-voice audio script, estimate cost without calling
-the API, audition voices, then generate audio via Gemini TTS — with a
-background-job lane for anything longer than a few minutes.
+Turn text into audio via Gemini's preview TTS models. The skill takes
+you from raw input → adapted script → cost estimate → generated WAV/MP3,
+with a background lane for jobs longer than a few minutes.
 
-## 1. When to use (and not)
+## Out of scope
 
-**Use this skill when** the user wants to:
+- Voice cloning or custom voices (prebuilt voices only).
+- SSML markup (Gemini TTS ignores it; use inline directives instead).
+- Subtitles, timecodes, streaming output, upload to a host.
 
-- Convert a Markdown-ish script into audio (podcast, voice-over,
-  explainer, reading).
-- Compare the cost of `pro` vs. `flash` before committing.
-- Audition individual voices before picking a preset.
-- Run a long generation in the background with notification.
-
-**Do not use this skill for:**
-
-- Voice cloning or custom voices (Gemini prebuilt voices only).
-- SSML markup (not supported by Gemini TTS).
-- Subtitles / timecode alignment, streaming output, or upload.
-- Retry / idempotency scaffolding — out of scope for v1.
-
-## 2. Prerequisites
+## Prerequisites
 
 - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) in the environment **for
-  generation only**. The `gemini-tts-mcp` child reads it; this skill
-  never touches the secret. Parsing, estimation, voice listing and
-  preset validation work offline.
-- Python 3.10+ and `uv`. Each entry-point script (`generate_tts.py`,
-  `preview_voice.py`, `estimate_cost.py`, `list_voices.py`) declares
-  its dependencies inline as a [PEP 723](https://peps.python.org/pep-0723/)
-  header, so `uv run path/to/script.py …` resolves and caches them
-  automatically — no `pip install` step.
-- Optional: `ffmpeg` (MP3 transcoding), `kitten` (Kitty notification),
-  `alerter` (macOS actionable notifications).
+  generation only**. The MCP child reads it; this skill never touches
+  the secret. Parsing, estimation, voice listing, and preset validation
+  all work offline.
+- Python 3.10+ and `uv`. Each entry-point script declares its
+  dependencies inline ([PEP 723](https://peps.python.org/pep-0723/)),
+  so `uv run path/to/script.py …` resolves them automatically.
+- Optional: `ffmpeg` (MP3), `kitten` / `alerter` (notifications).
 
-## 3. Workflow (agent-facing)
+## Workflow
 
-0. **Honour `prompt_at_call`** from `~/.config/tts-duet/config.yaml`.
-   If the list contains `preset`, `style`, or `director`, re-ask the
-   user for that field at the start of every invocation instead of
-   silently taking the saved default. The saved value is the
-   suggestion, not the answer. Empty list = take defaults silently
-   (legacy behaviour). See `commands/tts-duet-setup.md` Step 1bis.
-1. **Adapt the input into a script — this step is mandatory.**
-   Never feed the user's raw text directly to TTS. Inspect the input
-   and produce a script that matches §5 and
-   `references/script_format.md`:
-   - Default shape: a **dual-voice dialogue / podcast** with
-     `Speaker A:` / `Speaker B:` turns. Two voices, lively pacing,
-     natural turn-taking — not the user's prose read aloud.
-   - If the user explicitly asks for another shape (mono narration,
-     interview Q&A, summary, condensed digest, translation, debate,
-     children's story, …), honour it. Mono mode collapses the
-     dialogue into a single `Mono` block; everything else still ships
-     as two voices unless impossible.
-   - When the input is long-form (article, transcript, paper, large
-     document), summarise / adapt to a runnable length first; do not
-     transcribe verbatim. Ask the user for the target duration when
-     unclear.
-   - Only skip adaptation when the input is **already** in the
-     `Speaker A:` / `Speaker B:` format described in
-     `references/script_format.md`. Even then, normalise speaker
-     labels and confirm with the user before generating.
-   - Persist the adapted script to disk before §5/§6 so the user can
-     review it (and re-run with edits without re-asking the model).
-2. **Pick voices** — a `--preset` is the fastest path; otherwise
-   `--voice1 / --voice2` or `--mono --voice`. Experimental presets
-   print a warning (§6).
-3. **Estimate offline** with `estimate_cost.py` (heuristic; no
-   network). Only call `--with-api` when the user explicitly wants the
+The workflow has one non-negotiable rule and a few sensible defaults.
+
+**Rule: never feed raw user text to TTS.** Always produce an adapted
+script first. The user wants something listenable, not their own prose
+read aloud — and the model handles dialogue better than monologue.
+
+1. **Honour `prompt_at_call`** from `~/.config/tts-duet/config.yaml`
+   when present. If the list contains `preset`, `style`, or `director`,
+   re-ask the user for that field at call time instead of taking the
+   saved default. Empty list (or no config) = take defaults silently.
+2. **Adapt the input into a script.** Default shape: a two-voice
+   dialogue with `Speaker A:` / `Speaker B:` turns, lively pacing,
+   natural turn-taking. Honour explicit user requests for other shapes
+   (mono narration, interview Q&A, debate, children's story, …). For
+   long-form input (article, paper, transcript), summarise to a
+   runnable length — ask the user for the target duration if unclear.
+   Skip adaptation only when the input already follows the script
+   format; even then, normalise speaker labels and confirm.
+   Persist the adapted script to disk before generating so the user
+   can review and iterate without round-tripping through the model.
+
+   **Who does the adaptation** is read from
+   `~/.config/tts-duet/config.yaml`'s `adaptation.backend` field:
+   - `agent` (default): you, the calling agent, do the summarisation
+     and dialogue-writing using your own context. Free, no extra
+     tokens, richer context than a one-shot transform.
+   - `gemini`: delegate to the `gemini-tts` MCP `text.transform` tool.
+     Useful when the calling agent is small, when the user wants
+     Gemini's editorial style end-to-end, or for unattended pipelines.
+
+   If `adaptation` is listed in `prompt_at_call`, ask the user at every
+   invocation instead of taking the default. The same trade-off applies
+   to **Director's Notes** via `--director` (step 7); when adaptation
+   is delegated to `gemini`, run with `--director off` to avoid a
+   double rewrite.
+3. **Pick voices.** `--preset` is the fastest path; `--voice1 / --voice2`
+   or `--mono --voice` if you know the catalog. Experimental presets
+   print a warning — audition first.
+4. **Estimate offline** with `estimate_cost.py` (heuristic, no
+   network). Use `--with-api` only when the user explicitly wants the
    exact `count_tokens` value.
-4. **Audition** one or both voices with `preview_voice.py` if the
-   preset is experimental or the user is unsure.
-5. **Propose generation** — only when a key is set — with model,
-   format, estimate, and sync-vs-background recommendation. Wait for
-   explicit approval.
-6. **Generate** with `generate_tts.py --yes`, adding
-   `--approved-cost-usd` so a drift aborts non-interactively.
-7. **Background for long jobs** — anything > ~5 min audio. Child
-   writes status transitions and fires a notification on `done`.
+5. **Audition** with `preview_voice.py` if the preset is experimental
+   or the user is unsure.
+6. **Propose generation** — once a key is set — with model, format,
+   estimate, and a sync-vs-background recommendation. Wait for
+   approval.
+7. **Generate** with `generate_tts.py --yes --approved-cost-usd <X>`
+   so a cost drift aborts non-interactively.
+8. **Background** anything > ~5 min audio (`--background`). The child
+   writes status transitions and fires a notification when done.
 
-## 4. Repository layout
+## Script format
 
-```
-skills/tts-duet/
-├── SKILL.md                              # this file
-├── scripts/
-│   ├── generate_tts.py                   # primary CLI
-│   ├── preview_voice.py                  # single-voice audition
-│   ├── estimate_cost.py                  # offline heuristic + --with-api
-│   ├── list_voices.py                    # --validate is a CI gate
-│   ├── dev-requirements.txt              # STT leakage test only
-│   └── lib/                              # internal plumbing
-│       ├── script_parser.py
-│       ├── pricing.py                    # SSOT for cost/duration
-│       ├── audio_io.py                   # PCM/WAV/MP3 helpers
-│       ├── notify.py                     # notification chain
-│       ├── _config.py                    # feature flag for §10
-│       ├── _spike_system_instruction.py  # P0 spike artefact
-│       └── _gen_api_notes_pricing.py
-├── assets/
-│   ├── voice_pairs.yaml
-│   ├── voices.yaml
-│   ├── script_template.md
-│   └── preview_text.md
-└── references/
-    ├── script_format.md
-    ├── voices_catalog.md
-    └── api_notes.md
+```markdown
+## Director's Notes
+Keep the energy friendly but measured. The hosts are old friends.
+
+## Transcript
+Speaker A: [ton: warm] Welcome back.
+Speaker B: [pace: measured] Glad to be here.
 ```
 
-## 5. Script format (mini-spec)
+- `## Director's Notes` (optional) bias delivery — tone, pace,
+  pronunciation cues.
+- `Speaker A:` / `Speaker B:` or `Speaker1:` / `Speaker2:` delimit
+  turns. Case-insensitive, normalised to `Speaker1` / `Speaker2`.
+- Inline directives like `[ton: warm]`, `[pace: slow]` stay in the
+  text and bias the model.
+- No speaker labels → mono mode.
 
-- Optional `## Director's Notes` block at the top. Captured as the
-  `notes` field of the parsed script.
-- `Speaker A:` / `Speaker B:` or `Speaker1:` / `Speaker2:` labels
-  delimit turns. Mixed forms are allowed and normalized.
-- Inline directives such as `[ton: warm]` are kept in the text and
-  also collected for debugging.
-- No speaker labels → mono mode (single `Mono` turn).
+Full spec and edge cases: `references/script_format.md`. Runnable
+template: `assets/script_template.md`.
 
-Reference template: `assets/script_template.md`. Full spec:
-`references/script_format.md`.
-
-## 6. Voice presets
+## Voice presets
 
 | Preset | Speaker A | Speaker B | Intent | Stability |
 | :----- | :-------- | :-------- | :----- | :-------- |
@@ -157,182 +124,102 @@ Reference template: `assets/script_template.md`. Full spec:
 | `mono-warm` | Algieba | — | Solo warm | experimental |
 | `mono-informative` | Rasalgethi | — | Solo narrator | experimental |
 
-Selecting any experimental preset prints:
-`WARN: preset '<name>' is experimental; audition with preview_voice.py first`
-
+Experimental presets print
+`WARN: preset '<name>' is experimental; audition with preview_voice.py first`.
 Catalog of 30 voices: `references/voices_catalog.md`.
 
-## 7. CLI reference
+## Quick reference
 
-### `generate_tts.py`
+Typical end-to-end session:
 
-```
-generate_tts.py --script SCRIPT.md --output NAME
-  [--preset podcast-chill | --voice1 Charon --voice2 Aoede | --mono --voice Algieba]
-  [--model pro|flash|<full-id>]
-  [--lang auto|fr|en|...]
-  [--format wav|mp3|both]
-  [--require-format]
-  [--style "warm tone, calm pace"]
-  [--max-duration SECONDS]
-  [--background]
-  [--chunk-if-over-output-seconds 480]
-  [--max-input-tokens 30000]
-  [--job-dir ./.tts-jobs/<uuid>/]
-  [--approved-cost-usd FLOAT]
-  [--director agent|gemini|off] [--genre TAG]
-  [--yes] [--keep-wav]
-```
+```bash
+# 1. Estimate
+uv run scripts/estimate_cost.py --script script.md --model flash --json
 
-### `preview_voice.py`
+# 2. Audition (optional)
+uv run scripts/preview_voice.py Charon --play
 
-```
-preview_voice.py VOICE_NAME [--text "..."] [--seconds 30] [--model flash] [--play]
+# 3. Generate (sync)
+uv run scripts/generate_tts.py \
+  --script script.md --output ./out/episode \
+  --preset podcast-chill --model flash --format mp3 \
+  --approved-cost-usd 0.42 --yes
+
+# 4. Or background, for long runs
+uv run scripts/generate_tts.py [...] --background
 ```
 
-### `estimate_cost.py`
+Entry points (run any with `--help` for the full flag set):
 
-```
-estimate_cost.py --script FILE [--model pro|flash] [--with-api] [--json]
-```
+- `generate_tts.py` — primary CLI (sync or `--background`).
+- `preview_voice.py` — single-voice audition.
+- `estimate_cost.py` — offline heuristic; `--with-api` for exact count.
+- `list_voices.py` — `--validate` is the CI gate (preset → voice
+  consistency).
 
-JSON output always includes `tokens_per_sec_estimate_band_pct: 30`.
-
-### `list_voices.py`
-
-```
-list_voices.py [--preset NAME] [--json] [--validate]
-```
-
-`--validate` is the CI gate: exits 1 if any preset references a voice
-absent from `voices.yaml`.
-
-### Exit-code table
-
-The authoritative exit-code table for `generate_tts.py`:
+### Exit codes (`generate_tts.py`)
 
 | Code | Meaning |
 | :--: | :------ |
 | 0 | Success. |
-| 1 | Bad input, or a required dependency was missing while `--require-format` was set. |
-| 2 | `--approved-cost-usd` breached; stderr carries `cost_drift_pct=<float>`. |
+| 1 | Bad input, or required dependency missing under `--require-format`. |
+| 2 | `--approved-cost-usd` breached. Stderr carries `cost_drift_pct=<float>`. |
 | 3 | Per-chunk generation failure. Partial WAVs preserved under `<job-dir>/chunks/`. |
 | 4 | WAV concatenation failure (inconsistent sample parameters). |
 
-## 8. Duration handling
+## Long jobs and chunking
 
-- No padding, no truncation. `--max-duration` is **advisory** — the
-  skill warns and continues.
-- Chunking triggers when **either**:
-  - Estimated output seconds > `--chunk-if-over-output-seconds`
-    (default 480 = 8 min).
-  - Input tokens > `--max-input-tokens` (default 30 000) when the
-    user asked for the SDK's `count_tokens` (via `estimate_cost.py
-    --with-api`).
-- Splits always happen on speaker-turn boundaries. A small click at
-  boundaries is accepted (documented trade-off).
-- Director's Notes are duplicated per chunk **only** in the fallback
-  inline-sentinel path (§10); otherwise they travel once via
-  `system_instruction`.
+`--background` allocates a short UUID, writes
+`.tts-jobs/<id>/{script.md,config.json,status,job.log,pid}`, re-execs
+detached, and the foreground prints the job ID and a `tail -f` hint.
+The child transitions `pending → running → done` (or `failed` with
+`failure_reason`) and fires a notification. The notifier never raises;
+if every tier fails the `status` file is the only signal.
 
-## 9. Background jobs
+Chunking kicks in when estimated output > `--chunk-if-over-output-seconds`
+(default 480 s) **or** input tokens > `--max-input-tokens` (default
+30 000, requires `--with-api`). Splits always happen on speaker-turn
+boundaries; a small click at boundaries is accepted.
 
-`--background`:
+## Director pass
 
-1. Allocates a short UUID and creates `.tts-jobs/<id>/` containing:
-   `script.md`, `config.json`, `status`, `job.log`, `pid`, and after
-   the run `notification`.
-2. Re-execs without `--background` using `nohup`, new session.
-3. Foreground prints the job ID, job dir, and a `tail -f` hint.
-4. Child writes `status=pending → running → done` (or
-   `status=failed` plus `failure_reason`) then calls
-   `lib.notify.notify(...)`. The winning tier is captured in
-   `<job-dir>/notification` (one of `kitten|alerter|osascript|not-available`).
+`--director` rewrites the script with explicit Director's Notes and
+per-turn cues before chunking. Three backends:
 
-### Notification chain
+- `gemini` (default) — call the MCP `text.transform`. Output saved to
+  `<job_dir>/director-output.md`. On failure, falls back to the
+  original; the error lands in `config.json`'s `director.error` field.
+- `agent` — the skill writes `director-prompt.md`, `director-input.md`,
+  `HANDOFF.md` to the job dir, sets `status=awaiting_director`, and
+  exits 0. The calling agent produces `director-output.md`, then
+  relaunches with `--director off`. Zero MCP calls, zero tokens. **Not
+  compatible with `--background`** — no supervised parent.
+- `off` — feed the script verbatim.
 
-1. **kitten** — requires Kitty (`$TERM=xterm-kitty` or
-   `$KITTY_WINDOW_ID`) plus a writable parent PTY.
-2. **alerter** — macOS only, `shutil.which("alerter")`.
-3. **osascript** — macOS only, `display notification`.
-4. **not-available** — every tier failed; the status file is the only
-   signal.
+Default backend is read from `~/.config/tts-duet/config.yaml`'s
+top-level `director:` block. `$TTS_DUET_DIRECTOR` overrides both. Full
+agent-mode contract: `references/director_handoff.md`.
 
-The notifier never raises; failures are logged at DEBUG.
-
-## 9.5 Director pass
-
-`--director` is tri-state:
-
-- `gemini` (default) — call the MCP `text.transform` tool to rewrite
-  the script with explicit Director's Notes and per-turn cues. The
-  enriched script is persisted to `<job_dir>/director-output.md` (or
-  `<script>.director.md` on the sync lane) and re-parsed before
-  chunking. Failures fall back to the original script; the error is
-  stamped into `config.json`'s `director.error` field.
-- `agent` — the skill stops after composing the prompt, writes three
-  artifacts to the job dir, and exits 0 with `status=awaiting_director`.
-  The calling agent is expected to read `HANDOFF.md` and produce
-  `director-output.md`, then relaunch with `--director off`. Zero MCP
-  calls, zero Gemini API tokens. **Incompatible with `--background`** —
-  the calling agent cannot supervise a detached child.
-- `off` — no rewrite. The script is fed verbatim to the chunk loop.
-
-The default backend is read from
-`~/.config/tts-duet/config.yaml`'s top-level `director:` block, with
-`$TTS_DUET_DIRECTOR` overriding both:
-
-```yaml
-director:
-  backend: gemini       # agent | gemini | off
-  model: gemini-2.5-flash
-  temperature: 0.2
-  existing_notes_policy: preserve
-```
-
-### Agent-mode artifact contract
-
-When `--director agent` runs, the job dir gets:
-
-| File | Content |
-| :--- | :------ |
-| `director-prompt.md` | Composed prompt (genre vocab + script + strict output format). |
-| `director-input.md` | Verbatim copy of the input script. |
-| `HANDOFF.md` | Caller-facing instructions: read prompt, write `director-output.md`, relaunch with `--director off`. |
-
-See `references/director_handoff.md` for the full contract.
-
-## 10. Limits & caveats
+## Limits
 
 - Preview models only (`gemini-2.5-pro-preview-tts`,
   `gemini-2.5-flash-preview-tts`). The `--model <full-id>` escape
   hatch lets callers target GA IDs without waiting for a skill bump.
-- Voice count capped at two per call.
-- Response payload is **raw PCM** — always 24 kHz, 16-bit, mono — not
-  a WAV file. The skill wraps it.
-- Output is **token-priced**, not time-priced. Estimates use the
-  `OUTPUT_TOKENS_PER_SECOND` constant in `scripts/lib/pricing.py` with
-  a ±30 % band (recalibrate after 10 real runs — see
-  `references/api_notes.md`).
-- SDK pinned to `google-genai>=0.8,<1`; unpin once a GA ≥ 1.0 ships
-  and the `system_instruction` spike is re-validated.
-- **Linux without `notify-send`**: no notifier path is attempted (the
-  Kitty route still works if applicable); rely on the `status` file.
-- **Director's Notes leakage**: the P0 spike in
-  `scripts/lib/_spike_system_instruction.py` decides whether notes go
-  to `system_instruction` (flag `True`) or are inlined with a sentinel
-  (flag `False`, duplicated per chunk). Flip
-  `USE_SYSTEM_INSTRUCTION_FOR_NOTES` in
-  `scripts/lib/_config.py` if the spike outcome changes.
+- Two voices per call (one in mono mode).
+- Output is **token-priced**, not time-priced. Estimates use a ±30 %
+  band; recalibrate after 10 real runs (see `references/api_notes.md`).
+- Response payload is raw PCM (24 kHz, 16-bit, mono); the skill wraps
+  it as WAV.
+- SDK pinned to `google-genai>=0.8,<1`.
 
-## 11. References
+Implementation quirks (system-instruction routing, notifier chain
+order, calibration constants) live in `references/api_notes.md`.
+
+## References
 
 - `references/script_format.md` — full input-format spec.
-- `references/voices_catalog.md` — 30-voice table + pre-tag audition
-  checklist.
-- `references/api_notes.md` — Gemini quirks (PCM response shape,
-  multi-speaker requirements, auto-generated pricing).
-- `references/director_handoff.md` — agent-mode handoff contract
-  (artifact files, status transitions, expected output format).
+- `references/voices_catalog.md` — 30-voice table + audition checklist.
+- `references/api_notes.md` — Gemini quirks, pricing, internal flags.
+- `references/director_handoff.md` — agent-mode artifact contract.
 - `assets/script_template.md` — runnable reference script.
 - `assets/preview_text.md` — default preview snippet.
