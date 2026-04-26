@@ -32,38 +32,38 @@ skills/<skill-name>/
 
 ```bash
 # Analyze a Dockerfile for anti-patterns
-python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py <path/to/Dockerfile>
+uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py <path/to/Dockerfile>
 
 # Analyze a Docker Compose file
-python skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/compose.yaml>
+uv run skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/compose.yaml>
 ```
 
 ### Helm Chart Validation
 
 ```bash
 # Validate a bjw-s common library chart
-python skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
 ```
 
 ### TTS Duet
 
 ```bash
 # List voices / presets (and validate preset coverage)
-python skills/tts-duet/scripts/list_voices.py --validate
+uv run skills/tts-duet/scripts/list_voices.py --validate
 
 # Estimate cost offline
-python skills/tts-duet/scripts/estimate_cost.py \
+uv run skills/tts-duet/scripts/estimate_cost.py \
   --script skills/tts-duet/assets/script_template.md --model flash --json
 
-# Generate (requires GEMINI_API_KEY)
-python skills/tts-duet/scripts/generate_tts.py \
+# Generate (the gemini-tts-mcp child reads GEMINI_API_KEY)
+uv run skills/tts-duet/scripts/generate_tts.py \
   --script skills/tts-duet/assets/script_template.md \
   --preset podcast-chill --output /tmp/demo --format mp3 --yes
 ```
 
 ### Dependencies
 
-Scripts use `uv` for Python execution. The `analyze_compose.py` and `validate_chart.py` scripts require `pyyaml`.
+Every entry-point script declares its dependencies inline as a [PEP 723](https://peps.python.org/pep-0723/) header (`# /// script` block). `uv run path/to/script.py` resolves and caches them automatically — no `requirements.txt` install step required.
 
 ## Mandatory Requirements
 
