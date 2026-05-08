@@ -1,0 +1,27 @@
+# autoMode-config heuristics catalog (flat YAML, no nesting, no lists).
+# Parsed by scripts/_canonical.py:parse_flat_yaml. One key per line.
+# Format: <key>: <value>. No empty values. No comments after a value.
+# Lines beginning with "#" and blank lines are ignored.
+
+claude_code_version_range: ">=2.1.83,<3.0"
+
+signal_dockerfile: A Dockerfile or Containerfile at the project root suggests container builds; offer Bash(docker build:*) and Bash(docker compose:*) candidates.
+signal_compose: A compose.yaml/compose.yml/docker-compose.yaml at the project root suggests local stack lifecycle; offer Bash(docker compose:*).
+signal_package_json: A package.json at the project root suggests Node tooling; offer Bash(npm:*), Bash(pnpm:*), Bash(yarn:*) scoped to declared scripts.
+signal_pyproject: A pyproject.toml at the project root suggests Python project tooling; offer Bash(uv:*), Bash(python -m:*), Bash(pip install:*) scoped to dev dependencies.
+signal_python_version: A .python-version file pins the interpreter; surface it in the prompt so the user can scope tool rules to the matching uv/pyenv invocations.
+signal_makefile: A Makefile at the project root suggests build orchestration; offer Bash(make:*) restricted to the declared targets.
+signal_helm: A Chart.yaml or charts/ directory suggests Helm tooling; offer Bash(helm template:*) and Bash(helm lint:*); avoid Bash(helm install:*) by default.
+signal_kustomize: A kustomization.yaml suggests Kustomize tooling; offer Bash(kubectl kustomize:*) read-only candidates.
+signal_terraform: A *.tf file or .terraform/ suggests Terraform tooling; offer Bash(terraform plan:*) and Bash(terraform validate:*); never Bash(terraform apply:*).
+signal_node_modules_in_gitignore: node_modules listed in .gitignore confirms a JS project layout; reinforces signal_package_json without being its prerequisite.
+signal_pytest_ini: A pytest.ini, pyproject.toml [tool.pytest.ini_options], or tox.ini with [pytest] suggests test runs; offer Bash(uv run pytest:*).
+signal_uv_lock: A uv.lock file confirms uv as the Python package manager; offer Bash(uv sync:*) and Bash(uv run:*) candidates.
+signal_pre_commit: A .pre-commit-config.yaml suggests pre-commit hooks; offer Bash(pre-commit run:*) candidates.
+signal_eslint: An .eslintrc.* or eslint.config.* suggests JS linting; offer Bash(npx eslint:*) candidates.
+signal_tsconfig: A tsconfig.json suggests TypeScript builds; offer Bash(npx tsc:*) candidates and Read access to dist/ if present.
+signal_cargo: A Cargo.toml suggests Rust tooling; offer Bash(cargo check:*), Bash(cargo test:*), Bash(cargo build:*).
+signal_go_mod: A go.mod suggests Go tooling; offer Bash(go test:*), Bash(go build:*), Bash(go vet:*).
+signal_pyright: A pyrightconfig.json suggests Python type-checking; offer Bash(uv run pyright:*) candidates.
+signal_ruff: A ruff.toml or [tool.ruff] in pyproject.toml suggests Python linting; offer Bash(uv run ruff:*) candidates.
+signal_dotenv: A .env file at the project root indicates secrets; surface a warning that env files should never be staged into autoMode rules verbatim.

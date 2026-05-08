@@ -1,0 +1,25 @@
+{
+  "autoMode": {
+    "allow": [
+      "Read(**)",
+      "Bash(npm test*)",
+      "Bash(uv run pytest*)"
+    ],
+    "ask": [
+      "Bash(rm *)"
+    ],
+    "deny": [
+      "Bash(curl *)"
+    ],
+    "environment": [
+      "$defaults",
+      "node-monorepo",
+      "python-uv-project"
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read(**)"
+    ]
+  }
+}

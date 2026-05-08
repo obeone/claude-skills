@@ -1,0 +1,12 @@
+{
+  "autoMode": {
+    "allow": [
+      "Read(**)"
+    ],
+    "ask": [],
+    "deny": [],
+    "environment": [
+      "$defaults"
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "// note": "Example .claude/settings.local.json autoMode block. JSONC: comments allowed for documentation; the live serializer canonicalizes to strict JSON. Demonstrates the __example_only structural wrapper (which the loader strips) versus the literal substring (which is preserved verbatim).",
+
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      {
+        "__example_only": true,
+        "value": {
+          "kind": "trust_signal",
+          "name": "project_has_dockerfile",
+          "matches": ["./Dockerfile"]
+        }
+      },
+      {
+        "__example_only": true,
+        "value": {
+          "kind": "trust_signal",
+          "name": "project_has_pyproject",
+          "matches": ["./pyproject.toml"]
+        }
+      },
+      {
+        "kind": "trust_signal",
+        "name": "operator_marker_for___example_only_substring",
+        "matches": ["./markers/__example_only.json"]
+      },
+      {
+        "kind": "trust_signal",
+        "name": "literal_dollar_defaults_documentation",
+        "matches": ["./docs/$defaults-explainer.md"]
+      }
+    ],
+    "allow": [
+      "Bash(uv run pytest:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Read(./**)",
+      "Write(./.omc/**)"
+    ],
+    "deny": [
+      "Bash(sudo:*)",
+      "Bash(rm -rf:*)",
+      "Write(./.git/**)"
+    ]
+  }
+}
