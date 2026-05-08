@@ -1,4 +1,4 @@
-"""pytest fixtures shared across the autoMode-config test suite.
+"""pytest fixtures shared across the automode-config test suite.
 
 Adds the skill's ``scripts/`` directory to ``sys.path`` so tests can
 ``import _canonical`` etc., and exposes a few directory-locating

@@ -97,7 +97,12 @@ REQUIRED_CRITIQUE_SECTIONS = frozenset({"## Major issues", "## Smaller issues"})
 
 BACKUP_RETENTION = 5
 
-AUTOMODE_ARRAY_KEYS = frozenset({"environment", "allow", "soft_deny", "deny", "ask"})
+AUTOMODE_ARRAY_KEYS = frozenset(
+    {"environment", "allow", "soft_deny", "deny", "hard_deny", "ask"}
+)
+# Sections whose entries are permission rules subject to the
+# silently-dropped-pattern filter (everything except environment).
+RULE_SECTIONS = ("allow", "ask", "soft_deny", "deny", "hard_deny")
 
 
 # ---------------------------------------------------------------------------
@@ -493,7 +498,7 @@ def _run_critique_swap(
 
     user_settings_path.parent.mkdir(parents=True, exist_ok=True)
     sentinel = user_settings_path.parent / (
-        f".autoMode-config.preview-orig.{os.getpid()}"
+        f".automode-config.preview-orig.{os.getpid()}"
     )
     swap_lock = user_settings_path.with_suffix(user_settings_path.suffix + ".lock")
     handle = lock_acquire(swap_lock)
@@ -553,7 +558,7 @@ def _stranded_files(files: ProjectFiles) -> list[Path]:
         if not base.is_dir():
             continue
         out.extend(
-            Path(p) for p in glob.glob(str(base / ".autoMode-config.preview-orig.*"))
+            Path(p) for p in glob.glob(str(base / ".automode-config.preview-orig.*"))
         )
     return sorted(out)
 
@@ -677,40 +682,101 @@ def _interview(
     return kept, decisions
 
 
+def _adopt_into(
+    adopted: dict[str, list[Any]],
+    section: str,
+    items: list[Any],
+) -> None:
+    """Append ``items`` to ``adopted[section]``, deduping order-preserving."""
+
+    bucket = adopted.setdefault(section, [])
+    for item in items:
+        if item not in bucket:
+            bucket.append(item)
+
+
 def _phase1_adopt(
     files: ProjectFiles,
     *,
     interactive: bool,
+    include_project_docs: bool = True,
 ) -> dict[str, Any]:
-    """Read shared autoMode and return adopted entries grouped by section."""
+    """Read shared autoMode + project docs; return adopted entries by section.
+
+    Sub-phase 1a walks ``.claude/settings.json`` (if present) and surfaces
+    each ``autoMode`` rule to the four-key prompt. Sub-phase 1b runs the
+    project-doc scanner on ``CLAUDE.md`` / ``AGENTS.md`` /
+    ``.claude/CLAUDE.md`` and surfaces its candidates the same way.
+    Both sub-phases push *accepted* entries into the same ``adopted``
+    dict, deduped order-preservingly.
+    """
 
     adopted: dict[str, list[Any]] = {}
-    if not files.shared_settings.is_file():
-        return adopted
-    try:
-        data = load_json(files.shared_settings)
-    except Exception as exc:  # noqa: BLE001
-        _eprint(f"phase 1: could not parse {files.shared_settings}: {exc}")
-        return adopted
-    auto = data.get("autoMode") if isinstance(data, dict) else None
-    if not isinstance(auto, dict):
-        return adopted
-    for section in ("allow", "deny", "ask", "environment"):
-        items = auto.get(section)
-        if not isinstance(items, list) or not items:
-            continue
-        _eprint(f"\n[Phase 1] adopt-from-shared :: {section}")
-        kept, decisions = _interview(
-            items, label=f"shared.{section}", interactive=interactive
-        )
-        kept = _strip_example_only(kept)
-        if section in ("allow", "deny", "ask"):
-            kept, dropped = _filter_dropped(kept)
-            for entry, reason in dropped:
-                _eprint(f"  ! dropped {entry!r}: {reason}")
-        adopted[section] = kept
-        for entry, action in decisions:
-            _eprint(f"  - {entry!r}: {action}")
+
+    # ---- Sub-phase 1a: shared file ------------------------------------
+    if files.shared_settings.is_file():
+        try:
+            data = load_json(files.shared_settings)
+        except Exception as exc:  # noqa: BLE001
+            _eprint(f"phase 1a: could not parse {files.shared_settings}: {exc}")
+            data = None
+        auto = data.get("autoMode") if isinstance(data, dict) else None
+        if isinstance(auto, dict):
+            for section in ("allow", "ask", "soft_deny", "deny", "hard_deny", "environment"):
+                items = auto.get(section)
+                if not isinstance(items, list) or not items:
+                    continue
+                _eprint(f"\n[Phase 1a] adopt-from-shared :: {section}")
+                kept, decisions = _interview(
+                    items, label=f"shared.{section}", interactive=interactive
+                )
+                kept = _strip_example_only(kept)
+                if section in RULE_SECTIONS:
+                    kept, dropped = _filter_dropped(kept)
+                    for entry, reason in dropped:
+                        _eprint(f"  ! dropped {entry!r}: {reason}")
+                _adopt_into(adopted, section, kept)
+                for entry, action in decisions:
+                    _eprint(f"  - {entry!r}: {action}")
+
+    # ---- Sub-phase 1b: project documentation --------------------------
+    if include_project_docs:
+        try:
+            from _doc_scan import scan as _scan_docs  # noqa: WPS433
+            doc_report = _scan_docs(files.project_root)
+        except Exception as exc:  # noqa: BLE001
+            _eprint(f"phase 1b: project-doc scan failed: {exc}")
+            doc_report = None
+        if doc_report and doc_report.get("candidates"):
+            by_section: dict[str, list[tuple[Any, str]]] = {}
+            for cand in doc_report["candidates"]:
+                by_section.setdefault(cand["section"], []).append(
+                    (cand["value"], cand.get("source", "?"))
+                )
+            for section, entries in by_section.items():
+                fresh = [
+                    v for v, _ in entries
+                    if v not in adopted.get(section, [])
+                ]
+                if not fresh:
+                    continue
+                sources = sorted({s for _, s in entries})
+                _eprint(
+                    f"\n[Phase 1b] adopt-from-project-doc :: {section}  "
+                    f"(sources: {', '.join(sources)})"
+                )
+                kept, decisions = _interview(
+                    fresh, label=f"doc.{section}", interactive=interactive
+                )
+                kept = _strip_example_only(kept)
+                if section in RULE_SECTIONS:
+                    kept, dropped = _filter_dropped(kept)
+                    for entry, reason in dropped:
+                        _eprint(f"  ! dropped {entry!r}: {reason}")
+                _adopt_into(adopted, section, kept)
+                for entry, action in decisions:
+                    _eprint(f"  - {entry!r}: {action}")
+
     return adopted
 
 
@@ -722,7 +788,10 @@ def _phase2_signals(files: ProjectFiles) -> dict[str, Any]:
     except ImportError:
         return {}
     report = build_report(
-        files.project_root, include_shared=False, check_gitignore=False
+        files.project_root,
+        include_shared=False,
+        check_gitignore=False,
+        include_project_docs=False,
     )
     hints: dict[str, Any] = {
         "signals": [s for s in report["signals"] if s["present"]],
@@ -779,8 +848,10 @@ def _migrate_strategy(
         return block, dropped_summary
     if strategy == "drop-all":
         block["allow"] = []
-        block["deny"] = []
         block["ask"] = []
+        block["soft_deny"] = []
+        block["deny"] = []
+        block["hard_deny"] = []
         block["environment"] = ["$defaults"]
         return block, dropped_summary
     if strategy == "fail":
@@ -855,12 +926,15 @@ def _run(args: argparse.Namespace) -> int:
     # ------------------------------------------------------------------
     interactive = args.migrate_strategy == "interactive"
     adopted: dict[str, list[Any]] = {}
-    if files.shared_settings.is_file():
-        try:
-            adopted = _phase1_adopt(files, interactive=interactive and sys.stdin.isatty())
-        except Exception as exc:  # noqa: BLE001
-            _eprint(f"phase 1 failed: {exc}")
-            return EXIT_VALIDATION
+    try:
+        adopted = _phase1_adopt(
+            files,
+            interactive=interactive and sys.stdin.isatty(),
+            include_project_docs=args.include_project_docs,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _eprint(f"phase 1 failed: {exc}")
+        return EXIT_VALIDATION
 
     # ------------------------------------------------------------------
     # Phase 2: scan signals (informational)
@@ -909,7 +983,7 @@ def _run(args: argparse.Namespace) -> int:
     )
     proposal = _strip_example_only(proposal)
 
-    for section in ("allow", "deny", "ask"):
+    for section in RULE_SECTIONS:
         items = proposal["autoMode"].get(section)
         if isinstance(items, list):
             kept, dropped = _filter_dropped(items)
@@ -1251,6 +1325,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--repair",
         action="store_true",
         help="Reclaim stale flocks + restore orphans (mutually exclusive).",
+    )
+    docs = parser.add_mutually_exclusive_group()
+    docs.add_argument(
+        "--include-project-docs",
+        dest="include_project_docs",
+        action="store_true",
+        default=True,
+        help="Phase 1b: surface allow/hard_deny candidates extracted "
+        "from CLAUDE.md / AGENTS.md / .claude/CLAUDE.md (default).",
+    )
+    docs.add_argument(
+        "--no-include-project-docs",
+        dest="include_project_docs",
+        action="store_false",
+        help="Skip Phase 1b (project-doc scan).",
     )
     return parser
 

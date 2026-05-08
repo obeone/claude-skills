@@ -50,7 +50,7 @@ the user-file flock, since the swap target is `~/.claude/settings.json`
 
 1. Acquire user-file flock.
 2. Copy `~/.claude/settings.json` to
-   `~/.claude/.autoMode-config.preview-orig.<pid>`.
+   `~/.claude/.automode-config.preview-orig.<pid>`.
 3. Write the proposal as the new
    `~/.claude/settings.json` (canonical bytes, mode preserved from
    the original).

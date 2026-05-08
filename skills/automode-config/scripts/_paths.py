@@ -1,4 +1,4 @@
-"""Filesystem layout helpers for the autoMode-config skill.
+"""Filesystem layout helpers for the automode-config skill.
 
 Resolves the four paths the skill cares about and exposes a small
 ``ProjectFiles`` dataclass that callers use to read, write, and reason

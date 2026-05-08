@@ -1,7 +1,7 @@
 """Canonical JSON serialization, lenient JSON loading, and flat-YAML parsing.
 
 This module is stdlib-only and is the byte-level contract for the
-autoMode-config skill: every approved bytes representation flows through
+automode-config skill: every approved bytes representation flows through
 ``canonicalize`` so that hashes and round-trips are stable.
 
 Public API

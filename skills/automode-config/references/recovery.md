@@ -9,9 +9,9 @@ Per-file pool: 5 most recent backups, pruned on each successful
 apply. Backup naming:
 
 ```
-.claude/.autoMode-config.backup.<ISO8601>.<sha256-12>     # local file
-.claude/.autoMode-config.backup.<ISO8601>.<sha256-12>     # shared file (Phase 4)
-~/.claude/.autoMode-config.backup.<ISO8601>.<sha256-12>   # user file (--hoist only)
+.claude/.automode-config.backup.<ISO8601>.<sha256-12>     # local file
+.claude/.automode-config.backup.<ISO8601>.<sha256-12>     # shared file (Phase 4)
+~/.claude/.automode-config.backup.<ISO8601>.<sha256-12>   # user file (--hoist only)
 ```
 
 `<ISO8601>` is `YYYY-MM-DDThh-mm-ssZ` (colons replaced with hyphens
@@ -24,7 +24,7 @@ The rollback line printed at the end of Phase 3 references the most
 recent backup of the local file:
 
 ```
-Rollback: cp -p .claude/.autoMode-config.backup.2026-05-08T14-22-13Z.a1b2c3d4e5f6 .claude/settings.local.json
+Rollback: cp -p .claude/.automode-config.backup.2026-05-08T14-22-13Z.a1b2c3d4e5f6 .claude/settings.local.json
 ```
 
 ## Stranded state
@@ -33,8 +33,8 @@ Detected at startup, **before** any other action including fresh-
 machine detection. Glob targets:
 
 ```
-~/.claude/.autoMode-config.preview-orig.*
-<project-root>/.claude/.autoMode-config.preview-orig.*
+~/.claude/.automode-config.preview-orig.*
+<project-root>/.claude/.automode-config.preview-orig.*
 ```
 
 Any match in either location -> exit 9 (`EXIT_STRANDED_STATE`) with
@@ -42,7 +42,7 @@ the message:
 
 ```
 Stranded preview-orig file(s) detected:
-  ~/.claude/.autoMode-config.preview-orig.12345
+  ~/.claude/.automode-config.preview-orig.12345
 Run with --repair to restore.
 ```
 
