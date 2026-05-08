@@ -1,15 +1,15 @@
 ---
-name: autoMode-config
-description: "Author, validate, and migrate Claude Code autoMode blocks at the project level. Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Runs `claude auto-mode critique` as the canonical Path (b) gate (bytes are the contract, prose is informational). Atomic write under per-file flock with sha256 hash gate. Triggers on: auto mode, autoMode, $defaults, claude auto-mode, claude auto-mode critique, permission classifier, soft_deny, classifier denials, migrating from --dangerously-skip-permissions, YOLO mode, accept edits mode, plan mode, project-level permissions, .claude/settings.local.json."
+name: automode-config
+description: "Author, validate, and migrate Claude Code autoMode blocks at the project level (four-bucket allow/ask/deny/hard_deny model). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b scans CLAUDE.md/AGENTS.md for tool command-line tokens and protected branch patterns. Runs `claude auto-mode critique` as the canonical Path (b) gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.136+."
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 tools:
   - Read
   - Write
   - Bash
 ---
 
-# autoMode-config
+# automode-config
 
 A skill for authoring, validating, and migrating `autoMode` blocks
 for **project-level** Claude Code permissions. The skill writes by
@@ -31,13 +31,18 @@ their state without mutating them unless the user explicitly opts in.
   sections. This skill is autoMode-only.
 - Retry-on-network-failure logic. The user re-runs.
 
-## Mental model: three files
+## Mental model: three files and four rule buckets
 
 | File | Path | Classifier reads `autoMode`? | Skill behaviour | Mode |
 |---|---|---|---|---|
 | **User baseline** | `~/.claude/settings.json` | yes | Read-only by default. Optional `--hoist <rule>` moves a rule from local to user. | 0600 (warn if 0644) |
 | **Project local** ← primary | `.claude/settings.local.json` | yes | Read + write (flock, atomic, backups, hash gate). **The skill's main target.** | 0600 |
 | **Project shared** | `.claude/settings.json` | no (for `autoMode` only — other sections still read) | Read for adoption. Write only with explicit opt-in flag, with classifier-ignores warning. | 0644 (committed file) |
+
+**Rule buckets:** `autoMode` contains four independent rule lists:
+`allow` (auto-approved), `ask` (surfaced to user), `deny` (blocked,
+bypassable), and `hard_deny` (blocked unconditionally, not bypassable).
+Plus `environment` (trust-signal array, separate from rule buckets).
 
 **Critical invariant:** the skill must never write `autoMode` into
 the shared file silently. Writing requires `--write-shared` AND
@@ -46,14 +51,17 @@ user-confirmed prompt AND the warning is reprinted at write time.
 For full per-file gotchas (gitignore status, mode 0644 user file,
 shared-file `autoMode` ignored), see `references/three_files.md`.
 
-## Workflow: four phases
+## Workflow: six phases (0 + 1a + 1b + 2 + 3 + 4)
 
 ```
 [Phase 0] auto-detect fresh vs migrate (presence of autoMode in .claude/settings.local.json)
     |
     v
-[Phase 1] adopt-from-shared (if .claude/settings.json contains autoMode)
+[Phase 1a] adopt-from-shared (if .claude/settings.json contains autoMode)
     |   per-entry interactive: [k]eep / [e]dit / [d]rop / [q]uit
+    v
+[Phase 1b] scan-project-docs (if CLAUDE.md/AGENTS.md contain documented tools/branches)
+    |   per-candidate interactive: [k]eep / [e]dit / [d]rop / [q]uit
     v
 [Phase 2] scan-project signals (Dockerfile, package.json, .gitignore, etc.)
     |   per-signal interactive: [k]eep / [e]dit / [d]rop / [q]uit
@@ -67,7 +75,7 @@ shared-file `autoMode` ignored), see `references/three_files.md`.
 done.
 ```
 
-Phase 0 is automatic and silent. Phases 1, 2, 4 are skipped cleanly
+Phase 0 is automatic and silent. Phases 1a, 1b, 2, 4 are skipped cleanly
 when their precondition is absent. Phase 3 always runs.
 
 ## The single intent question
@@ -75,9 +83,10 @@ when their precondition is absent. Phase 3 always runs.
 Asked silently from file state, never prompted: **does
 `.claude/settings.local.json` already contain an `autoMode` block?**
 
-- **No** -> mode `fresh`. The skill creates a new block. Phase 1
-  may still adopt from shared; Phase 2 scans for signals; Phase 3
-  writes the block at mode 0600 (parent dir 0700 if absent).
+- **No** -> mode `fresh`. The skill creates a new block. Phase 1a may
+  still adopt from shared; Phase 1b may surface project-doc candidates;
+  Phase 2 scans for signals; Phase 3 writes the block at mode 0600
+  (parent dir 0700 if absent).
 - **Yes** -> mode `migrate`. The skill rewrites the existing block
   using `--migrate-strategy` to fold rules
   (`keep-all`, `drop-all`, `interactive`, `fail`).
@@ -93,6 +102,7 @@ Asked silently from file state, never prompted: **does
 | `--project-root <path>` | cwd | Project root to scan. |
 | `--json` | off | Machine-readable output. |
 | `--include-shared` / `--no-include-shared` | on | Read `.claude/settings.json` `autoMode` for adoption candidates. |
+| `--include-project-docs` / `--no-include-project-docs` | on | Phase 1b: scan CLAUDE.md/AGENTS.md for tool and branch candidates. |
 | `--check-gitignore` | off | Warn if `.claude/settings.local.json` not in `.gitignore`. |
 
 ### `inspect_automode.py`
@@ -118,6 +128,7 @@ Asked silently from file state, never prompted: **does
 | `--model <model>` | (CLI default) | Passed to `claude auto-mode critique`. |
 | `--allow-swap-file-fallback` | off | Opt-in for swap-file when `--settings` unsupported. |
 | `--allow-unknown-critique-sections` | off | Relax contract-drift on extra sections. |
+| `--include-project-docs` / `--no-include-project-docs` | on | Phase 1b: scan CLAUDE.md/AGENTS.md for tool and branch candidates. |
 | `--write-shared` | off | Phase 4 opt-in: also write to `.claude/settings.json`. |
 | `--hoist <rule-id>` | off | Move rule from local to user. |
 | `--repair` | off | Restore orphans + reclaim locks; mutually exclusive with all other modes. |
@@ -139,6 +150,17 @@ Asked silently from file state, never prompted: **does
 | 10 | EXIT_OUT_OF_BAND | `claude` version outside heuristics range. |
 
 (11 codes counting `EXIT_OK`.)
+
+## hard_deny semantics
+
+`hard_deny` is an unconditionally enforced rule bucket. Entries in
+`autoMode.hard_deny` block classified operations regardless of rules in
+`allow`, `ask`, or `deny`. `hard_deny` overrides any rule for the same
+target in other buckets. It is not bypassable by user-intent flags like
+`--dangerously-skip-permissions`. Requires Claude Code 2.1.136+. The
+skill reads and writes `hard_deny` identically to other rule sections;
+the `$defaults` sentinel does not apply (it is a rule list, not an env
+array). `--migrate-strategy drop-all` resets `hard_deny` to `[]`.
 
 ## The `$defaults` trap
 
@@ -188,7 +210,7 @@ The flock is held across the whole sequence. Backups are taken
 before the replace. The rollback line printed at the end of Phase 3:
 
 ```
-Rollback: cp -p .claude/.autoMode-config.backup.2026-05-08T14-22-13Z.a1b2c3d4e5f6 .claude/settings.local.json
+Rollback: cp -p .claude/.automode-config.backup.2026-05-08T14-22-13Z.a1b2c3d4e5f6 .claude/settings.local.json
 ```
 
 Five backups per file are retained (per-file pool, pruned on each
@@ -221,13 +243,14 @@ cleanup, and stranded-state detection, see `references/recovery.md`.
 
 ## References
 
-- `references/mental_model.md` — three files, four flows, decision tree.
-- `references/three_files.md` — file relationships and per-file gotchas.
+- `references/mental_model.md` — three files, four rule buckets, six phases, decision tree.
+- `references/three_files.md` — file relationships and per-file gotchas (including `hard_deny` round-trip).
 - `references/canonicalization.md` — byte contract, fixtures, idempotency, `parse_flat_yaml`.
 - `references/critique_workflow.md` — Path (b), `--settings` probe, swap-file, contract drift.
-- `references/migration.md` — adopt-from-shared, scan signals, four-key prompt, strategy modes.
+- `references/migration.md` — Phase 1a/1b adoption, project-doc scan, four-key prompt, strategy modes.
 - `references/recovery.md` — backup retention, `--repair`, stranded state, multi-file flock.
-- `references/verification.md` — 23 acceptance predicates with measurement commands.
+- `references/verification.md` — acceptance predicates with measurement commands.
+- `scripts/_doc_scan.py` — internal; Phase 1b scanner for CLAUDE.md/AGENTS.md tools and protected branches.
 
 ## Documentation URLs
 

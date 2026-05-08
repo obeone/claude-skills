@@ -1,17 +1,17 @@
 # Migration
 
-Phases 1 and 2 fold rules from existing sources into the proposal
-the skill is about to write. Both phases use the same per-entry
-interactive prompt: `[k]eep / [e]dit / [d]rop / [q]uit`. Both can be
-suppressed with `--migrate-strategy` non-interactive modes.
+Phases 1a, 1b, and 2 fold rules from existing sources into the proposal
+the skill is about to write. All three phases use the same per-entry
+interactive prompt: `[k]eep / [e]dit / [d]rop / [q]uit`. Phases 1a and 1b
+can be suppressed with `--migrate-strategy` non-interactive modes.
 
-## Phase 1 — adopt-from-shared
+## Phase 1a — adopt-from-shared
 
 Triggered when `.claude/settings.json` contains an `autoMode` block
 and `--include-shared` is in effect (default). The skill reads each
-entry in `autoMode.allow`, `autoMode.deny`, and
-`autoMode.environment` from the shared file. For each entry not
-already in the proposal:
+entry in `autoMode.allow`, `autoMode.ask`, `autoMode.deny`,
+`autoMode.hard_deny`, and `autoMode.environment` from the shared file.
+For each entry not already in the proposal:
 
 ```
 [Phase 1] Adopt from shared (.claude/settings.json):
@@ -31,6 +31,29 @@ already in the proposal:
 - `[q]uit` exits Phase 1 cleanly. Already-decided entries are kept;
   remaining entries are dropped. The skill prints
   `quit at entry K of N` for the audit trail.
+
+## Phase 1b — scan-project-docs
+
+Triggered after Phase 1a (or first if shared has no `autoMode`). The
+skill scans CLAUDE.md, AGENTS.md, and `.claude/CLAUDE.md` from the
+project root. Two types of candidates are surfaced:
+
+**Tool candidates** from documented command-line tools (pattern:
+tool-name appearing as the head of a line in fenced bash/sh/shell/console
+code blocks). Surfaced as `allow` rule candidates of the form
+`Bash(<tool>:*)`. Trivial shell builtins (cd, ls, cp, etc.) are filtered
+out. No tool list is hardcoded—candidates derive from what the project
+itself documents.
+
+**Protected-branch candidates** from documented branch protection
+statements. Regex patterns detect English ("never push to main", "main is
+protected") and French ("ne pas push vers stable", "Protected branches:")
+patterns. Surfaced as `hard_deny` rule candidates of the form
+`Bash(git push * <branch>*)` to unconditionally block accidental pushes.
+Conservative heuristic—false negatives preferred to false positives.
+
+Each candidate fires the same four-key prompt. Skipped silently if
+`--no-include-project-docs` was passed.
 
 ## Phase 2 — scan-project signals
 
@@ -52,7 +75,7 @@ runs.
 
 ## `--migrate-strategy` modes
 
-Applies to both Phase 1 (adoption) and the fold-in of any
+Applies to both Phase 1a/1b (adoption) and the fold-in of any
 pre-existing local `autoMode` (when `--mode migrate`). Default is
 `interactive`.
 
@@ -61,7 +84,7 @@ pre-existing local `autoMode` (when `--mode migrate`). Default is
   proposal bytes are byte-equal to the merged input. No prompt.
 - `drop-all`. Every existing rule is dropped. `autoMode.environment`
   is reset to `["$defaults"]` (the curated baseline preserved); the
-  allow and deny lists become empty arrays. No prompt.
+  allow, ask, deny, and hard_deny lists become empty arrays. No prompt.
 - `fail`. Any existing rule that conflicts with the proposal's
   rules causes the skill to exit 2 (`EXIT_VALIDATION`). Useful for
   CI-style runs where the operator wants no surprise inheritance.

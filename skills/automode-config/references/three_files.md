@@ -38,7 +38,7 @@ second only with explicit opt-in, and the third only via `--hoist`.
   `.claude/` directory at 0700 if either is missing.
 - The primary target. Phase 3 always writes here. The classifier
   reads `autoMode` here.
-- Backups in `.claude/.autoMode-config.backup.<ISO8601>.<sha256-12>`,
+- Backups in `.claude/.automode-config.backup.<ISO8601>.<sha256-12>`,
   retained 5 most recent per file, pruned on each successful apply.
 
 ## Project shared — `.claude/settings.json`
@@ -66,6 +66,11 @@ second only with explicit opt-in, and the third only via `--hoist`.
   expecting their teammates' classifier to honour the rules will be
   surprised. The skill prints this warning at every read of shared
   `autoMode` and reprints it at every Phase 4 write.
+- **`hard_deny` round-trips like other rule sections.** Entries in
+  `hard_deny` are read from and written to the local file identically
+  to `allow`, `ask`, and `deny`. They are also silently ignored when
+  present in `.claude/settings.json` shared, since the classifier
+  ignores **all** of `autoMode` in that file.
 - **Local file gitignore status varies.** Many project starters
   include `.claude/settings.local.json` in `.gitignore`; some do
   not. The skill warns but does not edit `.gitignore` for the user.

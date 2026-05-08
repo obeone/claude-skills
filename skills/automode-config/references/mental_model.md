@@ -1,11 +1,11 @@
 # Mental model
 
-Three files. Four phases. One classifier that reads only two of them
-and silently ignores the `autoMode` key in the third. The skill never
-hides any of these facts; it surfaces them at the points where the
-user can do something about them.
+Three files. Four rule buckets. Six phases. One classifier that reads
+only two files and silently ignores the `autoMode` key in the third.
+The skill never hides any of these facts; it surfaces them at the
+points where the user can do something about them.
 
-## The three files
+## The three files and four rule buckets
 
 | File | Path | Classifier reads `autoMode`? |
 |---|---|---|
@@ -21,10 +21,16 @@ The shared file is read for adoption candidates and only ever written
 when the user passes `--write-shared`, with the
 classifier-ignores warning reprinted at write time.
 
-## The four phases
+Each `autoMode` block contains four independent rule lists: `allow`
+(auto-approved), `ask` (surfaced to user), `deny` (blocked, bypassable),
+and `hard_deny` (blocked unconditionally, overrides all others, not
+bypassable). Plus `environment` (trust-signal array, separate from
+rule buckets).
 
-`apply_automode.py` runs a four-phase pipeline. Phase 0 is automatic
-detection; Phases 1, 2, 4 are skipped cleanly when their precondition
+## The six phases
+
+`apply_automode.py` runs a six-phase pipeline. Phase 0 is automatic
+detection; Phases 1a, 1b, 2, 4 are skipped cleanly when their precondition
 is absent; Phase 3 always runs.
 
 ```
@@ -32,8 +38,12 @@ is absent; Phase 3 always runs.
             (presence of autoMode in .claude/settings.local.json)
                  |
                  v
-[Phase 1] adopt-from-shared (skipped if shared has no autoMode)
-            per-entry: [k]eep / [e]dit / [d]rop / [q]uit
+[Phase 1a] adopt-from-shared (skipped if shared has no autoMode)
+             per-entry: [k]eep / [e]dit / [d]rop / [q]uit
+                 |
+                 v
+[Phase 1b] scan-project-docs (skipped if no docs or --no-include-project-docs)
+             per-candidate: [k]eep / [e]dit / [d]rop / [q]uit
                  |
                  v
 [Phase 2] scan-project signals (skipped if no signals match)
@@ -58,9 +68,10 @@ The single intent question — asked silently, derived from the file
 state, never prompted — is: **does `.claude/settings.local.json`
 already contain an `autoMode` block?**
 
-- No -> mode `fresh`. Phase 1 may still adopt from shared; Phase 2
-  scans for signals; Phase 3 writes a brand-new block to the local
-  file at mode 0600 (parent dir 0700 if absent).
+- No -> mode `fresh`. Phase 1a may still adopt from shared; Phase 1b
+  may surface project-doc candidates; Phase 2 scans for signals;
+  Phase 3 writes a brand-new block to the local file at mode 0600
+  (parent dir 0700 if absent).
 - Yes -> mode `migrate`. Same Phase 1/2 path; Phase 3 rewrites the
   local file using `--migrate-strategy` to choose how the existing
   rules are folded in (`keep-all`, `drop-all`, `interactive`,
@@ -74,12 +85,18 @@ already contain an `autoMode` block?**
 - **Phase 0 — detect.** Reads the local file once. No prompt, no
   output beyond a debug log line. Sets the run's mode unless
   `--mode` was passed.
-- **Phase 1 — adopt-from-shared.** Reads the shared file. For each
-  rule in `autoMode.allow|deny|environment` not present in the
-  proposal, asks `[k]eep / [e]dit / [d]rop / [q]uit`. Prints the
+- **Phase 1a — adopt-from-shared.** Reads the shared file. For each
+  rule in `autoMode.allow|ask|deny|hard_deny|environment` not present
+  in the proposal, asks `[k]eep / [e]dit / [d]rop / [q]uit`. Prints the
   classifier-ignores warning at the start so the user understands
   these rules currently do nothing. Skipped silently if shared has
   no `autoMode` or `--no-include-shared` was passed at scan.
+- **Phase 1b — scan-project-docs.** Scans CLAUDE.md, AGENTS.md, and
+  `.claude/CLAUDE.md` from the project root. Surfaces tool command-line
+  tokens as `allow` candidates and protected branch names as `hard_deny`
+  candidates. For each match not already in the proposal, asks the same
+  four-key prompt. Skipped silently if no docs are found or
+  `--no-include-project-docs` was passed.
 - **Phase 2 — scan-project.** Walks `assets/heuristics.yaml`
   signals against the project root. For each match not already in
   the proposal, asks the same four-key prompt. Skipped silently if
@@ -115,5 +132,5 @@ preview-orig files in either `~/.claude/` or the project `.claude/`.
   see `migration.md`.
 - Backups, `--repair`, stranded state in both locations: see
   `recovery.md`.
-- The 23 acceptance predicates as testable items: see
+- The 25 acceptance predicates as testable items: see
   `verification.md`.
