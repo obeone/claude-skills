@@ -1,0 +1,16 @@
+{
+  "false_bool": false,
+  "float": 3.14,
+  "integer": 42,
+  "list": [
+    1,
+    "two",
+    3.0
+  ],
+  "null_value": null,
+  "object": {
+    "k": "v"
+  },
+  "string": "hello",
+  "true_bool": true
+}

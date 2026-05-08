@@ -1,0 +1,24 @@
+# Canonical-fixture generator parameters
+#
+# Used by `_generate.py` (committed alongside) to produce
+# `in_10.json` .. `in_49.json` and `out_00.json` .. `out_49.json`.
+# Stdlib `random` only — no hypothesis dep — so output is stable
+# across Python versions and library upgrades.
+#
+# Generator parameters:
+#   - random.Random seed: 20260508
+#   - max_depth: 3 (recursion budget per value)
+#   - max_branch: 4 (max children per list/dict)
+#   - leaf kinds: null | bool | int (-2**31..2**31) | float (uniform -1e6..1e6) | str
+#   - alphabet: ASCII letters + digits + " _-éàü" (small unicode sample)
+#   - count: 40 fixtures (NN = 10..49)
+#
+# The companion property test (`test_canonical.py`) re-uses this seed
+# in its hypothesis-style randomized test. Each `out_NN.json` is the
+# byte-exact output of `canonicalize(load(in_NN.json))` computed by
+# `scripts/_canonical.py`.
+#
+# Re-running `_generate.py` with the same seed MUST produce
+# byte-identical fixtures. Bump the seed only if the strategy itself
+# changes; never to "fix" a broken canonicalizer.
+seed: 20260508
