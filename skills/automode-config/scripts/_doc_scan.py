@@ -74,7 +74,14 @@ _FENCE_CLOSE = re.compile(r"^```\s*$")
 # Leading line decorations we strip before tokenising. Order matters:
 # we strip prompts first, then leading ``sudo`` (since the *real* tool
 # is what comes after sudo).
-_PROMPT_PREFIXES: tuple[str, ...] = ("$ ", "# ", "> ", "% ")
+#
+# ``# `` is intentionally absent: in shell code blocks ``# foo`` is
+# overwhelmingly a comment, not a root prompt. Treating it as a prompt
+# would surface comment text (``# Analyze``, ``# Validate``) as tool
+# candidates. The downstream ``_head_token`` skips lines that start
+# with ``#`` after this decoration pass, so comments stay out of the
+# tool catalogue.
+_PROMPT_PREFIXES: tuple[str, ...] = ("$ ", "> ", "% ")
 
 
 # A valid command-tool token: starts with a letter or underscore,

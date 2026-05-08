@@ -2099,3 +2099,57 @@ def test_acc25_doc_scan_strips_sudo_env_assignment(tmp_path: Path):
         assert bad not in tools, (
             f"spurious token {bad!r} must not appear in tools; got {tools!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# K. shell comments inside fenced blocks must not become tool candidates
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_doc_scan_skips_shell_comments(tmp_path: Path):
+    """Comment lines inside fenced bash blocks must not yield tool tokens.
+
+    Regression: when ``# `` was treated as a prompt prefix, the leading
+    ``#`` was stripped and the comment text (e.g. ``# Analyze a
+    Dockerfile``) flowed into ``_head_token`` which happily emitted
+    ``Analyze`` as a candidate. The fix drops ``# `` from the prompt
+    list; ``_head_token``'s existing ``#``-skip then catches the line.
+    Verified against the claude-skills repo's own CLAUDE.md, which mixes
+    real ``uv run`` invocations with a wall of ``# Analyze``-style
+    section markers inside fenced bash blocks.
+    """
+
+    try:
+        import importlib
+        doc_scan = importlib.import_module("_doc_scan")
+        scan_fn = getattr(doc_scan, "scan", None)
+        if scan_fn is None:
+            pytest.skip("_doc_scan.scan not available")
+    except Exception as exc:
+        pytest.skip(f"_doc_scan not importable: {exc}")
+
+    content = (
+        "## Build\n\n"
+        "```bash\n"
+        "# Analyze a Dockerfile for anti-patterns\n"
+        "# Validate a bjw-s common library chart\n"
+        "uv run scripts/foo.py\n"
+        "# Generate (the gemini-tts-mcp child reads GEMINI_API_KEY)\n"
+        "npm install\n"
+        "```\n"
+    )
+    (tmp_path / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+    result = scan_fn(tmp_path)
+    tools = result["tools"]
+
+    assert tools == ["uv", "npm"], (
+        f"expected only real commands ['uv', 'npm']; got {tools!r}. "
+        f"Comment text leaking through means ``# `` is being stripped "
+        f"as a prompt prefix again."
+    )
+    for bad in ("Analyze", "Validate", "Generate", "the"):
+        assert bad not in tools, (
+            f"comment-leak token {bad!r} must not appear in tools; "
+            f"got {tools!r}"
+        )
