@@ -20,12 +20,6 @@ CLI flags
 --include-shared / --no-include-shared
                                   Surface adoption candidates from the
                                   project's shared settings file.
---include-project-docs / --no-include-project-docs
-                                  Read ``CLAUDE.md`` / ``AGENTS.md`` /
-                                  ``.claude/CLAUDE.md`` and surface
-                                  tool tokens (allow candidates) +
-                                  protected branches (``hard_deny``
-                                  candidates) found there. Default on.
 --check-gitignore                 Warn (stderr) when
                                   ``.claude/settings.local.json`` isn't
                                   covered by any ``.gitignore`` rule.
@@ -52,7 +46,6 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from _canonical import load_json, parse_flat_yaml  # noqa: E402
-from _doc_scan import scan as scan_project_docs  # noqa: E402
 from _paths import resolve  # noqa: E402
 
 
@@ -288,21 +281,8 @@ def build_report(
     *,
     include_shared: bool,
     check_gitignore: bool,
-    include_project_docs: bool = True,
 ) -> dict[str, Any]:
-    """Return the full scan report as a serializable dict.
-
-    Parameters
-    ----------
-    include_project_docs : bool, default True
-        When ``True`` (default), the scanner reads ``CLAUDE.md``,
-        ``AGENTS.md``, and ``.claude/CLAUDE.md`` and surfaces tool
-        tokens (allow candidates) and protected branches
-        (``hard_deny`` candidates) it finds there. When ``False``, the
-        section is empty. The scanner never writes; everything goes
-        through the same per-entry adoption prompt as shared-file
-        candidates.
-    """
+    """Return the full scan report as a serializable dict."""
 
     files = resolve(project_root)
     signals, meta, warnings = _load_heuristics()
@@ -325,18 +305,6 @@ def build_report(
         candidates = cand
         warnings.extend(warn)
 
-    project_doc: dict[str, Any] = {
-        "tools": [],
-        "protected_branches": [],
-        "candidates": [],
-        "sources": [],
-    }
-    if include_project_docs:
-        try:
-            project_doc = scan_project_docs(files.project_root)
-        except Exception as exc:  # noqa: BLE001
-            warnings.append(f"project-doc scan failed: {exc}")
-
     gitignore_warning: str | None = None
     if check_gitignore:
         gitignore_warning = _check_gitignore(files.local_settings, files.project_root)
@@ -349,7 +317,6 @@ def build_report(
         "heuristics_meta": meta,
         "signals": findings,
         "shared_adoption_candidates": candidates,
-        "project_doc_recommendations": project_doc,
         "warnings": warnings,
         "gitignore_warning": gitignore_warning,
     }
@@ -373,22 +340,6 @@ def _emit_human(report: dict[str, Any]) -> None:
         out.write(f"{len(cands)}\n")
         for c in cands:
             out.write(f"  - {c['section']}[{c['index']}]: {c['value']!r}\n")
-    doc = report.get("project_doc_recommendations") or {}
-    doc_cands = doc.get("candidates") or []
-    out.write("\nproject-doc recommendations: ")
-    if not doc_cands:
-        sources = doc.get("sources") or []
-        if sources:
-            out.write(f"(none — scanned {', '.join(sources)})\n")
-        else:
-            out.write("(no project docs found)\n")
-    else:
-        out.write(f"{len(doc_cands)}\n")
-        for c in doc_cands:
-            out.write(
-                f"  - {c['section']}: {c['value']}  "
-                f"(from {c['source']})\n"
-            )
     if report["warnings"]:
         out.write("\nwarnings:\n")
         for w in report["warnings"]:
@@ -427,21 +378,6 @@ def main(argv: list[str] | None = None) -> int:
         action="store_false",
         help="Skip reading .claude/settings.json for adoption candidates.",
     )
-    g2 = parser.add_mutually_exclusive_group()
-    g2.add_argument(
-        "--include-project-docs",
-        dest="include_project_docs",
-        action="store_true",
-        default=True,
-        help="Scan CLAUDE.md / AGENTS.md / .claude/CLAUDE.md for tool "
-        "tokens and protected-branch hints (default).",
-    )
-    g2.add_argument(
-        "--no-include-project-docs",
-        dest="include_project_docs",
-        action="store_false",
-        help="Skip the project-doc scan.",
-    )
     parser.add_argument(
         "--check-gitignore",
         action="store_true",
@@ -454,7 +390,6 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.project_root),
         include_shared=args.include_shared,
         check_gitignore=args.check_gitignore,
-        include_project_docs=args.include_project_docs,
     )
     if args.json:
         sys.stdout.write(json.dumps(report, indent=2, sort_keys=True) + "\n")

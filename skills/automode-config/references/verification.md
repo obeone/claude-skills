@@ -2,7 +2,7 @@
 
 Acceptance predicates, restated as testable items with a measurement
 command per item. Pytest names follow the convention `test_acc01_…`
-through `test_acc25_…`.
+through `test_acc24_…`.
 
 1. **Round-trip byte-equal across 50 canonical fixtures.**
    Measure: `uv run --with pytest -m pytest skills/automode-config/tests/test_canonical.py -k roundtrip -q`.
@@ -53,9 +53,6 @@ through `test_acc25_…`.
 
 24. **`hard_deny` round-trip and drop-all reset.**
     Measure: seed local file with non-empty `autoMode.hard_deny`; run `inspect_automode.py --json` and verify the `hard_deny` array is present in output. Run `apply_automode.py --mode migrate --migrate-strategy drop-all`; verify the resulting `autoMode.hard_deny == []`.
-
-25. **Phase 1b: project-doc scan emits candidates from synthetic fixture.**
-    Measure: create a synthetic project with CLAUDE.md containing fenced bash block with `uv run pytest` and a sentence "protected branch: main". Run `scan_project.py`; verify candidates include `Bash(uv run pytest:*)` and `Bash(git push * main*)`. Interactive apply: verify four-key prompts fire for both.
 
 ## Cross-checks
 

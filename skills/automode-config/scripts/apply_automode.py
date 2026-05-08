@@ -699,16 +699,17 @@ def _phase1_adopt(
     files: ProjectFiles,
     *,
     interactive: bool,
-    include_project_docs: bool = True,
 ) -> dict[str, Any]:
-    """Read shared autoMode + project docs; return adopted entries by section.
+    """Read shared autoMode; return adopted entries by section.
 
     Sub-phase 1a walks ``.claude/settings.json`` (if present) and surfaces
-    each ``autoMode`` rule to the four-key prompt. Sub-phase 1b runs the
-    project-doc scanner on ``CLAUDE.md`` / ``AGENTS.md`` /
-    ``.claude/CLAUDE.md`` and surfaces its candidates the same way.
-    Both sub-phases push *accepted* entries into the same ``adopted``
-    dict, deduped order-preservingly.
+    each ``autoMode`` rule to the four-key prompt. Accepted entries are
+    pushed into ``adopted``, deduped order-preservingly.
+
+    Sub-phase 1b is agent-driven: the calling agent reads CLAUDE.md /
+    AGENTS.md / .claude/CLAUDE.md, applies judgment, and emits a proposal
+    JSON that flows through the same critique + hash-gate + atomic-write
+    pipeline as any other proposal.
     """
 
     adopted: dict[str, list[Any]] = {}
@@ -739,44 +740,6 @@ def _phase1_adopt(
                 for entry, action in decisions:
                     _eprint(f"  - {entry!r}: {action}")
 
-    # ---- Sub-phase 1b: project documentation --------------------------
-    if include_project_docs:
-        try:
-            from _doc_scan import scan as _scan_docs  # noqa: WPS433
-            doc_report = _scan_docs(files.project_root)
-        except Exception as exc:  # noqa: BLE001
-            _eprint(f"phase 1b: project-doc scan failed: {exc}")
-            doc_report = None
-        if doc_report and doc_report.get("candidates"):
-            by_section: dict[str, list[tuple[Any, str]]] = {}
-            for cand in doc_report["candidates"]:
-                by_section.setdefault(cand["section"], []).append(
-                    (cand["value"], cand.get("source", "?"))
-                )
-            for section, entries in by_section.items():
-                fresh = [
-                    v for v, _ in entries
-                    if v not in adopted.get(section, [])
-                ]
-                if not fresh:
-                    continue
-                sources = sorted({s for _, s in entries})
-                _eprint(
-                    f"\n[Phase 1b] adopt-from-project-doc :: {section}  "
-                    f"(sources: {', '.join(sources)})"
-                )
-                kept, decisions = _interview(
-                    fresh, label=f"doc.{section}", interactive=interactive
-                )
-                kept = _strip_example_only(kept)
-                if section in RULE_SECTIONS:
-                    kept, dropped = _filter_dropped(kept)
-                    for entry, reason in dropped:
-                        _eprint(f"  ! dropped {entry!r}: {reason}")
-                _adopt_into(adopted, section, kept)
-                for entry, action in decisions:
-                    _eprint(f"  - {entry!r}: {action}")
-
     return adopted
 
 
@@ -791,7 +754,6 @@ def _phase2_signals(files: ProjectFiles) -> dict[str, Any]:
         files.project_root,
         include_shared=False,
         check_gitignore=False,
-        include_project_docs=False,
     )
     hints: dict[str, Any] = {
         "signals": [s for s in report["signals"] if s["present"]],
@@ -930,7 +892,6 @@ def _run(args: argparse.Namespace) -> int:
         adopted = _phase1_adopt(
             files,
             interactive=interactive and sys.stdin.isatty(),
-            include_project_docs=args.include_project_docs,
         )
     except Exception as exc:  # noqa: BLE001
         _eprint(f"phase 1 failed: {exc}")
@@ -1325,21 +1286,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--repair",
         action="store_true",
         help="Reclaim stale flocks + restore orphans (mutually exclusive).",
-    )
-    docs = parser.add_mutually_exclusive_group()
-    docs.add_argument(
-        "--include-project-docs",
-        dest="include_project_docs",
-        action="store_true",
-        default=True,
-        help="Phase 1b: surface allow/hard_deny candidates extracted "
-        "from CLAUDE.md / AGENTS.md / .claude/CLAUDE.md (default).",
-    )
-    docs.add_argument(
-        "--no-include-project-docs",
-        dest="include_project_docs",
-        action="store_false",
-        help="Skip Phase 1b (project-doc scan).",
     )
     return parser
 

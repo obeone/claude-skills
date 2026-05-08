@@ -1,8 +1,8 @@
 ---
 name: automode-config
-description: "Author, validate, and migrate Claude Code autoMode blocks at the project level (four-bucket allow/ask/deny/hard_deny model). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b scans CLAUDE.md/AGENTS.md for tool command-line tokens and protected branch patterns. Runs `claude auto-mode critique` as the canonical Path (b) gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.136+."
+description: "Author, validate, and migrate Claude Code autoMode blocks at the project level (four-bucket allow/ask/deny/hard_deny model). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b is agent-driven: the calling agent reads CLAUDE.md / AGENTS.md / .claude/CLAUDE.md, applies judgment, and emits a proposal JSON that flows through the same critique + hash-gate + atomic-write pipeline as any other proposal. Runs `claude auto-mode critique` as the canonical Path (b) gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.136+."
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 tools:
   - Read
   - Write
@@ -60,7 +60,7 @@ shared-file `autoMode` ignored), see `references/three_files.md`.
 [Phase 1a] adopt-from-shared (if .claude/settings.json contains autoMode)
     |   per-entry interactive: [k]eep / [e]dit / [d]rop / [q]uit
     v
-[Phase 1b] scan-project-docs (if CLAUDE.md/AGENTS.md contain documented tools/branches)
+[Phase 1b] agent-driven adoption from project docs (CLAUDE.md / AGENTS.md / .claude/CLAUDE.md)
     |   per-candidate interactive: [k]eep / [e]dit / [d]rop / [q]uit
     v
 [Phase 2] scan-project signals (Dockerfile, package.json, .gitignore, etc.)
@@ -77,6 +77,47 @@ done.
 
 Phase 0 is automatic and silent. Phases 1a, 1b, 2, 4 are skipped cleanly
 when their precondition is absent. Phase 3 always runs.
+
+### Phase 1b — agent-driven adoption from project docs
+
+Before Phase 3 commits the proposal, the calling agent SHOULD enrich it
+with rules implied by the project's documentation:
+
+1. Read these files (skip silently if absent):
+   - `<project>/CLAUDE.md`
+   - `<project>/AGENTS.md`
+   - `<project>/.claude/CLAUDE.md`
+   - Optionally `~/.claude/CLAUDE.md` (user-global conventions; include
+     only if the project hasn't redefined them)
+2. Propose rules using the four-bucket model:
+   - **allow**: tools the docs document as routine (test runners, linters,
+     build tools, local dev commands).
+   - **ask**: anything ambiguous or potentially destructive that should
+     surface a prompt.
+   - **deny**: paths/operations the docs warn against but a flag could
+     legitimately override.
+   - **hard_deny**: protected branches, secrets paths, anything the docs
+     say must NEVER be auto-approved. `hard_deny` overrides `allow` for
+     the same target and is not bypassable by user-intent flags.
+3. Write the proposal as JSON to a file (e.g. `/tmp/automode-proposal.json`):
+   ```json
+   {
+     "autoMode": {
+       "allow":     ["Bash(<tool>:*)", "..."],
+       "ask":       ["..."],
+       "deny":      ["..."],
+       "hard_deny": ["Bash(git push * <branch>*)", "..."],
+       "environment": ["$defaults"]
+     }
+   }
+   ```
+4. Pass the file to `apply_automode.py --proposal <file>` (with `--dry-run`
+   first to obtain the canonical hash, then with `--approved-canonical-hash`).
+
+The deterministic guards still apply: schema validation,
+classifier-dropped pattern filter, version-band probe (Claude Code 2.1.136+
+for `hard_deny`), critique exit-code gate, sha256 hash gate, atomic write
+under flock. The agent cannot bypass them.
 
 ## The single intent question
 
@@ -102,7 +143,6 @@ Asked silently from file state, never prompted: **does
 | `--project-root <path>` | cwd | Project root to scan. |
 | `--json` | off | Machine-readable output. |
 | `--include-shared` / `--no-include-shared` | on | Read `.claude/settings.json` `autoMode` for adoption candidates. |
-| `--include-project-docs` / `--no-include-project-docs` | on | Phase 1b: scan CLAUDE.md/AGENTS.md for tool and branch candidates. |
 | `--check-gitignore` | off | Warn if `.claude/settings.local.json` not in `.gitignore`. |
 
 ### `inspect_automode.py`
@@ -128,7 +168,6 @@ Asked silently from file state, never prompted: **does
 | `--model <model>` | (CLI default) | Passed to `claude auto-mode critique`. |
 | `--allow-swap-file-fallback` | off | Opt-in for swap-file when `--settings` unsupported. |
 | `--allow-unknown-critique-sections` | off | Relax contract-drift on extra sections. |
-| `--include-project-docs` / `--no-include-project-docs` | on | Phase 1b: scan CLAUDE.md/AGENTS.md for tool and branch candidates. |
 | `--write-shared` | off | Phase 4 opt-in: also write to `.claude/settings.json`. |
 | `--hoist <rule-id>` | off | Move rule from local to user. |
 | `--repair` | off | Restore orphans + reclaim locks; mutually exclusive with all other modes. |
@@ -250,7 +289,6 @@ cleanup, and stranded-state detection, see `references/recovery.md`.
 - `references/migration.md` — Phase 1a/1b adoption, project-doc scan, four-key prompt, strategy modes.
 - `references/recovery.md` — backup retention, `--repair`, stranded state, multi-file flock.
 - `references/verification.md` — acceptance predicates with measurement commands.
-- `scripts/_doc_scan.py` — internal; Phase 1b scanner for CLAUDE.md/AGENTS.md tools and protected branches.
 
 ## Documentation URLs
 

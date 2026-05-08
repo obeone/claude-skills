@@ -32,28 +32,30 @@ For each entry not already in the proposal:
   remaining entries are dropped. The skill prints
   `quit at entry K of N` for the audit trail.
 
-## Phase 1b — scan-project-docs
+## Phase 1b — agent-driven adoption from project docs
 
 Triggered after Phase 1a (or first if shared has no `autoMode`). The
-skill scans CLAUDE.md, AGENTS.md, and `.claude/CLAUDE.md` from the
-project root. Two types of candidates are surfaced:
+calling agent reads CLAUDE.md, AGENTS.md, and `.claude/CLAUDE.md` from
+the project root, applies judgment, and writes a JSON proposal that
+flows through `apply_automode.py --proposal <file>`.
 
-**Tool candidates** from documented command-line tools (pattern:
-tool-name appearing as the head of a line in fenced bash/sh/shell/console
-code blocks). Surfaced as `allow` rule candidates of the form
-`Bash(<tool>:*)`. Trivial shell builtins (cd, ls, cp, etc.) are filtered
-out. No tool list is hardcoded—candidates derive from what the project
-itself documents.
+The agent uses the four-bucket model to classify what it finds:
 
-**Protected-branch candidates** from documented branch protection
-statements. Regex patterns detect English ("never push to main", "main is
-protected") and French ("ne pas push vers stable", "Protected branches:")
-patterns. Surfaced as `hard_deny` rule candidates of the form
-`Bash(git push * <branch>*)` to unconditionally block accidental pushes.
-Conservative heuristic—false negatives preferred to false positives.
+- **allow**: tools the docs document as routine (test runners, linters,
+  build tools, local dev commands).
+- **ask**: anything ambiguous or potentially destructive that should
+  surface a prompt.
+- **deny**: paths/operations the docs warn against but a flag could
+  legitimately override.
+- **hard_deny**: protected branches, secrets paths, anything the docs
+  say must NEVER be auto-approved. `hard_deny` overrides `allow` for
+  the same target and is not bypassable by user-intent flags.
 
-Each candidate fires the same four-key prompt. Skipped silently if
-`--no-include-project-docs` was passed.
+The agent writes a proposal JSON, then passes it to
+`apply_automode.py --proposal <file> --dry-run` to obtain the canonical
+hash, then reruns with `--approved-canonical-hash`. The same per-entry
+four-key prompt (`[k]eep / [e]dit / [d]rop / [q]uit`) applies when the
+pipeline is run interactively.
 
 ## Phase 2 — scan-project signals
 

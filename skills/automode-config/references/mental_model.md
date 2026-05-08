@@ -42,7 +42,7 @@ is absent; Phase 3 always runs.
              per-entry: [k]eep / [e]dit / [d]rop / [q]uit
                  |
                  v
-[Phase 1b] scan-project-docs (skipped if no docs or --no-include-project-docs)
+[Phase 1b] agent-driven adoption from project docs (CLAUDE.md / AGENTS.md / .claude/CLAUDE.md)
              per-candidate: [k]eep / [e]dit / [d]rop / [q]uit
                  |
                  v
@@ -91,12 +91,15 @@ already contain an `autoMode` block?**
   classifier-ignores warning at the start so the user understands
   these rules currently do nothing. Skipped silently if shared has
   no `autoMode` or `--no-include-shared` was passed at scan.
-- **Phase 1b — scan-project-docs.** Scans CLAUDE.md, AGENTS.md, and
-  `.claude/CLAUDE.md` from the project root. Surfaces tool command-line
-  tokens as `allow` candidates and protected branch names as `hard_deny`
-  candidates. For each match not already in the proposal, asks the same
-  four-key prompt. Skipped silently if no docs are found or
-  `--no-include-project-docs` was passed.
+- **Phase 1b — agent-driven adoption from project docs.** The calling
+  agent reads CLAUDE.md, AGENTS.md, and `.claude/CLAUDE.md` from the
+  project root, applies judgment, and writes a JSON proposal that flows
+  through `apply_automode.py --proposal <file>`. The agent proposes
+  `allow` rules for routine tools, `ask` for ambiguous operations,
+  `deny` for warned-against operations, and `hard_deny` for protected
+  branches and secrets paths. The deterministic guards (schema
+  validation, classifier-dropped pattern filter, critique gate, hash
+  gate, atomic write) still apply; the agent cannot bypass them.
 - **Phase 2 — scan-project.** Walks `assets/heuristics.yaml`
   signals against the project root. For each match not already in
   the proposal, asks the same four-key prompt. Skipped silently if
@@ -132,5 +135,5 @@ preview-orig files in either `~/.claude/` or the project `.claude/`.
   see `migration.md`.
 - Backups, `--repair`, stranded state in both locations: see
   `recovery.md`.
-- The 25 acceptance predicates as testable items: see
+- The 24 acceptance predicates as testable items: see
   `verification.md`.
