@@ -1,0 +1,63 @@
+# dropped_rules.yaml — permission-allow patterns auto mode drops on entry
+#
+# Schema: strictly flat `key: value` pairs. Parsed by
+# `_canonical.parse_flat_yaml` (no nesting, no lists, no empty values).
+#
+# Semantics
+# ---------
+# When auto mode is engaged, Claude Code silently strips a set of
+# overbroad `permissions.allow` patterns from `~/.claude/settings.json`
+# because they would defeat the classifier's purpose. This file is the
+# skill's authoritative list of those patterns, used by
+# `inspect_automode.py` to warn the user that their existing rules will
+# be ignored under auto mode and by `apply_automode.py` to refuse to
+# write a proposal that re-introduces any of them.
+#
+# Keys
+# ----
+# claude_code_version_range
+#   Same band as heuristics.yaml. Bumping the upper bound here without
+#   re-checking which rules the classifier still drops is unsafe.
+#
+# drop_<slug>
+#   A permission-allow pattern dropped on entry. The value is the
+#   verbatim pattern string (e.g., `Bash(*)`). The `drop_` key prefix
+#   namespaces these entries; the slug after it is informational only.
+#   Patterns containing ` #` must be quoted.
+
+claude_code_version_range: ">=2.1.83,<3.0"
+
+# Wildcards that defeat classification entirely
+drop_bash_any: Bash(*)
+drop_powershell_any: PowerShell(*)
+drop_agent_any: Agent(*)
+
+# Interpreter wildcards (any script via `python …`, `node …`, etc.)
+drop_bash_python: Bash(python*)
+drop_bash_python3: Bash(python3*)
+drop_bash_node: Bash(node*)
+drop_bash_npm: Bash(npm*)
+drop_bash_pnpm: Bash(pnpm*)
+drop_bash_yarn: Bash(yarn*)
+drop_bash_bun: Bash(bun*)
+drop_bash_deno: Bash(deno*)
+drop_bash_uv: Bash(uv*)
+drop_bash_pip: Bash(pip*)
+drop_bash_pipx: Bash(pipx*)
+drop_bash_cargo: Bash(cargo*)
+drop_bash_go: Bash(go*)
+drop_bash_make: Bash(make*)
+drop_bash_just: Bash(just*)
+
+# Common script-runner wildcards (npm-script style)
+drop_bash_npm_run: "Bash(npm run *)"
+drop_bash_pnpm_run: "Bash(pnpm run *)"
+drop_bash_yarn_run: "Bash(yarn run *)"
+drop_bash_uv_run: "Bash(uv run *)"
+
+# Specific Agent allow examples (Agent(*) handled above; named agents
+# also dropped because subagents bypass the classifier on the parent's
+# behalf).
+drop_agent_executor: Agent(executor)
+drop_agent_planner: Agent(planner)
+drop_agent_explore: Agent(explore)

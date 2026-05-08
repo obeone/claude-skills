@@ -1,0 +1,66 @@
+# heuristics.yaml — flat key:value heuristics consumed by scan_project.py
+#
+# Schema: strictly flat `key: value` pairs (no nesting, no lists, no empty
+# values). Parsed by `_canonical.parse_flat_yaml`. See that module for
+# the full grammar.
+#
+# Important
+# ---------
+# The flat YAML walker treats values verbatim. It does NOT apply YAML
+# escape semantics, even inside quotes. A backslash in the source file
+# is read as a literal backslash. Therefore patterns here use SINGLE
+# backslashes (Python `re` syntax), e.g. `\.` not `\\.`.
+#
+# Keys
+# ----
+# claude_code_version_range
+#   PEP-440-ish version band the skill is known to behave correctly
+#   within. apply_automode.py refuses to run when the live
+#   `claude --version` falls outside this window (exit code 10 —
+#   `OutOfBandError`).
+#
+# signal_<name>
+#   Project-signal heuristic. The value is a regex (Python `re` syntax)
+#   that scan_project.py applies to candidate file names found in the
+#   current working directory. A match contributes the signal `<name>`
+#   to the JSON `language_signals` or `build_tools` array. The
+#   `signal_` prefix exists purely to namespace these keys; the suffix
+#   after the prefix is the human-readable signal label emitted in the
+#   JSON output.
+#
+# Notes
+# -----
+# - Patterns are unanchored and matched with `re.search` against each
+#   filename in the project root only (depth 0). Recursive scanning is
+#   intentionally avoided to keep `scan_project.py` deterministic and
+#   fast on large monorepos.
+# - Bare values containing ` #` (space then hash) must be quoted to
+#   survive the inline-comment stripper.
+# - Adding a key here is enough to extend the scanner; no Python code
+#   change is required.
+
+claude_code_version_range: ">=2.1.83,<3.0"
+
+# Language signals (suffix becomes the label in the JSON output)
+signal_python: ^pyproject\.toml$|^setup\.cfg$|^setup\.py$|^requirements.*\.txt$
+signal_node: ^package\.json$|^package-lock\.json$|^pnpm-lock\.yaml$|^yarn\.lock$
+signal_rust: ^Cargo\.toml$|^Cargo\.lock$
+signal_go: ^go\.mod$|^go\.sum$
+signal_ruby: ^Gemfile$|^Gemfile\.lock$|^.+\.gemspec$
+signal_java: ^pom\.xml$|^build\.gradle$|^build\.gradle\.kts$|^settings\.gradle$
+signal_php: ^composer\.json$|^composer\.lock$
+signal_dotnet: ^.+\.csproj$|^.+\.fsproj$|^.+\.sln$
+
+# Build / orchestration signals
+signal_docker: ^Dockerfile$|^Dockerfile\..+$|^\.dockerignore$
+signal_compose: ^compose\.ya?ml$|^docker-compose\.ya?ml$|^docker-compose\..+\.ya?ml$
+signal_make: ^[Mm]akefile$|^GNUmakefile$
+signal_just: ^[Jj]ustfile$|^\.justfile$
+signal_taskfile: ^Taskfile\.ya?ml$
+signal_bazel: ^WORKSPACE$|^MODULE\.bazel$|^BUILD$|^BUILD\.bazel$
+signal_tool_versions: ^\.tool-versions$
+
+# Forge / remote signals (helps scan_project.py classify the host)
+signal_forgejo_remote: (forgejo\.|codeberg\.org|/forgejo\.)
+signal_gitlab_remote: (gitlab\.com|/gitlab\.|gitlab/)
+signal_github_remote: (github\.com|/github\.)
