@@ -852,10 +852,10 @@ def test_acc17_stranded_state(
     project_claude.mkdir(parents=True)
 
     # Plant orphans in both directories.
-    (home_claude / ".autoMode-config.preview-orig.99998").write_text(
+    (home_claude / ".automode-config.preview-orig.99998").write_text(
         '{"autoMode": {"environment": ["$defaults"]}}\n', encoding="utf-8"
     )
-    (project_claude / ".autoMode-config.preview-orig.99999").write_text(
+    (project_claude / ".automode-config.preview-orig.99999").write_text(
         '{"autoMode": {"environment": ["$defaults"]}}\n', encoding="utf-8"
     )
 
@@ -906,7 +906,7 @@ def test_acc18_repair_restores(
     project_claude.mkdir(parents=True)
 
     # Orphan + dead lock.
-    orphan = home_claude / ".autoMode-config.preview-orig.99999"
+    orphan = home_claude / ".automode-config.preview-orig.99999"
     orphan.write_text(
         '{"autoMode": {"environment": ["$defaults"]}}\n', encoding="utf-8"
     )
@@ -1582,3 +1582,520 @@ def test_validator_accepts_extra_top_level_keys():
         },
         "permissions": {"allow": ["Read(**)"]},
     })
+
+
+# ---------------------------------------------------------------------------
+# A. Validator accepts hard_deny section
+# ---------------------------------------------------------------------------
+
+
+def test_acc24_validator_accepts_hard_deny_section():
+    """The stdlib validator accepts a populated hard_deny array."""
+
+    validate, ProposalValidationError = _get_validator()
+    validate({
+        "autoMode": {
+            "allow": [],
+            "deny": [],
+            "hard_deny": ["Bash(git push * main*)", "Bash(rm -rf /:*)"],
+            "ask": [],
+            "environment": ["$defaults"],
+        }
+    })
+
+
+# ---------------------------------------------------------------------------
+# B. Drop-all resets hard_deny too
+# ---------------------------------------------------------------------------
+
+
+def test_acc24_migrate_drop_all_resets_hard_deny(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+):
+    """migrate --drop-all resets hard_deny to [] alongside allow/deny/ask."""
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project_claude = project / ".claude"
+    project_claude.mkdir(parents=True)
+
+    _build_local_settings(
+        project_claude,
+        automode={
+            "allow": ["Read(**)", "Bash(npm test*)"],
+            "ask": [],
+            "deny": [],
+            "hard_deny": ["Bash(git push * main*)", "Bash(git push * stable*)"],
+            "environment": [
+                "$defaults",
+                "node-monorepo",
+            ],
+        },
+    )
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_ok")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proc = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "migrate",
+            "--migrate-strategy", "drop-all",
+            "--no-include-project-docs",
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert proc.returncode == EXIT_OK, (
+        f"drop-all dry-run failed: {proc.stderr.decode('utf-8', 'replace')!r}"
+    )
+    proposed = _proposal_from_dryrun_stdout(proc.stdout)
+    assert proposed is not None, (
+        f"could not parse dry-run stdout as JSON: {proc.stdout!r}"
+    )
+    am = proposed["autoMode"]
+    assert am.get("environment") == ["$defaults"]
+    assert am.get("allow", []) == []
+    assert am.get("deny", []) == []
+    assert am.get("ask", []) == []
+    assert am.get("hard_deny", []) == [], (
+        f"expected hard_deny == [] after drop-all; got {am.get('hard_deny')!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# C. scan_project surfaces shared hard_deny adoption candidates
+# ---------------------------------------------------------------------------
+
+
+def test_acc24_scan_shared_hard_deny_candidates(
+    tmp_path: Path,
+    scripts_dir: Path,
+):
+    """scan_project surfaces autoMode hard_deny entries from .claude/settings.json."""
+
+    scan = _scan_cli(scripts_dir)
+    _require(scan)
+
+    project = tmp_path / "proj"
+    project_claude = project / ".claude"
+    project_claude.mkdir(parents=True)
+
+    # Write a shared settings file inline with a hard_deny entry.
+    shared_payload = {
+        "autoMode": {
+            "allow": ["Read(**)"],
+            "ask": [],
+            "deny": [],
+            "hard_deny": ["Bash(git push * main*)", "Bash(git push * stable*)"],
+            "environment": ["$defaults"],
+        }
+    }
+    shared = project_claude / "settings.json"
+    shared.write_bytes(_canonical.canonicalize(shared_payload))
+
+    env = _clean_env(tmp_path)
+    proc = subprocess.run(
+        [
+            "uv", "run", str(scan),
+            "--project-root", str(project),
+            "--include-shared",
+            "--no-include-project-docs",
+            "--json",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    data = json.loads(proc.stdout.decode("utf-8"))
+    cands = data["shared_adoption_candidates"]
+    assert isinstance(cands, list) and len(cands) >= 1, (
+        f"expected adoption candidates; got {cands!r}"
+    )
+    sections = {c["section"] for c in cands}
+    assert "hard_deny" in sections, (
+        f"expected hard_deny in sections; got {sections!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# D. project-doc scan extracts tool tokens (direct import)
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_doc_scan_extracts_tool_tokens(tmp_path: Path):
+    """_doc_scan.scan surfaces tool tokens from fenced bash blocks in CLAUDE.md.
+
+    Asserts:
+    - npm and cargo appear (in document order) from a ```bash block.
+    - Trivial builtins (cd, ls) are not surfaced.
+    - candidates contains allow entries for npm and cargo.
+    - Unknown tool tokens (xyzzy-cli) are also surfaced (no built-in opinionated list).
+    """
+
+    try:
+        import importlib
+        doc_scan = importlib.import_module("_doc_scan")
+        scan_fn = getattr(doc_scan, "scan", None)
+        if scan_fn is None:
+            pytest.skip("_doc_scan.scan not available")
+    except Exception as exc:
+        pytest.skip(f"_doc_scan not importable: {exc}")
+
+    content = (
+        "# My Project\n\n"
+        "## Usage\n\n"
+        "```bash\n"
+        "cd mydir\n"
+        "ls -la\n"
+        "npm install\n"
+        "cargo build\n"
+        "xyzzy-cli run\n"
+        "```\n"
+    )
+    (tmp_path / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+    result = scan_fn(tmp_path)
+
+    tools = result["tools"]
+    assert "npm" in tools, f"expected 'npm' in tools; got {tools!r}"
+    assert "cargo" in tools, f"expected 'cargo' in tools; got {tools!r}"
+    assert "xyzzy-cli" in tools, f"expected 'xyzzy-cli' in tools; got {tools!r}"
+
+    # Document order preserved: npm before cargo before xyzzy-cli.
+    assert tools.index("npm") < tools.index("cargo"), (
+        f"expected npm before cargo in {tools!r}"
+    )
+    assert tools.index("cargo") < tools.index("xyzzy-cli"), (
+        f"expected cargo before xyzzy-cli in {tools!r}"
+    )
+
+    # Trivial builtins are filtered out.
+    assert "cd" not in tools, f"'cd' should not appear in tools; got {tools!r}"
+    assert "ls" not in tools, f"'ls' should not appear in tools; got {tools!r}"
+
+    # candidates contains allow entries for each tool.
+    allow_values = {
+        c["value"] for c in result["candidates"] if c["section"] == "allow"
+    }
+    assert "Bash(npm:*)" in allow_values, (
+        f"expected Bash(npm:*) in allow candidates; got {allow_values!r}"
+    )
+    assert "Bash(cargo:*)" in allow_values, (
+        f"expected Bash(cargo:*) in allow candidates; got {allow_values!r}"
+    )
+    assert "Bash(xyzzy-cli:*)" in allow_values, (
+        f"expected Bash(xyzzy-cli:*) in allow candidates; got {allow_values!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# E. project-doc scan emits hard_deny for protected branches (direct import)
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_doc_scan_hard_deny_for_protected_branches(tmp_path: Path):
+    """_doc_scan.scan emits hard_deny candidates for documented protected branches.
+
+    Covers English, French, and explicit-listing patterns.
+    """
+
+    try:
+        import importlib
+        doc_scan = importlib.import_module("_doc_scan")
+        scan_fn = getattr(doc_scan, "scan", None)
+        if scan_fn is None:
+            pytest.skip("_doc_scan.scan not available")
+    except Exception as exc:
+        pytest.skip(f"_doc_scan not importable: {exc}")
+
+    # ---- English: "Never push directly to main." ----
+    proj_en = tmp_path / "proj_en"
+    proj_en.mkdir()
+    (proj_en / "CLAUDE.md").write_text(
+        "# Rules\n\nNever push directly to main.\n", encoding="utf-8"
+    )
+    result_en = scan_fn(proj_en)
+    assert "main" in result_en["protected_branches"], (
+        f"expected 'main' in protected_branches; got {result_en['protected_branches']!r}"
+    )
+    deny_values_en = {
+        c["value"] for c in result_en["candidates"] if c["section"] == "hard_deny"
+    }
+    assert "Bash(git push * main*)" in deny_values_en, (
+        f"expected Bash(git push * main*) in hard_deny candidates; got {deny_values_en!r}"
+    )
+
+    # ---- French: "Ne pas push vers stable." ----
+    proj_fr = tmp_path / "proj_fr"
+    proj_fr.mkdir()
+    (proj_fr / "CLAUDE.md").write_text(
+        "# Règles\n\nNe pas push vers stable.\n", encoding="utf-8"
+    )
+    result_fr = scan_fn(proj_fr)
+    assert "stable" in result_fr["protected_branches"], (
+        f"expected 'stable' in protected_branches; got {result_fr['protected_branches']!r}"
+    )
+    deny_values_fr = {
+        c["value"] for c in result_fr["candidates"] if c["section"] == "hard_deny"
+    }
+    assert "Bash(git push * stable*)" in deny_values_fr, (
+        f"expected Bash(git push * stable*) in hard_deny candidates; got {deny_values_fr!r}"
+    )
+
+    # ---- Explicit listing: "Protected branches: main, develop, stable" ----
+    proj_list = tmp_path / "proj_list"
+    proj_list.mkdir()
+    (proj_list / "CLAUDE.md").write_text(
+        "# Git policy\n\nProtected branches: main, develop, stable\n",
+        encoding="utf-8",
+    )
+    result_list = scan_fn(proj_list)
+    for branch in ("main", "develop", "stable"):
+        assert branch in result_list["protected_branches"], (
+            f"expected {branch!r} in protected_branches; "
+            f"got {result_list['protected_branches']!r}"
+        )
+    deny_values_list = {
+        c["value"] for c in result_list["candidates"] if c["section"] == "hard_deny"
+    }
+    for branch in ("main", "develop", "stable"):
+        expected = f"Bash(git push * {branch}*)"
+        assert expected in deny_values_list, (
+            f"expected {expected!r} in hard_deny candidates; got {deny_values_list!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# F. CLI smoke for --no-include-project-docs
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_no_include_project_docs_empty(
+    tmp_path: Path,
+    scripts_dir: Path,
+):
+    """scan_project --no-include-project-docs yields empty project_doc_recommendations.candidates."""
+
+    scan = _scan_cli(scripts_dir)
+    _require(scan)
+
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    # Plant a CLAUDE.md that would yield candidates if docs were scanned.
+    (project / "CLAUDE.md").write_text(
+        "# Rules\n\nNever push directly to main.\n\n"
+        "```bash\n"
+        "npm install\n"
+        "```\n",
+        encoding="utf-8",
+    )
+
+    env = _clean_env(tmp_path)
+    proc = subprocess.run(
+        [
+            "uv", "run", str(scan),
+            "--project-root", str(project),
+            "--no-include-project-docs",
+            "--json",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    data = json.loads(proc.stdout.decode("utf-8"))
+    doc_cands = data["project_doc_recommendations"]["candidates"]
+    assert doc_cands == [], (
+        f"expected empty candidates with --no-include-project-docs; got {doc_cands!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# G. apply_automode Phase 1b adopts doc-derived hard_deny (non-interactive)
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_phase1b_adopts_doc_derived_hard_deny(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """Phase 1b auto-keeps doc-derived hard_deny entries when non-interactive.
+
+    With a closed stdin (no tty), _interview is a pass-through, so doc-scan
+    candidates derived from "Never push to main." in CLAUDE.md are kept as-is.
+    The dry-run stdout proposal must include Bash(git push * main*) in hard_deny.
+    """
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    # Plant a CLAUDE.md with a protected-branch statement.
+    (project / "CLAUDE.md").write_text(
+        "# Git policy\n\nNever push directly to main.\n",
+        encoding="utf-8",
+    )
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_ok")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proposal = fixtures_dir / "proposal_minimal.json"
+    proc = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--include-project-docs",
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+        input=b"",  # closed stdin — non-interactive path
+    )
+    assert proc.returncode == EXIT_OK, (
+        f"apply dry-run failed: {proc.stderr.decode('utf-8', 'replace')!r}"
+    )
+    proposed = _proposal_from_dryrun_stdout(proc.stdout)
+    assert proposed is not None, (
+        f"could not parse dry-run stdout as JSON: {proc.stdout!r}"
+    )
+    hard_deny = proposed["autoMode"].get("hard_deny", [])
+    assert "Bash(git push * main*)" in hard_deny, (
+        f"expected 'Bash(git push * main*)' in hard_deny; got {hard_deny!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# H. Bullet-list-with-parens protected-branch form (fix #4)
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_doc_scan_handles_bullet_protected_branches(tmp_path: Path):
+    """_doc_scan.scan recognises the Markdown bullet-list-with-parens form.
+
+    Input: ``- **Protected branches** (`main`, `develop`, `stable`): never push directly``
+    Expected: protected_branches == ["main", "develop", "stable"]
+    """
+
+    try:
+        import importlib
+        doc_scan = importlib.import_module("_doc_scan")
+        scan_fn = getattr(doc_scan, "scan", None)
+        if scan_fn is None:
+            pytest.skip("_doc_scan.scan not available")
+    except Exception as exc:
+        pytest.skip(f"_doc_scan not importable: {exc}")
+
+    content = (
+        "# Git & PR Policy\n\n"
+        "- **Protected branches** (`main`, `develop`, `stable`): "
+        "never push directly\n"
+    )
+    (tmp_path / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+    result = scan_fn(tmp_path)
+    branches = result["protected_branches"]
+    for expected in ("main", "develop", "stable"):
+        assert expected in branches, (
+            f"expected {expected!r} in protected_branches; got {branches!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# I. Path-traversal tokens are rejected by _TOKEN_RE (fix #5)
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_doc_scan_rejects_path_traversal_tokens(tmp_path: Path):
+    """_doc_scan.scan does not emit allow candidates for path-traversal tokens.
+
+    Tokens like ``../../bin/rm``, ``./scripts/foo.sh``, and ``+`` (all-punct)
+    must be absent from tools and candidates.
+    """
+
+    try:
+        import importlib
+        doc_scan = importlib.import_module("_doc_scan")
+        scan_fn = getattr(doc_scan, "scan", None)
+        if scan_fn is None:
+            pytest.skip("_doc_scan.scan not available")
+    except Exception as exc:
+        pytest.skip(f"_doc_scan not importable: {exc}")
+
+    content = (
+        "# Usage\n\n"
+        "```bash\n"
+        "../../bin/rm -rf /\n"
+        "./scripts/foo.sh\n"
+        "+ extra\n"
+        "```\n"
+    )
+    (tmp_path / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+    result = scan_fn(tmp_path)
+    tools = result["tools"]
+    candidate_values = {c["value"] for c in result["candidates"]}
+
+    for bad_token in ("../../bin/rm", "./scripts/foo.sh", "+"):
+        assert bad_token not in tools, (
+            f"path-traversal token {bad_token!r} must not appear in tools; got {tools!r}"
+        )
+        # Also check that no allow candidate wraps it.
+        bad_candidate = f"Bash({bad_token}:*)"
+        assert bad_candidate not in candidate_values, (
+            f"path-traversal candidate {bad_candidate!r} must not be surfaced"
+        )
+
+
+# ---------------------------------------------------------------------------
+# J. sudo env-assignment interleaved with flags (fix #1)
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_doc_scan_strips_sudo_env_assignment(tmp_path: Path):
+    """_doc_scan.scan handles sudo with interleaved env assignments and flags.
+
+    Input line: ``sudo VAR=1 -E npm install``
+    Expected: tools == ["npm"]  (no "-E", no "VAR", no "VAR=1")
+    """
+
+    try:
+        import importlib
+        doc_scan = importlib.import_module("_doc_scan")
+        scan_fn = getattr(doc_scan, "scan", None)
+        if scan_fn is None:
+            pytest.skip("_doc_scan.scan not available")
+    except Exception as exc:
+        pytest.skip(f"_doc_scan not importable: {exc}")
+
+    content = (
+        "# Install\n\n"
+        "```bash\n"
+        "sudo VAR=1 -E npm install\n"
+        "```\n"
+    )
+    (tmp_path / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+    result = scan_fn(tmp_path)
+    tools = result["tools"]
+
+    assert tools == ["npm"], (
+        f"expected ['npm'] after stripping 'sudo VAR=1 -E'; got {tools!r}"
+    )
+    # Confirm no spurious tokens slipped through.
+    for bad in ("-E", "VAR", "VAR=1"):
+        assert bad not in tools, (
+            f"spurious token {bad!r} must not appear in tools; got {tools!r}"
+        )
