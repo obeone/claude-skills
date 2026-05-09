@@ -2,7 +2,7 @@
 name: automode-config
 description: "Author, validate, and migrate Claude Code autoMode blocks at the project level (four-bucket allow/ask/deny/hard_deny model). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b is agent-driven: the calling agent reads CLAUDE.md / AGENTS.md / .claude/CLAUDE.md, applies judgment, and emits a proposal JSON that flows through the same critique + hash-gate + atomic-write pipeline as any other proposal. Runs `claude auto-mode critique` as the canonical Path (b) gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.136+."
 metadata:
-  version: "0.4.1"
+  version: "0.4.2"
 tools:
   - Read
   - Write

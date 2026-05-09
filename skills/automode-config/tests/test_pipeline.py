@@ -2101,3 +2101,97 @@ def test_v041_deprecated_flag_still_accepted_with_warning(
     assert "--allow-swap-file-fallback is deprecated" in stderr, (
         f"expected deprecation warning; stderr={stderr!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# v0.4.2 — cache hash scope matches inspect (autoMode-only)
+# ---------------------------------------------------------------------------
+
+
+def test_v042_apply_then_inspect_reports_no_drift(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """After a successful apply commit, inspect --show-drift reports no drift.
+
+    Regression for the phantom-drift bug: apply used to write the
+    full-document hash into the approved cache, while inspect computes
+    drift against the canonical bytes of the autoMode block alone. The
+    two values were never equal, so drift was always reported.
+    """
+
+    apply = _apply_cli(scripts_dir)
+    inspect = _inspect_cli(scripts_dir)
+    _require(apply)
+    _require(inspect)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_ok")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proposal = fixtures_dir / "proposal_minimal.json"
+    dry = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry.returncode == EXIT_OK, dry.stderr.decode("utf-8", "replace")
+    h = _hash_from_dryrun_stderr(dry.stderr)
+    assert h, "could not extract canonical hash from dry-run"
+
+    commit = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--approved-canonical-hash", h,
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert commit.returncode == EXIT_OK, (
+        f"commit failed: {commit.stderr.decode('utf-8', 'replace')!r}"
+    )
+
+    drift = subprocess.run(
+        [
+            "uv", "run", str(inspect),
+            "--project-root", str(project),
+            "--show-drift",
+            "--file", "local",
+            "--json",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert drift.returncode == EXIT_OK, (
+        "inspect reported drift immediately after apply commit. "
+        f"stdout={drift.stdout.decode('utf-8', 'replace')!r} "
+        f"stderr={drift.stderr.decode('utf-8', 'replace')!r}"
+    )
+
+    # Sanity: the cache value must equal sha256(canonical(autoMode)),
+    # not sha256(canonical(full doc)).
+    local = project / ".claude" / "settings.local.json"
+    cache = project / ".claude" / ".auto_mode_approved.json"
+    full_doc = json.loads(local.read_text(encoding="utf-8"))
+    automode_only = _canonical.canonicalize(full_doc["autoMode"])
+    full_doc_canonical = _canonical.canonicalize(full_doc)
+    cache_data = json.loads(cache.read_text(encoding="utf-8"))
+    cached_hash = cache_data["local"]["hash"]
+    assert cached_hash == hashlib.sha256(automode_only).hexdigest(), (
+        f"cache hash {cached_hash!r} should equal autoMode-only sha256"
+    )
+    assert cached_hash != hashlib.sha256(full_doc_canonical).hexdigest(), (
+        "cache hash must NOT equal full-document sha256 (regression sentinel)"
+    )

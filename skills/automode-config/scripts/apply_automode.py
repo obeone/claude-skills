@@ -212,6 +212,19 @@ def _sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
+def _automode_only_hash(doc: dict[str, Any]) -> str:
+    """Return sha256 of canonical bytes of ``doc['autoMode']`` only.
+
+    The drift cache stores this value (matching the scope used by
+    ``inspect_automode.py``); the full-document hash drives the
+    ``--approved-canonical-hash`` gate predicate and the critique
+    archive label.
+    """
+
+    auto = doc.get("autoMode") if isinstance(doc, dict) else None
+    return _sha256_bytes(canonicalize(auto if auto is not None else {}))
+
+
 def _atomic_write(target: Path, payload: bytes, *, mode: int = EXPECTED_SECRET_MODE) -> None:
     """Atomically write ``payload`` to ``target`` with ``mode`` permissions.
 
@@ -1110,7 +1123,9 @@ def _run(args: argparse.Namespace) -> int:
             return EXIT_PERMISSION
 
         _update_approved_cache(
-            files.approved_cache, label="local", sha256=proposal_hash
+            files.approved_cache,
+            label="local",
+            sha256=_automode_only_hash(proposal),
         )
         _print_rollback(files.local_settings, backup)
     finally:
@@ -1190,7 +1205,7 @@ def _phase4_write_shared(
         _update_approved_cache(
             files.approved_cache,
             label="shared",
-            sha256=_sha256_bytes(new_canonical),
+            sha256=_automode_only_hash(existing),
         )
         _print_rollback(files.shared_settings, backup)
     finally:
@@ -1268,12 +1283,12 @@ def _hoist_rule(files: ProjectFiles, *, rule: str) -> int:
         _update_approved_cache(
             files.approved_cache,
             label="user",
-            sha256=_sha256_bytes(canonicalize(user)),
+            sha256=_automode_only_hash(user),
         )
         _update_approved_cache(
             files.approved_cache,
             label="local",
-            sha256=_sha256_bytes(canonicalize(local)),
+            sha256=_automode_only_hash(local),
         )
         _print_rollback(files.local_settings, backup_local)
         _print_rollback(files.user_settings, backup_user)
