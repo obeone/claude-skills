@@ -550,6 +550,7 @@ def test_acc11_contract_drift_hardfail(
             "--mode", "fresh",
             "--proposal", str(proposal),
             "--approved-canonical-hash", h,
+            "--strict-critique-sections",
         ],
         env=env, capture_output=True, timeout=60,
     )
@@ -1720,4 +1721,261 @@ def test_acc24_scan_shared_hard_deny_candidates(
     assert "hard_deny" in sections, (
         f"expected hard_deny in sections; got {sections!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# v0.4.0 patch tests
+# ---------------------------------------------------------------------------
+
+
+def test_acc24_critique_section_validation_off_by_default(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """Without --strict-critique-sections, drifted sections do not fail.
+
+    ``claude_drift`` exits 0 but emits ``## Severe issues`` instead of
+    ``## Major issues``. Default behaviour (no flag): EXIT_OK.
+    With ``--strict-critique-sections``: EXIT_CRITIQUE_FAILED.
+    """
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_drift")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proposal = fixtures_dir / "proposal_minimal.json"
+    dry = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry.returncode == EXIT_OK, dry.stderr.decode("utf-8", "replace")
+    h = _hash_from_dryrun_stderr(dry.stderr)
+    assert h, "could not extract canonical hash from dry-run"
+
+    # Without --strict-critique-sections: exit 0 (drift is ignored).
+    proc_permissive = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--approved-canonical-hash", h,
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert proc_permissive.returncode == EXIT_OK, (
+        f"expected EXIT_OK without --strict-critique-sections; "
+        f"got {proc_permissive.returncode}; "
+        f"stderr={proc_permissive.stderr.decode('utf-8', 'replace')!r}"
+    )
+
+    # With --strict-critique-sections: exit 3 (drift detected).
+    # Re-compute hash since the first run wrote the file (migrate mode now).
+    dry2 = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "migrate",
+            "--migrate-strategy", "keep-all",
+            "--proposal", str(proposal),
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry2.returncode == EXIT_OK, dry2.stderr.decode("utf-8", "replace")
+    h2 = _hash_from_dryrun_stderr(dry2.stderr)
+    assert h2, "could not extract canonical hash from second dry-run"
+
+    proc_strict = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "migrate",
+            "--migrate-strategy", "keep-all",
+            "--proposal", str(proposal),
+            "--approved-canonical-hash", h2,
+            "--strict-critique-sections",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert proc_strict.returncode == EXIT_CRITIQUE_FAILED, (
+        f"expected EXIT_CRITIQUE_FAILED with --strict-critique-sections; "
+        f"got {proc_strict.returncode}; "
+        f"stderr={proc_strict.stderr.decode('utf-8', 'replace')!r}"
+    )
+
+
+def test_acc24_critique_archived_on_success(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """After a successful apply, a critique archive file exists with mode 0600."""
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_ok")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proposal = fixtures_dir / "proposal_minimal.json"
+    dry = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry.returncode == EXIT_OK, dry.stderr.decode("utf-8", "replace")
+    h = _hash_from_dryrun_stderr(dry.stderr)
+    assert h, "could not extract canonical hash from dry-run"
+
+    proc = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--approved-canonical-hash", h,
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert proc.returncode == EXIT_OK, (
+        f"commit failed: {proc.stderr.decode('utf-8', 'replace')!r}"
+    )
+
+    history_dir = project / ".claude" / ".automode-history"
+    assert history_dir.is_dir(), "expected .automode-history dir to be created"
+    archives = sorted(history_dir.glob("critique-*.md"))
+    assert len(archives) == 1, (
+        f"expected exactly 1 archive file; got {[str(a) for a in archives]!r}"
+    )
+    archive = archives[0]
+    file_mode = stat.S_IMODE(archive.stat().st_mode)
+    assert file_mode == 0o600, f"archive mode {oct(file_mode)} != 0o600"
+    content = archive.read_text(encoding="utf-8")
+    assert h in content, "archive must contain the proposal hash"
+    # The stub emits the critique body to stdout.
+    assert "Critique" in content, "archive must contain critique output"
+
+
+def test_acc24_critique_archived_on_failure(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """Even when critique exits non-zero, the archive file is still written."""
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_fail")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proposal = fixtures_dir / "proposal_minimal.json"
+    dry = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry.returncode == EXIT_OK, dry.stderr.decode("utf-8", "replace")
+    h = _hash_from_dryrun_stderr(dry.stderr)
+    assert h, "could not extract canonical hash from dry-run"
+
+    proc = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--approved-canonical-hash", h,
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert proc.returncode == EXIT_CRITIQUE_FAILED, (
+        f"expected EXIT_CRITIQUE_FAILED; got {proc.returncode}"
+    )
+
+    history_dir = project / ".claude" / ".automode-history"
+    assert history_dir.is_dir(), (
+        "expected .automode-history dir even on critique failure"
+    )
+    archives = sorted(history_dir.glob("critique-*.md"))
+    assert len(archives) >= 1, (
+        f"expected at least 1 archive file on failure; got {[str(a) for a in archives]!r}"
+    )
+    archive = archives[0]
+    file_mode = stat.S_IMODE(archive.stat().st_mode)
+    assert file_mode == 0o600, f"archive mode {oct(file_mode)} != 0o600"
+
+
+def test_heuristics_yaml_no_warnings(skill_dir: Path):
+    """_load_heuristics produces zero warnings against the real heuristics.yaml.
+
+    Also verifies that the well-known fallback signals appear in the output
+    with their YAML-supplied description as the label.
+    """
+
+    # Import scan_project from the scripts directory.
+    try:
+        import importlib
+        scan_mod = importlib.import_module("scan_project")
+    except Exception as exc:
+        pytest.skip(f"scan_project not importable: {exc}")
+
+    load_fn = getattr(scan_mod, "_load_heuristics", None)
+    if load_fn is None:
+        pytest.skip("_load_heuristics not exposed")
+
+    signals, meta, warnings = load_fn()
+
+    assert warnings == [], (
+        f"expected zero warnings from _load_heuristics; got: {warnings!r}"
+    )
+    signal_ids = {s["id"] for s in signals}
+    # These IDs are defined in both the YAML and _FALLBACK_SIGNALS.
+    for expected_id in ("signal_dockerfile", "signal_compose", "signal_pyproject"):
+        assert expected_id in signal_ids, (
+            f"expected signal {expected_id!r} in signals; got {signal_ids!r}"
+        )
+    # Labels must be non-empty strings.
+    for s in signals:
+        assert isinstance(s.get("label"), str) and s["label"], (
+            f"signal {s['id']!r} has empty/missing label"
+        )
 

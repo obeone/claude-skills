@@ -100,10 +100,23 @@ _FALLBACK_SIGNALS: list[dict[str, str]] = [
 def _load_heuristics() -> tuple[list[dict[str, str]], dict[str, str], list[str]]:
     """Return ``(signals, meta, warnings)`` from ``heuristics.yaml``.
 
-    The file is parsed with :func:`_canonical.parse_flat_yaml`, which
-    only supports a flat ``key: value`` mapping. We translate that into
-    the structured form the scanner needs by interpreting any key
-    matching ``signal_NN_<field>`` as a field of signal ``signal_NN``.
+    The YAML file uses a flat ``signal_<name>: <description>`` schema —
+    one descriptive line per signal. Each entry overrides the ``label``
+    of the matching ``_FALLBACK_SIGNALS`` entry. Probes and targets stay
+    in ``_FALLBACK_SIGNALS``; the YAML only supplies human-readable labels.
+
+    Lines that do not match any fallback signal ID are kept as ``meta``
+    entries and surfaced in the report's ``heuristics_meta`` field.
+    The ``claude_code_version_range`` entry flows through ``meta``.
+
+    Returns
+    -------
+    signals : list[dict[str, str]]
+        Full signal descriptors (id, label, probe, target).
+    meta : dict[str, str]
+        Non-signal entries from the YAML (e.g. version range).
+    warnings : list[str]
+        Parse or config warnings (empty on clean parse).
     """
 
     warnings: list[str] = []
@@ -124,41 +137,28 @@ def _load_heuristics() -> tuple[list[dict[str, str]], dict[str, str], list[str]]
         )
         return _FALLBACK_SIGNALS, {}, warnings
 
+    fallback_by_id: dict[str, dict[str, str]] = {s["id"]: s for s in _FALLBACK_SIGNALS}
     meta: dict[str, str] = {}
-    signals: dict[str, dict[str, str]] = {}
+    signals: list[dict[str, str]] = []
+
     for key, value in flat.items():
-        if not key.startswith("signal_"):
+        if key.startswith("signal_") and key in fallback_by_id:
+            # Override the label from YAML; keep probe/target from fallback.
+            signal = dict(fallback_by_id[key])
+            signal["label"] = str(value)
+            signals.append(signal)
+        else:
+            # Non-signal entries and unknown signal names go to meta.
             meta[key] = value
-            continue
-        # signal_NN_field=value, signal_NN_label=…, signal_NN_probe=…
-        # We split on the LAST underscore so prefixes can have multiple
-        # underscores (signal_pkg_json_label).
-        head, _, field = key.rpartition("_")
-        if not head or not field:
-            continue
-        sid = head
-        signals.setdefault(sid, {"id": sid})[field] = value
 
-    out: list[dict[str, str]] = []
-    for sid, payload in signals.items():
-        if "probe" not in payload or "target" not in payload:
-            warnings.append(
-                f"signal {sid!r} missing probe/target in heuristics.yaml; "
-                f"skipped"
-            )
-            continue
-        payload.setdefault("label", sid)
-        out.append(payload)
+    # Append any fallback signals not mentioned in the YAML.
+    seen = {s["id"] for s in signals}
+    for s in _FALLBACK_SIGNALS:
+        if s["id"] not in seen:
+            signals.append(dict(s))
 
-    if not out:
-        warnings.append(
-            f"{HEURISTICS_PATH} contained no usable signals; using "
-            f"built-in fallback"
-        )
-        return _FALLBACK_SIGNALS, meta, warnings
-
-    out.sort(key=lambda s: s["id"])
-    return out, meta, warnings
+    signals.sort(key=lambda s: s["id"])
+    return signals, meta, warnings
 
 
 def _probe(signal: dict[str, str], root: Path) -> tuple[bool, str]:

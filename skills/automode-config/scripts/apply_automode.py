@@ -143,6 +143,71 @@ def _now_stamp() -> str:
     return _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _archive_critique(
+    project_dir: Path,
+    *,
+    proposal_hash: str,
+    exit_code: int,
+    output: str,
+) -> Path:
+    """Write the raw critique output to .claude/.automode-history/.
+
+    Returns the archive path. Best-effort: failures are logged to stderr
+    and otherwise swallowed (we never let a logging hiccup break the
+    pipeline).
+
+    Parameters
+    ----------
+    project_dir:
+        The project's ``.claude/`` directory (not the project root).
+    proposal_hash:
+        SHA-256 of the canonical proposal bytes, for audit correlation.
+    exit_code:
+        Exit code returned by the critique subprocess.
+    output:
+        Combined stdout+stderr from the critique invocation.
+    """
+
+    history_dir = project_dir / ".automode-history"
+    stamp = _now_stamp()
+    archive_path = history_dir / f"critique-{stamp}.md"
+    try:
+        history_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        try:
+            cli = _claude_cli()
+            version_proc = subprocess.run(
+                [cli, "--version"],
+                capture_output=True, text=True, timeout=5, check=False,
+            )
+            version_line = (version_proc.stdout or version_proc.stderr or "").strip().splitlines()[0] if (version_proc.stdout or version_proc.stderr) else "unknown"
+        except Exception:  # noqa: BLE001
+            version_line = "unknown"
+        header = (
+            f"# Critique of {project_dir.parent}\n\n"
+            f"timestamp: {stamp}\n"
+            f"claude_version: {version_line}\n"
+            f"proposal_hash: {proposal_hash}\n"
+            f"exit_code: {exit_code}\n\n"
+            f"---\n\n"
+        )
+        payload = (header + output).encode("utf-8")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fd = os.open(archive_path, flags, 0o600)
+        try:
+            os.write(fd, payload)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        try:
+            os.chmod(archive_path, 0o600)
+        except PermissionError:
+            pass
+        _eprint(f"archived critique to {archive_path}")
+    except Exception as exc:  # noqa: BLE001
+        _eprint(f"warning: could not archive critique output: {exc}")
+    return archive_path
+
+
 def _sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
@@ -365,7 +430,10 @@ def _critique_supports_settings_flag() -> bool:
 
 
 def _check_critique_sections(text: str, *, allow_unknown: bool) -> None:
-    """Raise ``CritiqueContractError`` when section set drifts."""
+    """Raise ``CritiqueContractError`` when section set drifts.
+
+    Only called when ``--strict-critique-sections`` is active.
+    """
 
     headers = set(re.findall(r"^##\s+.+$", text, flags=re.MULTILINE))
     missing = REQUIRED_CRITIQUE_SECTIONS - headers
@@ -378,8 +446,7 @@ def _check_critique_sections(text: str, *, allow_unknown: bool) -> None:
     if extras and not allow_unknown:
         raise CritiqueContractError(
             f"critique output has unexpected section headers: "
-            f"{sorted(extras)} (use --allow-unknown-critique-sections to "
-            f"relax)"
+            f"{sorted(extras)}"
         )
 
 
@@ -1017,17 +1084,24 @@ def _run(args: argparse.Namespace) -> int:
 
         sys.stdout.write(output)
         sys.stdout.write("\n")
+        _archive_critique(
+            files.project_dir,
+            proposal_hash=proposal_hash,
+            exit_code=rc,
+            output=output,
+        )
         if rc != 0:
             _eprint(f"critique exited {rc}")
             return EXIT_CRITIQUE_FAILED
-        try:
-            _check_critique_sections(
-                output,
-                allow_unknown=args.allow_unknown_critique_sections,
-            )
-        except CritiqueContractError as exc:
-            _eprint(str(exc))
-            return EXIT_CRITIQUE_FAILED
+        if args.strict_critique_sections:
+            try:
+                _check_critique_sections(
+                    output,
+                    allow_unknown=args.allow_unknown_critique_sections,
+                )
+            except CritiqueContractError as exc:
+                _eprint(str(exc))
+                return EXIT_CRITIQUE_FAILED
 
         backup = _backup_file(files.local_settings)
         try:
@@ -1268,9 +1342,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Permit swap-file path when the CLI lacks --settings.",
     )
     parser.add_argument(
+        "--strict-critique-sections",
+        action="store_true",
+        help=(
+            "Validate critique output sections against the hardcoded contract "
+            "(off by default — the binary's section names drift across versions; "
+            "exit_code == 0 is the real gate)."
+        ),
+    )
+    parser.add_argument(
         "--allow-unknown-critique-sections",
         action="store_true",
-        help="Relax contract drift on unexpected critique sections.",
+        help=(
+            "Forward-compat alias for --strict-critique-sections=loose. "
+            "Off by default (validation is now opt-in via --strict-critique-sections)."
+        ),
     )
     parser.add_argument(
         "--write-shared",

@@ -2,7 +2,7 @@
 name: automode-config
 description: "Author, validate, and migrate Claude Code autoMode blocks at the project level (four-bucket allow/ask/deny/hard_deny model). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b is agent-driven: the calling agent reads CLAUDE.md / AGENTS.md / .claude/CLAUDE.md, applies judgment, and emits a proposal JSON that flows through the same critique + hash-gate + atomic-write pipeline as any other proposal. Runs `claude auto-mode critique` as the canonical Path (b) gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.136+."
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 tools:
   - Read
   - Write
@@ -77,6 +77,12 @@ done.
 
 Phase 0 is automatic and silent. Phases 1a, 1b, 2, 4 are skipped cleanly
 when their precondition is absent. Phase 3 always runs.
+
+Phase 3 archives every critique invocation (success and failure) to
+`.claude/.automode-history/critique-<UTC>.md`. Section-header validation
+of the critique output is opt-in via `--strict-critique-sections`; the
+default gate is exit code == 0 only (binary section names drift across
+versions).
 
 ### Phase 1b — agent-driven adoption from project docs
 
@@ -167,7 +173,8 @@ Asked silently from file state, never prompted: **does
 | `--show-drift` | off | Alias delegating to `inspect_automode.py`. |
 | `--model <model>` | (CLI default) | Passed to `claude auto-mode critique`. |
 | `--allow-swap-file-fallback` | off | Opt-in for swap-file when `--settings` unsupported. |
-| `--allow-unknown-critique-sections` | off | Relax contract-drift on extra sections. |
+| `--strict-critique-sections` | off | Validate critique output sections against the hardcoded contract (off by default — exit_code == 0 is the real gate). |
+| `--allow-unknown-critique-sections` | off | Forward-compat alias for `--strict-critique-sections=loose`. Off by default (validation is now opt-in). |
 | `--write-shared` | off | Phase 4 opt-in: also write to `.claude/settings.json`. |
 | `--hoist <rule-id>` | off | Move rule from local to user. |
 | `--repair` | off | Restore orphans + reclaim locks; mutually exclusive with all other modes. |
@@ -255,6 +262,15 @@ Rollback: cp -p .claude/.automode-config.backup.2026-05-08T14-22-13Z.a1b2c3d4e5f
 Five backups per file are retained (per-file pool, pruned on each
 successful apply). For `--repair` semantics, multi-file flock
 cleanup, and stranded-state detection, see `references/recovery.md`.
+
+## Critique history
+
+Every critique invocation writes its raw output to
+`.claude/.automode-history/critique-<UTC>.md` with a header containing
+the proposal hash, the binary's `--version`, and the exit code. Useful
+for auditing what the binary said during a run, especially on
+`EXIT_CRITIQUE_FAILED`. The directory is created at mode 0700 if
+missing; each archive file is mode 0600.
 
 ## Edge cases
 
