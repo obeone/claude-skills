@@ -776,12 +776,11 @@ def test_acc16_missing_claude_cli(
 ):
     """With ``claude`` absent on PATH, the script reports a CLI-missing error.
 
-    The handoff exit code 5 (EXIT_CLAUDE_CLI_MISSING) is reachable via
-    the swap-file fallback path which tries to invoke ``claude`` and
-    catches ``ClaudeCLIMissingError``. Without ``--allow-swap-file-fallback``
-    the script exits earlier with a usage error pointing to the flag —
-    which is also a correct refusal. We accept either as a clean refusal
-    that mentions the missing CLI.
+    The handoff exit code 5 (EXIT_CLAUDE_CLI_MISSING) is reachable on
+    the commit path because the swap-file path is now automatic
+    whenever the CLI lacks ``--settings`` — and any ``claude`` invocation
+    raises ``ClaudeCLIMissingError`` here. Dry-run never reaches the
+    critique step, so the missing-CLI detection only fires on commit.
     """
 
     apply = _apply_cli(scripts_dir)
@@ -802,7 +801,6 @@ def test_acc16_missing_claude_cli(
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
-            "--allow-swap-file-fallback",
             "--dry-run",
         ],
         env=env, capture_output=True, timeout=60,
@@ -819,7 +817,6 @@ def test_acc16_missing_claude_cli(
                 "--project-root", str(project),
                 "--mode", "fresh",
                 "--proposal", str(proposal),
-                "--allow-swap-file-fallback",
                 "--approved-canonical-hash", h,
             ],
             env=env, capture_output=True, timeout=60,
@@ -1979,3 +1976,128 @@ def test_heuristics_yaml_no_warnings(skill_dir: Path):
             f"signal {s['id']!r} has empty/missing label"
         )
 
+
+# ---------------------------------------------------------------------------
+# v0.4.1 — auto-detect --settings, no opt-in flag
+# ---------------------------------------------------------------------------
+
+
+def test_v041_swap_path_runs_silently_when_settings_unsupported(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """When the CLI omits --settings, the swap-file path runs without an opt-in.
+
+    The user no longer has to pass --allow-swap-file-fallback. The skill
+    logs an informational notice, swaps ~/.claude/settings.json for the
+    duration of the critique invocation, and commits the local file.
+    """
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_no_settings_flag")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proposal = fixtures_dir / "proposal_minimal.json"
+    dry = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry.returncode == EXIT_OK, dry.stderr.decode("utf-8", "replace")
+    h = _hash_from_dryrun_stderr(dry.stderr)
+    assert h, "could not extract canonical hash from dry-run"
+
+    proc = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--approved-canonical-hash", h,
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    stderr = proc.stderr.decode("utf-8", "replace")
+    assert proc.returncode == EXIT_OK, (
+        f"commit failed without --allow-swap-file-fallback: {stderr!r}"
+    )
+    assert "swapping ~/.claude/settings.json" in stderr, (
+        f"expected the informational notice on swap-file path; stderr={stderr!r}"
+    )
+    # No deprecation warning when the flag was not passed.
+    assert "deprecated" not in stderr.lower(), (
+        f"unexpected deprecation noise without --allow-swap-file-fallback: {stderr!r}"
+    )
+    # User settings file must have been restored to absent (it never existed).
+    assert not (home / ".claude" / "settings.json").exists(), (
+        "swap restore should remove the transient user settings file"
+    )
+
+
+def test_v041_deprecated_flag_still_accepted_with_warning(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """--allow-swap-file-fallback is accepted but emits a deprecation warning."""
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_ok")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+
+    proposal = fixtures_dir / "proposal_minimal.json"
+    dry = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--allow-swap-file-fallback",
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry.returncode == EXIT_OK, dry.stderr.decode("utf-8", "replace")
+    h = _hash_from_dryrun_stderr(dry.stderr)
+    assert h, "could not extract canonical hash from dry-run"
+
+    proc = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--allow-swap-file-fallback",
+            "--approved-canonical-hash", h,
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    stderr = proc.stderr.decode("utf-8", "replace")
+    assert proc.returncode == EXIT_OK, (
+        f"commit with deprecated flag failed: {stderr!r}"
+    )
+    assert "--allow-swap-file-fallback is deprecated" in stderr, (
+        f"expected deprecation warning; stderr={stderr!r}"
+    )

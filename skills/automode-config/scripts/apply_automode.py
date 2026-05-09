@@ -512,16 +512,15 @@ def run_critique(
     *,
     settings_path: Path | None,
     model: str | None,
-    allow_swap_file_fallback: bool,
     user_settings_path: Path,
 ) -> tuple[int, str]:
     """Invoke ``claude auto-mode critique`` and return ``(exit_code, output)``.
 
     When the CLI accepts ``--settings``, the proposal is fed via that
-    flag. Otherwise the swap-file path is taken — but only when
-    ``allow_swap_file_fallback`` is True. The swap target is the user
-    settings file (``~/.claude/settings.json``) since that is the file
-    the classifier reads during the critique invocation.
+    flag. Otherwise the skill swaps ``~/.claude/settings.json`` for the
+    duration of the critique invocation (the classifier reads from the
+    user-level file). The swap is atomic with signal-handler restore;
+    SIGKILL leaves a sentinel that ``--repair`` reclaims.
     """
 
     cli = _claude_cli()
@@ -536,13 +535,12 @@ def run_critique(
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
         return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
-    if not allow_swap_file_fallback:
-        raise CritiqueContractError(
-            "this version of 'claude' does not accept --settings; pass "
-            "--allow-swap-file-fallback to swap ~/.claude/settings.json "
-            "during the critique invocation."
-        )
-
+    _eprint(
+        "claude auto-mode critique does not accept --settings on this CLI; "
+        "swapping ~/.claude/settings.json transiently for the duration of "
+        "the critique invocation (atomic restore; --repair reclaims after "
+        "SIGKILL)."
+    )
     return _run_critique_swap(
         cmd,
         canonical=canonical,
@@ -935,15 +933,17 @@ def _run(args: argparse.Namespace) -> int:
         _eprint(str(exc))
         return EXIT_OUT_OF_BAND
 
-    # --settings capability probe (before any flock).
+    # --settings capability probe (before any flock). When the CLI
+    # lacks --settings the skill swaps ~/.claude/settings.json transiently
+    # during the critique invocation; the deprecated
+    # --allow-swap-file-fallback flag is now a no-op.
     settings_flag_supported = _critique_supports_settings_flag()
-    if not settings_flag_supported and not args.allow_swap_file_fallback:
+    if args.allow_swap_file_fallback:
         _eprint(
-            "this 'claude' does not accept 'auto-mode critique --settings'.\n"
-            "rerun with --allow-swap-file-fallback to use the swap-file "
-            "path (writes to ~/.claude/settings.json transiently)."
+            "warning: --allow-swap-file-fallback is deprecated and has no "
+            "effect; the swap-file path is now used automatically when the "
+            "CLI lacks --settings."
         )
-        return EXIT_USAGE
 
     # ------------------------------------------------------------------
     # Phase 0: detect mode
@@ -1053,7 +1053,7 @@ def _run(args: argparse.Namespace) -> int:
     # Phase 3: critique + commit local
     # ------------------------------------------------------------------
     ensure_project_dir(files)
-    if args.allow_swap_file_fallback and not settings_flag_supported:
+    if not settings_flag_supported:
         ensure_user_dir(files)
 
     local_lock = files.local_settings.with_suffix(
@@ -1072,7 +1072,6 @@ def _run(args: argparse.Namespace) -> int:
                 proposal,
                 settings_path=files.local_settings if settings_flag_supported else None,
                 model=args.model,
-                allow_swap_file_fallback=args.allow_swap_file_fallback,
                 user_settings_path=files.user_settings,
             )
         except ClaudeCLIMissingError as exc:
@@ -1339,7 +1338,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-swap-file-fallback",
         action="store_true",
-        help="Permit swap-file path when the CLI lacks --settings.",
+        help=(
+            "DEPRECATED no-op (kept for compat). The swap-file path is "
+            "now used automatically when the CLI lacks --settings."
+        ),
     )
     parser.add_argument(
         "--strict-critique-sections",

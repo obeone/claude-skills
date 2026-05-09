@@ -32,21 +32,22 @@ claude auto-mode critique --help 2>&1 | grep -- --settings
 - If `--settings <path>` is supported: the critique is invoked on
   the proposal directly. Path: `claude auto-mode critique --settings
   <proposal-path> --model <model>`.
-- If `--settings` is absent: the skill defaults to **refuse** with
-  a pointer to `--allow-swap-file-fallback`. The reason is that the
-  alternative (swap-file) mutates `~/.claude/settings.json` for the
-  duration of the critique invocation, which is enough state churn
-  that we want explicit consent.
+- If `--settings` is absent: the skill swaps
+  `~/.claude/settings.json` transiently for the duration of the
+  critique invocation (atomic restore; sentinel reclaimed by
+  `--repair` after SIGKILL). An informational notice is logged to
+  stderr. The deprecated `--allow-swap-file-fallback` flag is now a
+  no-op kept for backward compatibility.
 
 The probe runs once and is cached for the lifetime of the
 `apply_automode.py` process. It is not persisted across runs.
 
-## Swap-file fallback (opt-in)
+## Swap-file path
 
-With `--allow-swap-file-fallback` and a critique CLI that omits
-`--settings`, the skill performs the following sequence (all under
-the user-file flock, since the swap target is `~/.claude/settings.json`
-— the critique CLI reads from there):
+When the critique CLI omits `--settings`, the skill performs the
+following sequence (all under the user-file flock, since the swap
+target is `~/.claude/settings.json` — the critique CLI reads from
+there):
 
 1. Acquire user-file flock.
 2. Copy `~/.claude/settings.json` to

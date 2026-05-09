@@ -2,7 +2,7 @@
 name: automode-config
 description: "Author, validate, and migrate Claude Code autoMode blocks at the project level (four-bucket allow/ask/deny/hard_deny model). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b is agent-driven: the calling agent reads CLAUDE.md / AGENTS.md / .claude/CLAUDE.md, applies judgment, and emits a proposal JSON that flows through the same critique + hash-gate + atomic-write pipeline as any other proposal. Runs `claude auto-mode critique` as the canonical Path (b) gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.136+."
 metadata:
-  version: "0.4.0"
+  version: "0.4.1"
 tools:
   - Read
   - Write
@@ -172,7 +172,7 @@ Asked silently from file state, never prompted: **does
 | `--migrate-strategy {keep-all,drop-all,fail,interactive}` | interactive | Existing-rule fold-in. |
 | `--show-drift` | off | Alias delegating to `inspect_automode.py`. |
 | `--model <model>` | (CLI default) | Passed to `claude auto-mode critique`. |
-| `--allow-swap-file-fallback` | off | Opt-in for swap-file when `--settings` unsupported. |
+| `--allow-swap-file-fallback` | off | DEPRECATED no-op; swap-file is now automatic when `--settings` is missing. |
 | `--strict-critique-sections` | off | Validate critique output sections against the hardcoded contract (off by default — exit_code == 0 is the real gate). |
 | `--allow-unknown-critique-sections` | off | Forward-compat alias for `--strict-critique-sections=loose`. Off by default (validation is now opt-in). |
 | `--write-shared` | off | Phase 4 opt-in: also write to `.claude/settings.json`. |
@@ -286,11 +286,13 @@ missing; each archive file is mode 0600.
   Phase 4 always reprints the warning at the prompt and the diff,
   even if the user passed `--write-shared`. The skill never lets
   the warning slide.
-- **Swap-file fallback is opt-in.** When the critique CLI lacks
-  `--settings`, the skill exits 1 with a pointer to
-  `--allow-swap-file-fallback`. The swap target is
-  `~/.claude/settings.json` (since the critique CLI reads from
-  user-level), not the project file. See `references/critique_workflow.md`.
+- **Swap-file is automatic.** When the critique CLI lacks
+  `--settings`, the skill swaps `~/.claude/settings.json` transiently
+  for the duration of the critique invocation (the classifier reads
+  from user-level). The swap is atomic with signal-handler restore;
+  SIGKILL leaves a sentinel that `--repair` reclaims. The deprecated
+  `--allow-swap-file-fallback` flag is now a no-op. See
+  `references/critique_workflow.md`.
 - **Three independent flocks.** Each of the three files has its
   own `<target>.lock`. The skill acquires only the lock(s) needed
   by the current phase; `--repair` reclaims all three. See
@@ -301,7 +303,7 @@ missing; each archive file is mode 0600.
 - `references/mental_model.md` — three files, four rule buckets, six phases, decision tree.
 - `references/three_files.md` — file relationships and per-file gotchas (including `hard_deny` round-trip).
 - `references/canonicalization.md` — byte contract, fixtures, idempotency, `parse_flat_yaml`.
-- `references/critique_workflow.md` — Path (b), `--settings` probe, swap-file, contract drift.
+- `references/critique_workflow.md` — Path (b), `--settings` probe, automatic swap-file, contract drift.
 - `references/migration.md` — Phase 1a/1b adoption, project-doc scan, four-key prompt, strategy modes.
 - `references/recovery.md` — backup retention, `--repair`, stranded state, multi-file flock.
 - `references/verification.md` — acceptance predicates with measurement commands.
