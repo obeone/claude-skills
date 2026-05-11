@@ -66,11 +66,11 @@ second only with explicit opt-in, and the third only via `--hoist`.
   expecting their teammates' classifier to honour the rules will be
   surprised. The skill prints this warning at every read of shared
   `autoMode` and reprints it at every Phase 4 write.
-- **`hard_deny` round-trips like other rule sections.** Entries in
-  `hard_deny` are read from and written to the local file identically
-  to `allow`, `ask`, and `deny`. They are also silently ignored when
-  present in `.claude/settings.json` shared, since the classifier
-  ignores **all** of `autoMode` in that file.
+- **All four sections round-trip the same way.** Entries in
+  `environment`, `allow`, `soft_deny`, and `hard_deny` are read from
+  and written to the local file identically. They are also silently
+  ignored when present in `.claude/settings.json` shared, since the
+  classifier ignores **all** of `autoMode` in that file.
 - **Local file gitignore status varies.** Many project starters
   include `.claude/settings.local.json` in `.gitignore`; some do
   not. The skill warns but does not edit `.gitignore` for the user.
@@ -88,7 +88,10 @@ second only with explicit opt-in, and the third only via `--hoist`.
   array in order. The canonical form preserves declared order; the
   skill never sorts the array. JSON object keys inside each entry
   are sorted (canonical-form requirement).
-- **`$defaults` is a string sentinel, not an object.** The classifier
-  substitutes Anthropic-curated trust signals at load time when
-  `"$defaults"` appears in `environment`. The skill leaves it
-  untouched. Removing it removes the curated baseline.
+- **`$defaults` is a string sentinel, not an object.** It is accepted
+  in **all four** autoMode sections (`environment`, `allow`,
+  `soft_deny`, `hard_deny`), and the classifier substitutes Anthropic's
+  curated baseline for the section at the position where the sentinel
+  appears. The skill leaves it untouched. Removing it from a section
+  removes that section's curated baseline (e.g. removing it from
+  `soft_deny` discards built-in force-push and `curl | bash` blocks).

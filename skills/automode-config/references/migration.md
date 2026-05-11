@@ -9,17 +9,23 @@ can be suppressed with `--migrate-strategy` non-interactive modes.
 
 Triggered when `.claude/settings.json` contains an `autoMode` block
 and `--include-shared` is in effect (default). The skill reads each
-entry in `autoMode.allow`, `autoMode.ask`, `autoMode.deny`,
-`autoMode.hard_deny`, and `autoMode.environment` from the shared file.
-For each entry not already in the proposal:
+entry in `autoMode.environment`, `autoMode.allow`, `autoMode.soft_deny`,
+and `autoMode.hard_deny` from the shared file. For each entry not
+already in the proposal:
 
 ```
 [Phase 1] Adopt from shared (.claude/settings.json):
-  rule: Bash(uv run pytest:*)
-  source: .claude/settings.json#autoMode.allow[3]
+  rule: "Source control: github.com/acme-corp and all repos under it"
+  source: .claude/settings.json#autoMode.environment[3]
   reminder: shared autoMode is silently ignored by the classifier.
   [k]eep / [e]dit / [d]rop / [q]uit ?
 ```
+
+Legacy compatibility: if the shared file still uses the obsolete
+`autoMode.deny` or `autoMode.ask` keys, entries from `deny` are
+surfaced as `soft_deny` candidates with a warning, and entries from
+`ask` are surfaced with a warning that the bucket does not exist (the
+user can `[e]dit` them into a `soft_deny` rule or `[d]rop` them).
 
 - `[k]eep` adds the rule verbatim to the proposal at the same
   position in its target list.
@@ -39,17 +45,18 @@ calling agent reads CLAUDE.md, AGENTS.md, and `.claude/CLAUDE.md` from
 the project root, applies judgment, and writes a JSON proposal that
 flows through `apply_automode.py --proposal <file>`.
 
-The agent uses the four-bucket model to classify what it finds:
+The agent translates findings into **prose rules** (not
+`Tool(specifier)` patterns) and slots them into the four official
+autoMode sections — see `automode_doc_bible.md` for the schema:
 
-- **allow**: tools the docs document as routine (test runners, linters,
-  build tools, local dev commands).
-- **ask**: anything ambiguous or potentially destructive that should
-  surface a prompt.
-- **deny**: paths/operations the docs warn against but a flag could
-  legitimately override.
-- **hard_deny**: protected branches, secrets paths, anything the docs
-  say must NEVER be auto-approved. `hard_deny` overrides `allow` for
-  the same target and is not bypassable by user-intent flags.
+- **environment**: trusted infrastructure (git org, buckets, internal
+  domains, CI endpoints).
+- **allow**: exceptions for routine internal operations the
+  classifier's defaults flag as risky.
+- **soft_deny**: project-specific destructive risks that `$defaults`
+  does not cover.
+- **hard_deny**: unconditional boundaries the docs say must never be
+  auto-approved (protected branches, exfiltration vectors).
 
 The agent writes a proposal JSON, then passes it to
 `apply_automode.py --proposal <file> --dry-run` to obtain the canonical
@@ -61,15 +68,18 @@ pipeline is run interactively.
 
 Triggered after Phase 1 (or as the first interactive phase if shared
 has no `autoMode`). The skill walks `assets/heuristics.yaml` against
-the project root and emits a candidate per signal that fires:
+the project root and emits a prose candidate per signal that fires:
 
 ```
 [Phase 2] Scan signal: signal_dockerfile
   matched: ./Dockerfile
-  candidate: Bash(docker build:*)
+  candidate (environment): "Container builds: this project uses Docker (Dockerfile at root)"
   rationale: <signal description from heuristics.yaml>
   [k]eep / [e]dit / [d]rop / [q]uit ?
 ```
+
+Candidates are autoMode prose, not `permissions` patterns; the user
+can `[e]dit` them into the wording that matches their infrastructure.
 
 The four-key prompt behaves identically to Phase 1. Skipping is
 silent — if no signals fire, the phase prints nothing and Phase 3
@@ -86,7 +96,8 @@ pre-existing local `autoMode` (when `--mode migrate`). Default is
   proposal bytes are byte-equal to the merged input. No prompt.
 - `drop-all`. Every existing rule is dropped. `autoMode.environment`
   is reset to `["$defaults"]` (the curated baseline preserved); the
-  allow, ask, deny, and hard_deny lists become empty arrays. No prompt.
+  `allow`, `soft_deny`, and `hard_deny` lists become empty arrays. No
+  prompt. Legacy `deny` / `ask` keys are removed.
 - `fail`. Any existing rule that conflicts with the proposal's
   rules causes the skill to exit 2 (`EXIT_VALIDATION`). Useful for
   CI-style runs where the operator wants no surprise inheritance.

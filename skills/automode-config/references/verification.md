@@ -28,8 +28,8 @@ through `test_acc24_…`.
     Measure: stub `claude_drift` on PATH (replaces `## Major issues` with `## Major problems`); run apply; expect exit 3.
 12. **Hash mismatch raises HashMismatchError (exit 8).**
     Measure: pass `--approved-canonical-hash deadbeef…`; expect exit 8.
-13. **Migrate drop-all empties target's `autoMode.environment` to `["$defaults"]`.**
-    Measure: seed the local file with non-empty `autoMode`; run `apply_automode.py --mode migrate --migrate-strategy drop-all`; verify the resulting `autoMode.environment == ["$defaults"]`.
+13. **Migrate drop-all resets autoMode rule lists; environment keeps `["$defaults"]`.**
+    Measure: seed the local file with non-empty `autoMode`; run `apply_automode.py --mode migrate --migrate-strategy drop-all`; verify the resulting `autoMode.environment == ["$defaults"]` AND `autoMode.allow == []` AND `autoMode.soft_deny == []` AND `autoMode.hard_deny == []` AND no legacy `ask`/`deny` keys remain.
 14. **Migrate keep-all is byte-equal (no proposal change).**
     Measure: seed local; run with `--migrate-strategy keep-all`; verify the canonical bytes of the post-write local file equal the canonical bytes of the merged input.
 15. **`__example_only` anti-test: structural wrapper stripped, substring preserved.**
