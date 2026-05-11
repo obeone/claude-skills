@@ -86,6 +86,12 @@ EXIT_OUT_OF_BAND = 10
 # Static configuration
 # ---------------------------------------------------------------------------
 
+# Permission patterns the classifier drops from `permissions.allow`
+# when the user enters auto mode (source: code.claude.com docs,
+# /en/permission-modes "How the classifier evaluates actions"). These
+# are NOT autoMode rules — autoMode rules are prose. If any of these
+# literals appear inside an autoMode section, the user has likely
+# pasted a permissions pattern by mistake; the skill warns and drops.
 DROPPED_PATTERN_LITERALS = (
     "Bash(*)",
     "PowerShell(*)",
@@ -97,12 +103,20 @@ REQUIRED_CRITIQUE_SECTIONS = frozenset({"## Major issues", "## Smaller issues"})
 
 BACKUP_RETENTION = 5
 
+# The four (and only four) official autoMode array fields. The
+# classifier reads exactly these keys; anything else is rejected by the
+# validator and migrated by Phase 1a adoption (legacy `deny` becomes
+# `soft_deny` candidates; legacy `ask` is surfaced with a warning and
+# dropped because autoMode has no `ask` bucket).
 AUTOMODE_ARRAY_KEYS = frozenset(
-    {"environment", "allow", "soft_deny", "deny", "hard_deny", "ask"}
+    {"environment", "allow", "soft_deny", "hard_deny"}
 )
-# Sections whose entries are permission rules subject to the
-# silently-dropped-pattern filter (everything except environment).
-RULE_SECTIONS = ("allow", "ask", "soft_deny", "deny", "hard_deny")
+# Sections holding rule strings (everything except `environment`).
+# `environment` holds trust signals, not rules.
+RULE_SECTIONS = ("allow", "soft_deny", "hard_deny")
+# Legacy section names the skill knows about and migrates on adoption.
+LEGACY_RENAME = {"deny": "soft_deny"}
+LEGACY_DROP = ("ask",)
 
 
 # ---------------------------------------------------------------------------
@@ -801,20 +815,48 @@ def _phase1_adopt(
             data = None
         auto = data.get("autoMode") if isinstance(data, dict) else None
         if isinstance(auto, dict):
-            for section in ("allow", "ask", "soft_deny", "deny", "hard_deny", "environment"):
+            # Iteration order: official keys first, then legacy keys.
+            # Legacy `deny` entries are presented as `soft_deny`
+            # candidates with a warning; legacy `ask` entries are
+            # surfaced with a warning that the bucket does not exist
+            # in autoMode, then dropped.
+            sections_to_walk = list(AUTOMODE_ARRAY_KEYS) + list(LEGACY_RENAME) + list(LEGACY_DROP)
+            for section in sections_to_walk:
                 items = auto.get(section)
                 if not isinstance(items, list) or not items:
                     continue
-                _eprint(f"\n[Phase 1a] adopt-from-shared :: {section}")
+                target_section = LEGACY_RENAME.get(section, section)
+                if section in LEGACY_DROP:
+                    _eprint(
+                        f"\n[Phase 1a] shared {section!r} is not a valid autoMode "
+                        f"bucket; surfacing entries for review (will be dropped "
+                        f"unless edited into a valid section by hand)."
+                    )
+                elif section in LEGACY_RENAME:
+                    _eprint(
+                        f"\n[Phase 1a] shared {section!r} is the legacy name; "
+                        f"surfacing entries as candidates for {target_section!r}."
+                    )
+                else:
+                    _eprint(f"\n[Phase 1a] adopt-from-shared :: {section}")
                 kept, decisions = _interview(
                     items, label=f"shared.{section}", interactive=interactive
                 )
                 kept = _strip_example_only(kept)
-                if section in RULE_SECTIONS:
+                if target_section in RULE_SECTIONS:
                     kept, dropped = _filter_dropped(kept)
                     for entry, reason in dropped:
                         _eprint(f"  ! dropped {entry!r}: {reason}")
-                _adopt_into(adopted, section, kept)
+                if section in LEGACY_DROP:
+                    # autoMode has no bucket for these; drop after the
+                    # user has had a chance to inspect.
+                    for entry in kept:
+                        _eprint(
+                            f"  ! discarding {entry!r}: autoMode has no "
+                            f"{section!r} section (see references/automode_doc_bible.md)."
+                        )
+                else:
+                    _adopt_into(adopted, target_section, kept)
                 for entry, action in decisions:
                     _eprint(f"  - {entry!r}: {action}")
 
@@ -887,10 +929,13 @@ def _migrate_strategy(
     if strategy == "keep-all":
         return block, dropped_summary
     if strategy == "drop-all":
+        # Reset only the four official sections. Legacy `ask` / `deny`
+        # keys are removed entirely so the migrated block matches the
+        # current schema.
+        for legacy in (*LEGACY_RENAME, *LEGACY_DROP):
+            block.pop(legacy, None)
         block["allow"] = []
-        block["ask"] = []
         block["soft_deny"] = []
-        block["deny"] = []
         block["hard_deny"] = []
         block["environment"] = ["$defaults"]
         return block, dropped_summary

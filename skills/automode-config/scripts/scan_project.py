@@ -201,7 +201,11 @@ def _collect_shared_candidates(shared_path: Path) -> tuple[list[dict[str, Any]],
         return [], warnings
 
     candidates: list[dict[str, Any]] = []
-    for section in ("allow", "deny", "hard_deny", "ask"):
+    # Walk official sections plus the two legacy names the skill
+    # surfaces with translation/warning. The official autoMode keys are
+    # environment / allow / soft_deny / hard_deny — see
+    # references/automode_doc_bible.md.
+    for section in ("environment", "allow", "soft_deny", "hard_deny", "deny", "ask"):
         items = auto.get(section)
         if not isinstance(items, list):
             continue
@@ -209,17 +213,6 @@ def _collect_shared_candidates(shared_path: Path) -> tuple[list[dict[str, Any]],
             candidates.append(
                 {
                     "section": section,
-                    "index": idx,
-                    "value": item,
-                    "source": str(shared_path),
-                }
-            )
-    env = auto.get("environment")
-    if isinstance(env, list):
-        for idx, item in enumerate(env):
-            candidates.append(
-                {
-                    "section": "environment",
                     "index": idx,
                     "value": item,
                     "source": str(shared_path),

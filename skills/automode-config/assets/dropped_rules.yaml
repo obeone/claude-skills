@@ -1,31 +1,18 @@
-# Catalog of permission patterns the Claude Code permission classifier
-# silently drops at load time. The migrator surfaces each match per-item
-# with the reason below; users get to confirm replacements rather than
-# discover the drop after the fact. Flat YAML, no nesting, no lists.
+# Permission rules that the Claude Code classifier drops on entering
+# auto mode. Source: code.claude.com/docs/en/permission-modes (section
+# "How the classifier evaluates actions"). Dropped rules are restored
+# when the user leaves auto mode.
+#
+# These literals belong to the `permissions.allow` system, not to
+# `autoMode.allow`. autoMode rules are PROSE descriptions; if any of
+# these literals appear inside an autoMode section, the user has
+# probably pasted a permissions pattern by mistake. The skill
+# surfaces a warning and offers to translate or drop.
+#
+# Flat YAML, no nesting, no lists. Parsed by scripts/_canonical.py.
 
-drop_bash_wildcard: Bash(*) is rejected on entry; the classifier refuses unbounded shell. Replace with explicit command-prefix rules such as Bash(git status:*).
-drop_powershell_wildcard: PowerShell(*) is rejected on entry; the classifier refuses unbounded PowerShell. Replace with explicit command-prefix rules.
-drop_bash_python_wildcard: Bash(python*) is rejected because the prefix is not anchored at a word boundary. Use Bash(python:*) or Bash(python -m pytest:*).
-drop_agent_wildcard: Agent(*) is rejected; the classifier requires named-agent restrictions. Use Agent(executor) or Agent(verifier).
-drop_bash_sudo: Bash(sudo*) is rejected at the classifier; privileged commands are never auto-approved. Surface as a manual-approve rule instead.
-drop_bash_rm_recursive: Bash(rm -rf:*) is rejected; destructive recursion is never auto-approved.
-drop_write_root: Write(/) and Write(/*) patterns targeting the filesystem root are rejected. Scope to the project tree.
-drop_write_etc: Write(/etc/*) and Write(/var/*) are rejected outside containers; the classifier refuses system paths by default.
-drop_read_etc_shadow: Read(/etc/shadow) and Read(/etc/master.passwd) are rejected; secrets paths cannot be auto-allowed.
-drop_read_homedotssh: Read(~/.ssh/*) and Read(/Users/*/.ssh/*) are rejected; private-key paths cannot be auto-allowed.
-drop_bash_curl_pipe_sh: Bash(curl*|*sh*) and Bash(wget*|*sh*) patterns are rejected; remote-execute pipelines are never auto-approved.
-drop_bash_eval: Bash(eval*) is rejected; dynamic-expansion shells cannot be classified.
-drop_bash_exec_replace: Bash(exec *) is rejected when used to replace the shell; exec rebinds PID 1 of the spawn.
-drop_network_loopback_only: Network(loopback) needs an explicit port range; bare Network(loopback) is rejected.
-drop_network_wildcard_host: Network(*) is rejected; wildcard host destinations cannot be auto-approved.
-drop_network_private_subnet: Network(10.0.0.0/8) and Network(192.168.0.0/16) without a port are rejected; broad subnets need a port-range scope.
-drop_fetch_anywhere: Fetch(*) is rejected; remote fetches need an origin scope. Use Fetch(https://example.com/*) instead.
-drop_subagent_dangerous: Subagent(*) is rejected at the classifier; named subagents require declared trust.
-drop_mcp_server_wildcard: McpServer(*) is rejected; MCP servers must be enumerated explicitly.
-drop_filesystem_root_glob: Read(/**) and Write(/**) are rejected; scope all filesystem rules to a project subtree.
-drop_homedir_wildcard: Read(~/*) is rejected; use Read(~/.config/<app>/*) or similar narrow paths.
-drop_bash_dot_source: Bash(. *) and Bash(source *) are rejected; sourced scripts execute arbitrary code outside the rule scope.
-drop_bash_chmod_777: Bash(chmod 777:*) is rejected; mode 777 is never auto-approved.
-drop_bash_chown_root: Bash(chown root:*) is rejected; privileged ownership changes are never auto-approved.
-drop_bash_kill_minus_one: Bash(kill -1:*) and Bash(killall:*) are rejected; signalling external processes is out of scope for autoMode.
-drop_bash_history_clear: Bash(history -c:*) and Bash(history -d:*) are rejected; mutating shell history breaks audit trails.
+drop_bash_wildcard: Bash(*) is dropped from permissions.allow on entering auto mode; arbitrary shell execution is never auto-approved while the classifier is active. Restored when leaving auto mode.
+drop_powershell_wildcard: PowerShell(*) is dropped from permissions.allow on entering auto mode; arbitrary PowerShell execution is never auto-approved while the classifier is active. Restored when leaving auto mode.
+drop_bash_interpreter_wildcard: Wildcarded interpreter rules such as Bash(python*) are dropped from permissions.allow on entering auto mode; the prefix is too broad for the classifier. Restored when leaving auto mode.
+drop_agent_wildcard: Agent(*) and Agent(<name>) allow rules are dropped from permissions.allow on entering auto mode; subagent calls go through the classifier with the parent's rules. Restored when leaving auto mode.
+drop_pkg_manager_run: Package-manager run rules (e.g. Bash(npm run *), Bash(uv run *)) are dropped from permissions.allow on entering auto mode; the classifier evaluates the inner command. Restored when leaving auto mode.

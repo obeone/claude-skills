@@ -1,47 +1,39 @@
 {
-  "// note": "Example .claude/settings.local.json autoMode block. JSONC: comments allowed for documentation; the live serializer canonicalizes to strict JSON. Demonstrates the __example_only structural wrapper (which the loader strips) versus the literal substring (which is preserved verbatim).",
+  "// note": "Example .claude/settings.local.json autoMode block. JSONC: comments allowed for documentation; the live serializer canonicalizes to strict JSON. Demonstrates the four official autoMode sections (environment / allow / soft_deny / hard_deny) using prose rules, with `$defaults` per section. Also demonstrates the __example_only structural wrapper (which the loader strips) versus the literal substring (which is preserved verbatim).",
 
   "autoMode": {
     "environment": [
       "$defaults",
+      "Organization: Acme Corp. Primary use: software development.",
+      "Source control: github.com/acme-corp and all repos under it.",
+      "Trusted cloud buckets: s3://acme-build-artifacts, gs://acme-ml-datasets.",
+      "Trusted internal domains: *.corp.example.com, api.internal.example.com.",
+      "Key internal services: Jenkins at ci.example.com, Artifactory at artifacts.example.com.",
       {
         "__example_only": true,
-        "value": {
-          "kind": "trust_signal",
-          "name": "project_has_dockerfile",
-          "matches": ["./Dockerfile"]
-        }
+        "value": "Trust signal example: project_has_dockerfile (./Dockerfile)"
       },
       {
         "__example_only": true,
-        "value": {
-          "kind": "trust_signal",
-          "name": "project_has_pyproject",
-          "matches": ["./pyproject.toml"]
-        }
+        "value": "Trust signal example: project_has_pyproject (./pyproject.toml)"
       },
-      {
-        "kind": "trust_signal",
-        "name": "operator_marker_for___example_only_substring",
-        "matches": ["./markers/__example_only.json"]
-      },
-      {
-        "kind": "trust_signal",
-        "name": "literal_dollar_defaults_documentation",
-        "matches": ["./docs/$defaults-explainer.md"]
-      }
+      "Operator marker preserved verbatim: ./markers/__example_only.json",
+      "Documentation pointer: ./docs/$defaults-explainer.md (literal $defaults string is preserved here, not expanded)"
     ],
     "allow": [
-      "Bash(uv run pytest:*)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Read(./**)",
-      "Write(./.omc/**)"
+      "$defaults",
+      "Pushing to feature branches under feature/* on github.com/acme-corp is allowed: feature branches are throwaway and reset on review.",
+      "Writing to s3://acme-scratch/ is allowed: ephemeral bucket with a 7-day lifecycle policy."
     ],
-    "deny": [
-      "Bash(sudo:*)",
-      "Bash(rm -rf:*)",
-      "Write(./.git/**)"
+    "soft_deny": [
+      "$defaults",
+      "Never run database migrations outside the migrations CLI, even against dev databases.",
+      "Never modify files under infra/terraform/prod/: production infrastructure changes go through the review workflow."
+    ],
+    "hard_deny": [
+      "$defaults",
+      "Never force-push to main, develop, or release/* branches.",
+      "Never send repository contents to third-party code-review APIs."
     ]
   }
 }

@@ -1,15 +1,12 @@
 {
   "autoMode": {
     "allow": [
-      "Read(**)",
-      "Bash(npm test*)",
-      "Bash(uv run pytest*)"
+      "Routine internal operation: read project files",
+      "Routine internal operation: running npm test",
+      "Routine internal operation: running uv pytest"
     ],
-    "ask": [
-      "Bash(rm *)"
-    ],
-    "deny": [
-      "Bash(curl *)"
+    "soft_deny": [
+      "Be careful with rm: only inside the project tree"
     ],
     "environment": [
       "$defaults",

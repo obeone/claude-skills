@@ -2,26 +2,35 @@
 # Parsed by scripts/_canonical.py:parse_flat_yaml. One key per line.
 # Format: <key>: <value>. No empty values. No comments after a value.
 # Lines beginning with "#" and blank lines are ignored.
+#
+# Each `signal_*` entry is a project-scan probe. When the probe matches,
+# the skill surfaces a PROSE candidate the user can keep/edit/drop. The
+# rationale describes which autoMode section it likely belongs to —
+# `environment` for trust signals, `allow` for routine internal ops,
+# `soft_deny` for project-specific destructive risks, `hard_deny` for
+# unconditional boundaries. Candidates are NEVER tool patterns;
+# autoMode rules are natural-language descriptions (see
+# references/automode_doc_bible.md).
 
-claude_code_version_range: ">=2.1.136,<3.0"
+claude_code_version_range: ">=2.1.83,<3.0"
 
-signal_dockerfile: A Dockerfile or Containerfile at the project root suggests container builds; offer Bash(docker build:*) and Bash(docker compose:*) candidates.
-signal_compose: A compose.yaml/compose.yml/docker-compose.yaml at the project root suggests local stack lifecycle; offer Bash(docker compose:*).
-signal_package_json: A package.json at the project root suggests Node tooling; offer Bash(npm:*), Bash(pnpm:*), Bash(yarn:*) scoped to declared scripts.
-signal_pyproject: A pyproject.toml at the project root suggests Python project tooling; offer Bash(uv:*), Bash(python -m:*), Bash(pip install:*) scoped to dev dependencies.
-signal_python_version: A .python-version file pins the interpreter; surface it in the prompt so the user can scope tool rules to the matching uv/pyenv invocations.
-signal_makefile: A Makefile at the project root suggests build orchestration; offer Bash(make:*) restricted to the declared targets.
-signal_helm: A Chart.yaml or charts/ directory suggests Helm tooling; offer Bash(helm template:*) and Bash(helm lint:*); avoid Bash(helm install:*) by default.
-signal_kustomize: A kustomization.yaml suggests Kustomize tooling; offer Bash(kubectl kustomize:*) read-only candidates.
-signal_terraform: A *.tf file or .terraform/ suggests Terraform tooling; offer Bash(terraform plan:*) and Bash(terraform validate:*); never Bash(terraform apply:*).
-signal_node_modules_in_gitignore: node_modules listed in .gitignore confirms a JS project layout; reinforces signal_package_json without being its prerequisite.
-signal_pytest_ini: A pytest.ini, pyproject.toml [tool.pytest.ini_options], or tox.ini with [pytest] suggests test runs; offer Bash(uv run pytest:*).
-signal_uv_lock: A uv.lock file confirms uv as the Python package manager; offer Bash(uv sync:*) and Bash(uv run:*) candidates.
-signal_pre_commit: A .pre-commit-config.yaml suggests pre-commit hooks; offer Bash(pre-commit run:*) candidates.
-signal_eslint: An .eslintrc.* or eslint.config.* suggests JS linting; offer Bash(npx eslint:*) candidates.
-signal_tsconfig: A tsconfig.json suggests TypeScript builds; offer Bash(npx tsc:*) candidates and Read access to dist/ if present.
-signal_cargo: A Cargo.toml suggests Rust tooling; offer Bash(cargo check:*), Bash(cargo test:*), Bash(cargo build:*).
-signal_go_mod: A go.mod suggests Go tooling; offer Bash(go test:*), Bash(go build:*), Bash(go vet:*).
-signal_pyright: A pyrightconfig.json suggests Python type-checking; offer Bash(uv run pyright:*) candidates.
-signal_ruff: A ruff.toml or [tool.ruff] in pyproject.toml suggests Python linting; offer Bash(uv run ruff:*) candidates.
-signal_dotenv: A .env file at the project root indicates secrets; surface a warning that env files should never be staged into autoMode rules verbatim.
+signal_dockerfile: A Dockerfile or Containerfile at the project root means container builds happen here. Surface as an `environment` candidate, e.g. "Container builds: Docker is used to build images for this project."
+signal_compose: A compose.yaml/compose.yml/docker-compose.yaml at the project root means a local stack is part of the workflow. Surface as an `environment` candidate naming the stack.
+signal_package_json: A package.json at the project root means Node tooling is used. Surface as an `environment` candidate (e.g. "Node tooling: package.json declares dev scripts that may run in test runs.") — never as a Bash() rule.
+signal_pyproject: A pyproject.toml at the project root means Python project tooling. Surface as an `environment` candidate naming the package manager (uv/poetry/pip) and the typical dev commands.
+signal_python_version: A .python-version file pins the interpreter. Surface in the prompt so the user can word the environment description with the matching version.
+signal_makefile: A Makefile at the project root means make is used to drive builds. Surface as an `environment` candidate listing the declared targets that run in routine flows.
+signal_helm: A Chart.yaml or charts/ directory means Helm is used. Surface as an `environment` candidate for read-only Helm operations and a `soft_deny` candidate for cluster-mutating operations like `helm install` and `helm upgrade`.
+signal_kustomize: A kustomization.yaml means Kustomize is used. Surface as an `environment` candidate for read-only kubectl kustomize.
+signal_terraform: A *.tf file or .terraform/ means Terraform is used. Surface as an `environment` candidate for plan/validate, and a `hard_deny` candidate for `terraform apply` outside an approved promotion path.
+signal_node_modules_in_gitignore: node_modules listed in .gitignore confirms a JS project layout. Reinforces signal_package_json without being its prerequisite.
+signal_pytest_ini: A pytest.ini, pyproject.toml [tool.pytest.ini_options], or tox.ini with [pytest] means pytest is used. Surface as an `environment` candidate naming the test runner.
+signal_uv_lock: A uv.lock file confirms uv as the Python package manager. Surface as an `environment` candidate for "uv-driven Python project; routine dependency installs run via uv sync."
+signal_pre_commit: A .pre-commit-config.yaml means pre-commit hooks are used. Surface as an `environment` candidate naming the hook runner.
+signal_eslint: An .eslintrc.* or eslint.config.* means ESLint is used. Surface as an `environment` candidate naming the linter.
+signal_tsconfig: A tsconfig.json means TypeScript is used. Surface as an `environment` candidate naming the build tool and any committed dist/ output.
+signal_cargo: A Cargo.toml means Rust tooling is used. Surface as an `environment` candidate naming routine cargo subcommands.
+signal_go_mod: A go.mod means Go tooling is used. Surface as an `environment` candidate naming routine go subcommands.
+signal_pyright: A pyrightconfig.json means Python type-checking is in scope. Surface as an `environment` candidate naming the type-checker.
+signal_ruff: A ruff.toml or [tool.ruff] in pyproject.toml means ruff is used. Surface as an `environment` candidate naming the linter.
+signal_dotenv: A .env file at the project root indicates secrets. Surface a `hard_deny` candidate of the form "Never commit, transmit, or stage the contents of .env files" — env contents must never appear in autoMode rules verbatim.

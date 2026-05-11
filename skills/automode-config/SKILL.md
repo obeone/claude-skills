@@ -1,8 +1,8 @@
 ---
 name: automode-config
-description: "Author, validate, and migrate Claude Code autoMode blocks at the project level (four-bucket allow/ask/deny/hard_deny model). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b is agent-driven: the calling agent reads CLAUDE.md / AGENTS.md / .claude/CLAUDE.md, applies judgment, and emits a proposal JSON that flows through the same critique + hash-gate + atomic-write pipeline as any other proposal. Runs `claude auto-mode critique` as the canonical Path (b) gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.136+."
+description: "Author, validate, and migrate Claude Code autoMode blocks at the project level. Models the four official autoMode sections (environment, allow, soft_deny, hard_deny — all arrays of prose rules, with `$defaults` per section). Primary target is .claude/settings.local.json (per-user-per-project, gitignored, classifier-read). Reads ~/.claude/settings.json (user baseline, read-only) and .claude/settings.json (shared, classifier-ignores autoMode) for adoption candidates. Phase 1b is agent-driven: the calling agent reads CLAUDE.md / AGENTS.md / .claude/CLAUDE.md and emits a proposal JSON that flows through the same critique + hash-gate + atomic-write pipeline. Runs `claude auto-mode critique` as the canonical gate. Atomic write under per-file flock with sha256 hash gate. Requires Claude Code 2.1.83+ (auto mode itself; see references/automode_doc_bible.md)."
 metadata:
-  version: "0.4.2"
+  version: "0.5.0"
 tools:
   - Read
   - Write
@@ -31,7 +31,7 @@ their state without mutating them unless the user explicitly opts in.
   sections. This skill is autoMode-only.
 - Retry-on-network-failure logic. The user re-runs.
 
-## Mental model: three files and four rule buckets
+## Mental model: three files and four sections
 
 | File | Path | Classifier reads `autoMode`? | Skill behaviour | Mode |
 |---|---|---|---|---|
@@ -39,17 +39,38 @@ their state without mutating them unless the user explicitly opts in.
 | **Project local** ← primary | `.claude/settings.local.json` | yes | Read + write (flock, atomic, backups, hash gate). **The skill's main target.** | 0600 |
 | **Project shared** | `.claude/settings.json` | no (for `autoMode` only — other sections still read) | Read for adoption. Write only with explicit opt-in flag, with classifier-ignores warning. | 0644 (committed file) |
 
-**Rule buckets:** `autoMode` contains four independent rule lists:
-`allow` (auto-approved), `ask` (surfaced to user), `deny` (blocked,
-bypassable), and `hard_deny` (blocked unconditionally, not bypassable).
-Plus `environment` (trust-signal array, separate from rule buckets).
+**Sections:** `autoMode` has exactly four array fields, each holding
+**prose rules** (natural-language descriptions, not `Tool(specifier)`
+patterns):
+
+- `environment` — trust signals: repos, buckets, domains, services
+  considered "internal".
+- `allow` — exceptions that override `soft_deny` rules of the same
+  target.
+- `soft_deny` — destructive actions; overridable by `allow` or by
+  explicit user intent stated in the conversation.
+- `hard_deny` — unconditional security boundary; not lifted by `allow`,
+  intent flags, or user statements.
+
+Each section accepts the literal string `"$defaults"` to splice in
+Anthropic's curated baseline at that position. Omitting `"$defaults"`
+**replaces** the default list end-to-end; the skill warns at every
+write that does so.
+
+`autoMode` does **not** have an `ask` bucket and does **not** have a
+plain `deny` bucket — those names belong to the regular `permissions`
+system. The skill rejects unknown autoMode keys; legacy proposals
+using `deny` are migrated to `soft_deny` with a warning, and `ask`
+entries are dropped with a warning.
 
 **Critical invariant:** the skill must never write `autoMode` into
 the shared file silently. Writing requires `--write-shared` AND
 user-confirmed prompt AND the warning is reprinted at write time.
 
-For full per-file gotchas (gitignore status, mode 0644 user file,
-shared-file `autoMode` ignored), see `references/three_files.md`.
+For the full schema, semantics, CLI surface, and version requirements,
+see `references/automode_doc_bible.md` — it is distilled from the
+official Claude Code docs and is the authoritative reference for this
+skill. For per-file gotchas, see `references/three_files.md`.
 
 ## Workflow: six phases (0 + 1a + 1b + 2 + 3 + 4)
 
@@ -95,35 +116,53 @@ with rules implied by the project's documentation:
    - `<project>/.claude/CLAUDE.md`
    - Optionally `~/.claude/CLAUDE.md` (user-global conventions; include
      only if the project hasn't redefined them)
-2. Propose rules using the four-bucket model:
-   - **allow**: tools the docs document as routine (test runners, linters,
-     build tools, local dev commands).
-   - **ask**: anything ambiguous or potentially destructive that should
-     surface a prompt.
-   - **deny**: paths/operations the docs warn against but a flag could
-     legitimately override.
-   - **hard_deny**: protected branches, secrets paths, anything the docs
-     say must NEVER be auto-approved. `hard_deny` overrides `allow` for
-     the same target and is not bypassable by user-intent flags.
-3. Write the proposal as JSON to a file (e.g. `/tmp/automode-proposal.json`):
+2. Translate findings into **prose rules** under one of the four
+   official sections (see `references/automode_doc_bible.md`):
+   - **environment**: trusted infrastructure the project uses (Git
+     hosting org, buckets, internal domains, CI/registry endpoints).
+   - **allow**: exceptions for routine internal operations the
+     classifier's defaults flag as risky (e.g. "Pushing to feature
+     branches under `feature/*` on github.com/acme is allowed").
+   - **soft_deny**: destructive risks specific to the project that
+     `$defaults` does not cover (e.g. "Never run database migrations
+     outside `./scripts/migrate.sh`, even on dev databases").
+   - **hard_deny**: unconditional boundaries the docs say must never be
+     auto-approved (e.g. "Never push to `main` or `release/*`",
+     "Never send repository contents to external code-review APIs").
+3. Write the proposal as JSON to a file (e.g.
+   `/tmp/automode-proposal.json`). Rules are **prose strings**, not
+   `Tool(specifier)` patterns:
    ```json
    {
      "autoMode": {
-       "allow":     ["Bash(<tool>:*)", "..."],
-       "ask":       ["..."],
-       "deny":      ["..."],
-       "hard_deny": ["Bash(git push * <branch>*)", "..."],
-       "environment": ["$defaults"]
+       "environment": [
+         "$defaults",
+         "Source control: github.com/acme-corp and all repos under it",
+         "CI/CD: Jenkins at ci.acme.com, Artifactory at artifacts.acme.com"
+       ],
+       "allow": [
+         "$defaults",
+         "Deploying to the staging namespace is allowed: staging is isolated and resets nightly"
+       ],
+       "soft_deny": [
+         "$defaults",
+         "Never run database migrations outside the migrations CLI"
+       ],
+       "hard_deny": [
+         "$defaults",
+         "Never force-push to main or release/* branches",
+         "Never send repository contents to third-party code-review APIs"
+       ]
      }
    }
    ```
 4. Pass the file to `apply_automode.py --proposal <file>` (with `--dry-run`
    first to obtain the canonical hash, then with `--approved-canonical-hash`).
 
-The deterministic guards still apply: schema validation,
-classifier-dropped pattern filter, version-band probe (Claude Code 2.1.136+
-for `hard_deny`), critique exit-code gate, sha256 hash gate, atomic write
-under flock. The agent cannot bypass them.
+The deterministic guards still apply: schema validation, mistaken-pattern
+detection (warns when an autoMode rule looks like a `permissions`
+pattern), version-band probe, critique exit-code gate, sha256 hash gate,
+atomic write under flock. The agent cannot bypass them.
 
 ## The single intent question
 
@@ -199,29 +238,47 @@ Asked silently from file state, never prompted: **does
 
 ## hard_deny semantics
 
-`hard_deny` is an unconditionally enforced rule bucket. Entries in
-`autoMode.hard_deny` block classified operations regardless of rules in
-`allow`, `ask`, or `deny`. `hard_deny` overrides any rule for the same
-target in other buckets. It is not bypassable by user-intent flags like
-`--dangerously-skip-permissions`. Requires Claude Code 2.1.136+. The
-skill reads and writes `hard_deny` identically to other rule sections;
-the `$defaults` sentinel does not apply (it is a rule list, not an env
-array). `--migrate-strategy drop-all` resets `hard_deny` to `[]`.
+`hard_deny` is the unconditional bucket. Entries block classified
+operations regardless of any matching rule in `allow` or `soft_deny`,
+and they are not lifted by user intent stated in conversation or by
+intent flags such as `--dangerously-skip-permissions`. The skill reads
+and writes `hard_deny` identically to the other autoMode sections.
+`"$defaults"` works in `hard_deny` exactly as it does in `environment`,
+`allow`, and `soft_deny`: include it to keep Anthropic's curated
+baseline; omit it to take full ownership of the section.
+`--migrate-strategy drop-all` resets `hard_deny` to `[]` (and likewise
+for `allow` and `soft_deny`); `environment` is reset to
+`["$defaults"]`.
+
+For unconditional gates outside the classifier (i.e. blocked even when
+auto mode is off), use `permissions.deny` in managed settings — those
+run before the classifier and cannot be overridden by user/project
+settings.
 
 ## The `$defaults` trap
 
-`autoMode.environment` is a JSON array. The string sentinel
-`"$defaults"` tells the classifier to substitute Anthropic-curated
-trust signals at load time. The skill **never expands it**; it
-preserves the sentinel verbatim and at its declared position. Two
-implications:
+`"$defaults"` is a string sentinel accepted in **all four** autoMode
+sections (`environment`, `allow`, `soft_deny`, `hard_deny`). At load
+time the classifier splices Anthropic's curated baseline for the
+section at the position where the sentinel appears; the rest of the
+array is preserved.
 
-- A user who deletes `"$defaults"` loses the curated baseline. The
-  scan and inspect outputs flag missing `$defaults` so the user can
-  decide intentionally.
-- `--migrate-strategy drop-all` empties the lists but rewrites
-  `autoMode.environment` to exactly `["$defaults"]`. It is the
-  skill's start-from-scratch button, not a denuding button.
+The skill **never expands it**; it preserves the sentinel verbatim and
+at its declared position. Three implications:
+
+- A user who deletes `"$defaults"` from any section **loses the curated
+  baseline for that section**. For `soft_deny` that means losing
+  built-in rules like force-push, `curl | bash`, and production-deploy
+  blocks; for `hard_deny` it means losing the data-exfiltration and
+  safety-bypass blocks. Scan and inspect outputs flag the missing
+  sentinel per section so the user can decide intentionally.
+- `--migrate-strategy drop-all` empties `allow` / `soft_deny` /
+  `hard_deny` to `[]` and rewrites `autoMode.environment` to exactly
+  `["$defaults"]`. It is the start-from-scratch button: existing user
+  rules are removed but the curated `environment` baseline is
+  preserved.
+- Each section is independent. Setting `environment` alone leaves the
+  default `allow`, `soft_deny`, and `hard_deny` lists intact.
 
 ## The `__example_only` wrapper
 
@@ -300,16 +357,20 @@ missing; each archive file is mode 0600.
 
 ## References
 
-- `references/mental_model.md` — three files, four rule buckets, six phases, decision tree.
-- `references/three_files.md` — file relationships and per-file gotchas (including `hard_deny` round-trip).
+- `references/automode_doc_bible.md` — **start here**. Authoritative,
+  doc-distilled reference: schema, semantics, CLI surface, scope rules,
+  version requirements. The skill code is built to match this file.
+- `references/mental_model.md` — three files, four sections, six phases, decision tree.
+- `references/three_files.md` — file relationships and per-file gotchas.
 - `references/canonicalization.md` — byte contract, fixtures, idempotency, `parse_flat_yaml`.
-- `references/critique_workflow.md` — Path (b), `--settings` probe, automatic swap-file, contract drift.
+- `references/critique_workflow.md` — `claude auto-mode critique`, `--settings` probe, automatic swap-file, contract drift.
 - `references/migration.md` — Phase 1a/1b adoption, project-doc scan, four-key prompt, strategy modes.
 - `references/recovery.md` — backup retention, `--repair`, stranded state, multi-file flock.
 - `references/verification.md` — acceptance predicates with measurement commands.
 
-## Documentation URLs
+## Documentation URLs (verified 2026-05-10)
 
-- Claude Code permissions: <https://docs.claude.com/en/docs/claude-code/iam>
-- Claude Code settings: <https://docs.claude.com/en/docs/claude-code/settings>
-- Anthropic Engineering — autoMode design notes: <https://www.anthropic.com/engineering/claude-code-best-practices>
+- Configure auto mode: <https://code.claude.com/docs/en/auto-mode-config>
+- Permissions: <https://code.claude.com/docs/en/permissions>
+- Permission modes: <https://code.claude.com/docs/en/permission-modes>
+- Settings: <https://code.claude.com/docs/en/settings>

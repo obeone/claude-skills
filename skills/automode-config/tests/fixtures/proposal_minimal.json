@@ -1,11 +1,15 @@
 {
   "autoMode": {
-    "allow": [
-      "Read(**)"
-    ],
-    "ask": [],
-    "deny": [],
     "environment": [
+      "$defaults"
+    ],
+    "allow": [
+      "$defaults"
+    ],
+    "soft_deny": [
+      "$defaults"
+    ],
+    "hard_deny": [
       "$defaults"
     ]
   }

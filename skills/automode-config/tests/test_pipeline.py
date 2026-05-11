@@ -397,10 +397,10 @@ def test_acc08_backup_mode_0600(
     _build_local_settings(
         project_claude,
         automode={
-            "allow": ["Read(**)"],
-            "ask": [],
-            "deny": [],
             "environment": ["$defaults"],
+            "allow": ["$defaults"],
+            "soft_deny": ["$defaults"],
+            "hard_deny": ["$defaults"],
         },
     )
 
@@ -624,13 +624,22 @@ def test_acc13_migrate_drop_all(
     _build_local_settings(
         project_claude,
         automode={
-            "allow": ["Read(**)", "Bash(npm test*)"],
-            "ask": [],
-            "deny": [],
             "environment": [
                 "$defaults",
-                "node-monorepo",
-                "python-uv-project",
+                "Trust signal: node monorepo with workspaces",
+                "Trust signal: Python project managed by uv",
+            ],
+            "allow": [
+                "$defaults",
+                "Pushing to feature/* on github.com/acme is allowed",
+            ],
+            "soft_deny": [
+                "$defaults",
+                "Never run npm publish from this checkout",
+            ],
+            "hard_deny": [
+                "$defaults",
+                "Never force-push to main or release/*",
             ],
         },
     )
@@ -658,8 +667,11 @@ def test_acc13_migrate_drop_all(
     am = proposed["autoMode"]
     assert am.get("environment") == ["$defaults"]
     assert am.get("allow", []) == []
-    assert am.get("deny", []) == []
-    assert am.get("ask", []) == []
+    assert am.get("soft_deny", []) == []
+    assert am.get("hard_deny", []) == []
+    # Legacy keys must NOT appear in the migrated block.
+    assert "deny" not in am
+    assert "ask" not in am
 
 
 # ---------------------------------------------------------------------------
@@ -682,10 +694,19 @@ def test_acc14_migrate_keep_all_byte_equal(
     project_claude.mkdir(parents=True)
 
     automode = {
-        "allow": ["Read(**)", "Bash(uv run pytest*)"],
-        "ask": ["Bash(rm *)"],
-        "deny": ["Bash(curl *)"],
-        "environment": ["$defaults", "team-shared"],
+        "environment": ["$defaults", "Trust signal: team-shared infra"],
+        "allow": [
+            "$defaults",
+            "Routine internal operation: pushing to feature/* is allowed",
+        ],
+        "soft_deny": [
+            "$defaults",
+            "Never run database migrations outside the migrations CLI",
+        ],
+        "hard_deny": [
+            "$defaults",
+            "Never force-push to main or release/*",
+        ],
     }
     pre = _build_local_settings(project_claude, automode=automode)
     pre_bytes = pre.read_bytes()
@@ -739,22 +760,22 @@ def test_acc15_example_only_anti_test():
         "autoMode": {
             "environment": [
                 "$defaults",
-                {"__example_only": True, "value": "team-shared"},
+                {"__example_only": True, "value": "team-shared trust signal"},
             ],
             "allow": [
-                "Read(**)",
-                "Bash(echo __example_only marker)",
-                {"__example_only": True, "value": "Bash(npm test*)"},
+                "$defaults",
+                "Internal note about __example_only marker preserved verbatim",
+                {"__example_only": True, "value": "Pushing to feature/* is allowed"},
             ],
-            "ask": [],
-            "deny": [],
+            "soft_deny": [],
+            "hard_deny": [],
         }
     }
     out = strip(wrapped)
     am = out["autoMode"]
     # Structural wrapper stripped to its real value.
-    assert "team-shared" in am["environment"]
-    assert "Bash(npm test*)" in am["allow"]
+    assert "team-shared trust signal" in am["environment"]
+    assert "Pushing to feature/* is allowed" in am["allow"]
     # Substring preserved verbatim.
     assert any(
         isinstance(r, str) and "__example_only" in r for r in am["allow"]
@@ -980,7 +1001,7 @@ def test_acc19_adopt_from_shared(
     )
     sections = {c["section"] for c in cands}
     assert "environment" in sections
-    assert {"allow", "deny", "ask"} & sections
+    assert {"allow", "soft_deny"} & sections
 
 
 def test_acc19_no_include_shared_omits_candidates(
@@ -1239,7 +1260,7 @@ def test_acc22_auto_fresh_migrate_detection(
     project_b_claude.mkdir(parents=True)
     _build_local_settings(
         project_b_claude,
-        automode={"allow": [], "ask": [], "deny": [], "environment": ["$defaults"]},
+        automode={"allow": [], "soft_deny": [], "environment": ["$defaults"]},
     )
     files_b = resolve_paths(project_b)
     assert detect(files_b) == "migrate"
@@ -1546,9 +1567,8 @@ def test_validator_accepts_valid_proposal():
     validate, ProposalValidationError = _get_validator()
     validate({
         "autoMode": {
-            "allow": ["Read(**)"],
-            "ask": [],
-            "deny": [],
+            "allow": ["Routine internal operation: read project files"],
+            "soft_deny": [],
             "environment": ["$defaults"],
         }
     })
@@ -1575,7 +1595,7 @@ def test_validator_accepts_extra_top_level_keys():
     validate, ProposalValidationError = _get_validator()
     validate({
         "autoMode": {
-            "allow": ["Read(**)"],
+            "allow": ["Routine internal operation: read project files"],
             "environment": ["$defaults"],
         },
         "permissions": {"allow": ["Read(**)"]},
@@ -1594,9 +1614,8 @@ def test_acc24_validator_accepts_hard_deny_section():
     validate({
         "autoMode": {
             "allow": [],
-            "deny": [],
-            "hard_deny": ["Bash(git push * main*)", "Bash(rm -rf /:*)"],
-            "ask": [],
+            "soft_deny": [],
+            "hard_deny": ["Never push to main", "Never run rm -rf on system paths"],
             "environment": ["$defaults"],
         }
     })
@@ -1612,7 +1631,7 @@ def test_acc24_migrate_drop_all_resets_hard_deny(
     scripts_dir: Path,
     stub_claude_dir: Path,
 ):
-    """migrate --drop-all resets hard_deny to [] alongside allow/deny/ask."""
+    """migrate --drop-all resets hard_deny to [] alongside allow/soft_deny."""
 
     apply = _apply_cli(scripts_dir)
     _require(apply)
@@ -1626,10 +1645,12 @@ def test_acc24_migrate_drop_all_resets_hard_deny(
     _build_local_settings(
         project_claude,
         automode={
-            "allow": ["Read(**)", "Bash(npm test*)"],
-            "ask": [],
-            "deny": [],
-            "hard_deny": ["Bash(git push * main*)", "Bash(git push * stable*)"],
+            "allow": [
+                "Routine internal operation: read project files",
+                "Routine internal operation: running npm test",
+            ],
+            "soft_deny": [],
+            "hard_deny": ["Never push to main", "Never push to stable"],
             "environment": [
                 "$defaults",
                 "node-monorepo",
@@ -1660,8 +1681,9 @@ def test_acc24_migrate_drop_all_resets_hard_deny(
     am = proposed["autoMode"]
     assert am.get("environment") == ["$defaults"]
     assert am.get("allow", []) == []
-    assert am.get("deny", []) == []
-    assert am.get("ask", []) == []
+    assert am.get("soft_deny", []) == []
+    assert "deny" not in am
+    assert "ask" not in am
     assert am.get("hard_deny", []) == [], (
         f"expected hard_deny == [] after drop-all; got {am.get('hard_deny')!r}"
     )
@@ -1688,10 +1710,9 @@ def test_acc24_scan_shared_hard_deny_candidates(
     # Write a shared settings file inline with a hard_deny entry.
     shared_payload = {
         "autoMode": {
-            "allow": ["Read(**)"],
-            "ask": [],
-            "deny": [],
-            "hard_deny": ["Bash(git push * main*)", "Bash(git push * stable*)"],
+            "allow": ["Routine internal operation: read project files"],
+            "soft_deny": [],
+            "hard_deny": ["Never push to main", "Never push to stable"],
             "environment": ["$defaults"],
         }
     }
