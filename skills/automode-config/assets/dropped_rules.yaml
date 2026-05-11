@@ -1,0 +1,18 @@
+# Permission rules that the Claude Code classifier drops on entering
+# auto mode. Source: code.claude.com/docs/en/permission-modes (section
+# "How the classifier evaluates actions"). Dropped rules are restored
+# when the user leaves auto mode.
+#
+# These literals belong to the `permissions.allow` system, not to
+# `autoMode.allow`. autoMode rules are PROSE descriptions; if any of
+# these literals appear inside an autoMode section, the user has
+# probably pasted a permissions pattern by mistake. The skill
+# surfaces a warning and offers to translate or drop.
+#
+# Flat YAML, no nesting, no lists. Parsed by scripts/_canonical.py.
+
+drop_bash_wildcard: Bash(*) is dropped from permissions.allow on entering auto mode; arbitrary shell execution is never auto-approved while the classifier is active. Restored when leaving auto mode.
+drop_powershell_wildcard: PowerShell(*) is dropped from permissions.allow on entering auto mode; arbitrary PowerShell execution is never auto-approved while the classifier is active. Restored when leaving auto mode.
+drop_bash_interpreter_wildcard: Wildcarded interpreter rules such as Bash(python*) are dropped from permissions.allow on entering auto mode; the prefix is too broad for the classifier. Restored when leaving auto mode.
+drop_agent_wildcard: Agent(*) and Agent(<name>) allow rules are dropped from permissions.allow on entering auto mode; subagent calls go through the classifier with the parent's rules. Restored when leaving auto mode.
+drop_pkg_manager_run: Package-manager run rules (e.g. Bash(npm run *), Bash(uv run *)) are dropped from permissions.allow on entering auto mode; the classifier evaluates the inner command. Restored when leaving auto mode.

@@ -82,6 +82,10 @@ curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerf
 # Install helm-bjw-s-chart
 curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+
+# Install automode-config
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/automode-config.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 ```
 
 For project-specific skills, use `.claude/skills` instead of `~/.claude/skills`:
@@ -93,6 +97,9 @@ curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerf
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
 
 curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
+  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
+
+curl -L https://github.com/obeone/claude-skills/releases/latest/download/automode-config.skill \
   -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
 ```
 
@@ -112,6 +119,7 @@ git clone https://github.com/obeone/claude-skills.git
 # Copy all skills to your skills directory
 cp -r claude-skills/skills/dockerfile-best-practices ~/.claude/skills/
 cp -r claude-skills/skills/helm-bjw-s-chart ~/.claude/skills/
+cp -r claude-skills/skills/automode-config ~/.claude/skills/
 ```
 
 ### Other Platforms
@@ -147,6 +155,7 @@ Skills are automatically discovered when you run Claude Code in this repository.
 "Create a Dockerfile for my Python FastAPI application"
 "Generate a Helm chart for this container image"
 "Analyze my Dockerfile for best practices"
+"Set up Claude Code autoMode for this project"
 ```
 
 ### Manual Usage
@@ -160,6 +169,12 @@ uv run skills/dockerfile-best-practices/scripts/analyze_compose.py ./compose.yam
 
 # Validate a Helm chart
 uv run skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
+
+# Inspect Claude Code autoMode state for the current project
+uv run skills/automode-config/scripts/inspect_automode.py
+
+# Scan the project for autoMode adoption candidates
+uv run skills/automode-config/scripts/scan_project.py
 ```
 
 ## 🎯 Available Skills
@@ -169,6 +184,7 @@ uv run skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
 | [**tts-duet**](./skills/tts-duet/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS | Adaptation pre-pass (agent or MCP), shape/language defaults, director enrichment, offline cost estimate, voice audition, background jobs |
+| [**automode-config**](./skills/automode-config/) | Author, validate, and migrate project-level Claude Code `autoMode` blocks (4-bucket model) | `claude auto-mode critique` gate, atomic flock-protected writes, hash-gated commits, `hard_deny` round-trip, automatic swap-file when `--settings` is missing, `--repair` for stranded state |
 
 ## 🧩 Architecture
 
@@ -250,6 +266,15 @@ uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfi
 - **Best practices**: Resource limits, security contexts, health probes
 - **Chart validator**: Verifies structure and bjw-s compatibility
 
+### automode-config
+
+- **Four-bucket model**: `allow` / `ask` / `deny` / `hard_deny` with `hard_deny` round-trip
+- **Critique-gated writes**: `claude auto-mode critique` exit code is the contract; raw output archived per run
+- **Atomic + reversible**: per-file flock, `O_EXCL` write, five rolling backups, sha256 commit predicate
+- **Capability auto-detection**: silently swaps `~/.claude/settings.json` when the CLI lacks `--settings`
+- **Recovery**: `--repair` reclaims stale flocks and restores `.preview-orig` orphans
+- **Requires** Claude Code 2.1.136+
+
 ## 🔨 Development
 
 ### Repository Structure
@@ -264,7 +289,8 @@ uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfi
 └── skills/
     ├── dockerfile-best-practices/
     ├── helm-bjw-s-chart/
-    └── tts-duet/
+    ├── tts-duet/
+    └── automode-config/
 ```
 
 ### Mandatory Requirements

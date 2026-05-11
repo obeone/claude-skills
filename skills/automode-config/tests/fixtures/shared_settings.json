@@ -1,0 +1,22 @@
+{
+  "autoMode": {
+    "allow": [
+      "Routine internal operation: read project files",
+      "Routine internal operation: running npm test",
+      "Routine internal operation: running uv pytest"
+    ],
+    "soft_deny": [
+      "Be careful with rm: only inside the project tree"
+    ],
+    "environment": [
+      "$defaults",
+      "node-monorepo",
+      "python-uv-project"
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read(**)"
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+{"string": "s", "int": 1, "float": 1.5, "bool_t": true, "bool_f": false, "null": null, "array": [1, 2, 3], "object": {"nested": true}}

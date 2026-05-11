@@ -1,0 +1,15 @@
+{
+  "autoMode": {
+    "allow": [
+      "Read(**)",
+      "Bash(git status*)",
+      "Bash(git diff*)"
+    ],
+    "ask": [],
+    "deny": [],
+    "environment": [
+      "$defaults",
+      "local-dev"
+    ]
+  }
+}
