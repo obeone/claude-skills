@@ -2,6 +2,9 @@
 
 Proven patterns for common Kubernetes deployment scenarios using bjw-s common library.
 
+> All patterns work on **common 4.x and 5.x** unless tagged
+> **`(common ≥ 5.0)`**. See `SKILL.md` for the version matrix.
+
 ## Single Container App
 
 Basic web application with persistence:
@@ -614,4 +617,125 @@ persistence:
             subPath: main.yaml
           - path: /app/config/feature.yaml
             subPath: feature.yaml
+```
+
+## HorizontalPodAutoscaler **(common ≥ 5.0)**
+
+Autoscale a stateless workload on CPU + memory pressure. Leave
+`replicas: null` on the controller so the HPA owns the replica count.
+
+```yaml
+controllers:
+  web:
+    replicas: null                   # Let the HPA decide
+    containers:
+      app:
+        image:
+          repository: myapp/web
+          tag: "2.1.0"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 512Mi
+
+horizontalPodAutoscaler:
+  web:
+    enabled: true
+    controller: web
+    minReplicas: 2
+    maxReplicas: 20
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 80
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+```
+
+## PodMonitor (Prometheus, no Service required) **(common ≥ 5.0)**
+
+When the workload exposes metrics but has no `Service` (e.g. CronJobs,
+exporters that should be scraped per-pod):
+
+```yaml
+controllers:
+  worker:
+    containers:
+      app:
+        image:
+          repository: myapp/worker
+          tag: "1.4.0"
+        # Container port name picked up by the PodMonitor
+        # (declared inside the container spec, not the service)
+
+podMonitor:
+  worker:
+    enabled: true
+    controller: worker
+    endpoints:
+      - port: metrics
+        path: /metrics
+        interval: 30s
+```
+
+## Generic Ephemeral Volume **(common ≥ 5.0)**
+
+A throwaway PVC scoped to the pod lifecycle — useful for scratch space
+on dynamic provisioners without committing to a long-lived PVC:
+
+```yaml
+persistence:
+  scratch:
+    type: ephemeral
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    storageClass: fast-ssd
+    globalMounts:
+      - path: /scratch
+```
+
+## NetworkPolicy with single-controller auto-detection **(common ≥ 5.0)**
+
+When the chart only defines one controller, the policy is auto-targeted —
+no need to repeat `controller:` or `podSelector:`:
+
+```yaml
+controllers:
+  main:
+    containers:
+      app:
+        image:
+          repository: myapp
+          tag: "1.0.0"
+
+networkpolicies:
+  default-deny-egress:
+    enabled: true
+    # No controller / podSelector — auto-binds to `main`
+    policyTypes:
+      - Egress
+    rules:
+      egress:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: kube-system
+              podSelector:
+                matchLabels:
+                  k8s-app: kube-dns
+          ports:
+            - protocol: UDP
+              port: 53
 ```
