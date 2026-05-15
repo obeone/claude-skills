@@ -117,6 +117,31 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                         'Common library repository URL may be incorrect',
                         'Use: https://bjw-s-labs.github.io/helm-charts'
                     ))
+                # Surface major-version info so callers know which
+                # feature set is in scope (4.x vs 5.x).
+                raw_version = str(dep.get('version', '')).lstrip('^~=v ')
+                major = raw_version.split('.', 1)[0] if raw_version else ''
+                if not raw_version:
+                    issues.append(Issue(
+                        'Chart.yaml',
+                        'warning',
+                        'common library has no version pin',
+                        'Pin a version (current latest: 5.0.1)'
+                    ))
+                elif major.isdigit() and int(major) < 4:
+                    issues.append(Issue(
+                        'Chart.yaml',
+                        'warning',
+                        f'common library version {raw_version} is older than v4',
+                        'Upgrade to 4.x or 5.x — this skill targets v4+ only'
+                    ))
+                elif major == '4':
+                    issues.append(Issue(
+                        'Chart.yaml',
+                        'info',
+                        f'common library pinned to {raw_version} (v4 branch)',
+                        'Consider 5.0.1 if cluster is on K8s ≥ 1.31 / Helm ≥ 3.18'
+                    ))
                 break
 
         if not common_found:
