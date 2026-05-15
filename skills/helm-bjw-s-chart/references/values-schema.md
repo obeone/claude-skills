@@ -1,6 +1,9 @@
 # Values Schema Quick Reference
 
-Quick reference for common values.yaml configuration options in bjw-s common library v4+.
+Quick reference for common values.yaml configuration options in bjw-s common library v4+ (covers v4.x and v5.x).
+
+> Fields marked **`(common ≥ 5.0)`** require the 5.x chart and are silently
+> ignored on 4.x. Everything else is shared by both branches.
 
 ## Controllers
 
@@ -20,6 +23,9 @@ controllers:
       securityContext: {}
       annotations: {}
       labels: {}
+      # resizePolicy — pod-level in-place vertical scaling
+      # (common ≥ 5.0, K8s ≥ 1.36)
+      resizePolicy: PreferNoRestart        # PreferNoRestart | RestartContainer
       # ... other pod options
     
     # Container definitions
@@ -47,7 +53,14 @@ controllers:
             memory: ""
         
         securityContext: {}
-        
+
+        # resizePolicy — in-place vertical scaling (common ≥ 5.0, K8s ≥ 1.35)
+        resizePolicy:
+          - resourceName: cpu
+            restartPolicy: NotRequired      # NotRequired or RestartContainer
+          - resourceName: memory
+            restartPolicy: RestartContainer
+
         probes:
           liveness:
             enabled: true
@@ -168,6 +181,23 @@ persistence:
             subPath: ""
 ```
 
+### Ephemeral (generic ephemeral volume) — common ≥ 5.0
+
+```yaml
+persistence:
+  <identifier>:
+    type: ephemeral                  # (common ≥ 5.0)
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    storageClass: ""                 # Empty for default
+    globalMounts:
+      - path: /scratch
+```
+
+Generic ephemeral volumes look like a PVC but are bound to the pod
+lifecycle — they're created when the pod is scheduled and deleted when
+it terminates, with no `PersistentVolumeClaim` left behind.
+
 ### EmptyDir
 
 ```yaml
@@ -271,12 +301,22 @@ controllers:
       name: <serviceaccount-name>
 ```
 
+> **(common ≥ 5.0)** — A default unprivileged ServiceAccount is created
+> automatically. Disable when you bring your own:
+>
+> ```yaml
+> global:
+>   createDefaultServiceAccount: false
+> ```
+
 ## Default Pod Options
 
 ```yaml
 defaultPodOptions:
-  # Applied to all controllers
-  automountServiceAccountToken: true
+  # Applied to all controllers.
+  # (common 4.x default: true | common 5.x default: false)
+  # Set to true if your workload needs the SA token.
+  automountServiceAccountToken: false
   enableServiceLinks: false
 
   imagePullSecrets:
@@ -321,13 +361,62 @@ serviceMonitor:
     annotations: {}
     labels: {}
     serviceName: '{{ include "bjw-s.common.lib.chart.names.fullname" $ }}'
-    
+    jobLabel: app.kubernetes.io/name # (common ≥ 5.0 default — was unset)
+
     endpoints:
       - port: metrics
         path: /metrics
         interval: 30s
         scrapeTimeout: 10s
 ```
+
+## PodMonitor (Prometheus) — common ≥ 5.0
+
+Scrape pods directly without needing a Service.
+
+```yaml
+podMonitor:
+  <identifier>:
+    enabled: true
+    controller: <controller-id>      # Target controller (auto-detected if only one)
+    annotations: {}
+    labels: {}
+    jobLabel: app.kubernetes.io/name
+
+    endpoints:
+      - port: metrics
+        path: /metrics
+        interval: 30s
+        scrapeTimeout: 10s
+```
+
+## HorizontalPodAutoscaler — common ≥ 5.0
+
+```yaml
+horizontalPodAutoscaler:
+  <identifier>:
+    enabled: true
+    controller: <controller-id>      # Target controller
+    minReplicas: 1
+    maxReplicas: 10
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 80
+    behavior: {}                     # Optional scale-up/down behavior
+```
+
+> Set `controllers.<id>.replicas: null` on the targeted controller so the
+> HPA controls the replica count without Helm reverting it.
 
 ## Routes (Gateway API)
 
@@ -518,6 +607,8 @@ service:
 networkpolicies:
   <identifier>:
     enabled: true
+    # (common ≥ 5.0) If you omit both `controller` and `podSelector`
+    # and exactly one controller exists, it is auto-targeted.
     controller: <controller-id>      # Which controller to target
     
     policyTypes:
