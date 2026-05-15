@@ -7,4 +7,5 @@ appVersion: "1.0.0"
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 4.6.0
+    # v5.0.1 (latest). For Kubernetes < 1.31 or Helm < 3.18, pin to 4.6.0.
+    version: 5.0.1
