@@ -11,15 +11,14 @@ Rules
 2. ``env=None`` is forbidden (implicit parent-environment inherit).
 3. ``env=os.environ`` (or ``os.environ.copy()``, ``environ``) is forbidden.
 4. ``env=<Call>`` is allowed when the callee resolves to
-   ``safe_env``, ``_safe_env.safe_env``, ``_safe_env_nohup``, or
-   ``_safe_env._safe_env_nohup``.
+   ``safe_env`` or ``_safe_env.safe_env``.
 5. ``env=<Dict literal>`` is allowed (callers that build an allowlisted
    dict inline, e.g. tests).
 6. ``env=<Name>`` is allowed when every assignment to that name in the
    enclosing function or module scope is itself an allowed source
-   (Dict literal, ``safe_env(...)`` call, or ``_safe_env_nohup(...)``
-   call). Augmented assignments (``env += ...``) or assignments from
-   any other source invalidate the name.
+   (Dict literal or ``safe_env(...)`` call). Augmented assignments
+   (``env += ...``) or assignments from any other source invalidate
+   the name.
 7. Files listed (one path per line) in ``_lint_exempt.txt`` next to this
    script are skipped.
 
@@ -60,7 +59,7 @@ SUBPROCESS_CALLS: frozenset[str] = frozenset(
 """Attribute names on the ``subprocess`` module that spawn a child."""
 
 ALLOWED_ENV_CALL_NAMES: frozenset[str] = frozenset(
-    {"safe_env", "_safe_env_nohup"}
+    {"safe_env"}
 )
 """Terminal names allowed as callees for ``env=<Call>``."""
 
@@ -247,7 +246,7 @@ def _check_call(
                 col=node.col_offset,
                 message=(
                     "subprocess call missing explicit env= kwarg; "
-                    "use safe_env(for_mcp=...) or _safe_env_nohup(...)"
+                    "use safe_env(for_mcp=...)"
                 ),
             )
         )
@@ -277,7 +276,7 @@ def _check_call(
             col=node.col_offset,
             message=(
                 "env= must be a dict literal or a call to "
-                "safe_env()/_safe_env_nohup(); got "
+                "safe_env(); got "
                 f"{type(value).__name__}"
             ),
         )

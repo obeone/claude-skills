@@ -1,10 +1,9 @@
 """Offline audio finalisation helpers for the tts-duet skill.
 
 This module centralises WAV concat + MP3 transcode so both the sync
-lane (``finalize_audio.py`` CLI) and the background lane
-(``generate_tts.py``) use the same code path. All ``subprocess``
-spawns pass an explicit ``env=safe_env(for_mcp=False)`` to satisfy the
-AC-17 lint.
+lane (``finalize_audio.py`` CLI) and ``generate_tts.py`` use the same
+code path. All ``subprocess`` spawns pass an explicit
+``env=safe_env(for_mcp=False)`` to satisfy the AC-17 lint.
 """
 
 from __future__ import annotations

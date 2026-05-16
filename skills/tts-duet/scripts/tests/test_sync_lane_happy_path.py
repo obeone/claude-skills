@@ -1,6 +1,6 @@
-"""Background-lane happy path (AC-5 + §5.5 + §6.3).
+"""Sync-lane happy path (AC-5 + §5.5 + §6.3).
 
-End-to-end run: ``generate_tts.py --background`` against the fake MCP
+End-to-end run: ``generate_tts.py --job-dir`` against the fake MCP
 on a short script. Verifies:
 
 - ``status=done`` written to ``<job_dir>/status``.
@@ -72,7 +72,7 @@ def _read_status(job_dir: Path) -> dict[str, str]:
 
 
 @pytest.fixture()
-def background_run(tmp_path: Path) -> Path:
+def job_run(tmp_path: Path) -> Path:
     _require_rewired_skill()
     job_dir = tmp_path / "job"
     job_dir.mkdir()
@@ -88,7 +88,6 @@ def background_run(tmp_path: Path) -> Path:
         str(GENERATE_TTS),
         "--script",
         str(SHORT_SCRIPT),
-        "--background",
         "--job-dir",
         str(job_dir),
         "--yes",
@@ -98,7 +97,7 @@ def background_run(tmp_path: Path) -> Path:
     )
     if proc.returncode != 0:
         pytest.skip(
-            f"background run did not exit 0 (rc={proc.returncode}); "
+            f"--job-dir run did not exit 0 (rc={proc.returncode}); "
             f"stderr={proc.stderr[-400:]}"
         )
     return job_dir
@@ -109,19 +108,19 @@ def background_run(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_status_is_done(background_run: Path) -> None:
-    status = _read_status(background_run)
+def test_status_is_done(job_run: Path) -> None:
+    status = _read_status(job_run)
     assert status.get("status") == "done", f"status={status!r}"
 
 
-def test_mcp_stderr_log_present(background_run: Path) -> None:
-    assert (background_run / "mcp-stderr.log").is_file(), (
-        "AC-5: <job_dir>/mcp-stderr.log MUST exist after any background run"
+def test_mcp_stderr_log_present(job_run: Path) -> None:
+    assert (job_run / "mcp-stderr.log").is_file(), (
+        "AC-5: <job_dir>/mcp-stderr.log MUST exist after any --job-dir run"
     )
 
 
-def test_mcp_trace_first_entry_is_meta_health(background_run: Path) -> None:
-    trace = background_run / "mcp_trace.jsonl"
+def test_mcp_trace_first_entry_is_meta_health(job_run: Path) -> None:
+    trace = job_run / "mcp_trace.jsonl"
     assert trace.is_file(), "AC-5: mcp_trace.jsonl must exist when TTS_DUET_MCP_TRACE=1"
     first_line = trace.read_text(encoding="utf-8").splitlines()[0]
     record = json.loads(first_line)
@@ -131,9 +130,9 @@ def test_mcp_trace_first_entry_is_meta_health(background_run: Path) -> None:
     )
 
 
-def test_notification_present(background_run: Path) -> None:
-    assert (background_run / "notification").is_file(), (
-        "background lane must write a notification artifact on done"
+def test_notification_present(job_run: Path) -> None:
+    assert (job_run / "notification").is_file(), (
+        "a --job-dir run must write a notification artifact on done"
     )
 
 
@@ -142,8 +141,8 @@ def test_notification_present(background_run: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_config_json_has_v1_required_fields(background_run: Path) -> None:
-    config_path = background_run / "config.json"
+def test_config_json_has_v1_required_fields(job_run: Path) -> None:
+    config_path = job_run / "config.json"
     assert config_path.is_file(), "<job_dir>/config.json missing"
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     assert cfg.get("version") == 1, f"version={cfg.get('version')!r}"
@@ -151,14 +150,14 @@ def test_config_json_has_v1_required_fields(background_run: Path) -> None:
     assert not missing, f"config.json missing required fields: {missing}"
 
 
-def test_config_json_records_mcp_version_and_command(background_run: Path) -> None:
-    cfg = json.loads((background_run / "config.json").read_text(encoding="utf-8"))
+def test_config_json_records_mcp_version_and_command(job_run: Path) -> None:
+    cfg = json.loads((job_run / "config.json").read_text(encoding="utf-8"))
     assert cfg.get("mcp_version"), "mcp_version not recorded"
     assert cfg.get("mcp_command"), "mcp_command not recorded"
 
 
-def test_config_json_chunks_done_equals_chunk_count(background_run: Path) -> None:
-    cfg = json.loads((background_run / "config.json").read_text(encoding="utf-8"))
+def test_config_json_chunks_done_equals_chunk_count(job_run: Path) -> None:
+    cfg = json.loads((job_run / "config.json").read_text(encoding="utf-8"))
     assert cfg.get("chunks_done") == cfg.get("chunk_count"), (
         f"chunks_done={cfg.get('chunks_done')} != chunk_count={cfg.get('chunk_count')}"
     )

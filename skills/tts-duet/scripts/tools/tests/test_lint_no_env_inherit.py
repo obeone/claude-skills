@@ -162,14 +162,6 @@ def test_allows_safe_env_qualified_call(tmp_path: Path) -> None:
     assert _lint(source, tmp_path) == []
 
 
-def test_allows_safe_env_nohup(tmp_path: Path) -> None:
-    source = (
-        "import subprocess\n"
-        "from ._safe_env import _safe_env_nohup\n"
-        "subprocess.run(['ls'], env=_safe_env_nohup(mcp_command=None))\n"
-    )
-    assert _lint(source, tmp_path) == []
-
 
 def test_allows_dict_literal(tmp_path: Path) -> None:
     source = (
@@ -222,7 +214,6 @@ def test_is_forbidden_env_value(expr: str, expected: bool) -> None:
     [
         ("safe_env()", True),
         ("_safe_env.safe_env(for_mcp=False)", True),
-        ("_safe_env_nohup(mcp_command=None)", True),
         ("{'PATH': '/usr/bin'}", True),
         ("None", False),
         ("os.environ", False),

@@ -277,9 +277,9 @@ class GeminiTTSMCPClient:
         :func:`resolve_mcp_command`.
     stderr_log : Path, optional
         Path to capture the MCP's stderr stream. When ``None`` (default)
-        stderr is inherited from the caller. On the background lane
-        pass ``<job_dir>/mcp-stderr.log``; on the sync lane pass
-        ``~/.cache/tts-duet/mcp-stderr.log``.
+        stderr is inherited from the caller. Pass
+        ``<job_dir>/mcp-stderr.log`` for job-dir runs or
+        ``~/.cache/tts-duet/mcp-stderr.log`` for preflight checks.
 
     Notes
     -----

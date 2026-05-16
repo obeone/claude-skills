@@ -8,8 +8,8 @@ max_output_tokens)`` trio — no ``genre``, no ``script``, no
 ``existing_notes_policy`` field crosses the contract boundary.
 
 The module exposes a single public entry point, :func:`auto_direct`,
-which the ``generate_tts.py`` background lane (and ``/tts-duet-setup``
-dry-runs) invoke when the operator opts into the director pass.
+which ``generate_tts.py`` (and ``/tts-duet-setup`` dry-runs) invoke
+when the operator opts into the director pass.
 """
 
 from __future__ import annotations

@@ -6,10 +6,6 @@ These tests pin the contract from plan §5.3:
   ``GOOGLE_API_KEY`` from the returned environment.
 - ``safe_env(for_mcp=True)`` MUST forward those keys when present in the
   parent environment so the MCP child can read them.
-- ``_safe_env_nohup(...)`` MUST forward ``TTS_DUET_MCP_COMMAND`` (so the
-  background re-exec can resolve the MCP binary) AND strip both API
-  keys regardless of the parent environment, because API-key material
-  must never cross the skill→skill fork boundary.
 
 Until worker-b lands ``scripts/lib/_safe_env.py`` the module import
 fails — we skip the entire suite with a clear pointer.
@@ -95,39 +91,8 @@ def test_safe_env_for_mcp_omits_keys_when_unset() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _safe_env_nohup
+# No-mutation invariant
 # ---------------------------------------------------------------------------
-
-
-def test_safe_env_nohup_strips_api_keys_even_when_parent_has_them(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("GEMINI_API_KEY", "sk-leak")
-    monkeypatch.setenv("GOOGLE_API_KEY", "sk-leak-2")
-    env = _safe_env._safe_env_nohup(mcp_command=None)
-    assert "GEMINI_API_KEY" not in env
-    assert "GOOGLE_API_KEY" not in env
-
-
-def test_safe_env_nohup_forwards_mcp_command_env(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("TTS_DUET_MCP_COMMAND", "uvx --from . gemini-tts-mcp")
-    env = _safe_env._safe_env_nohup(mcp_command=None)
-    assert env.get("TTS_DUET_MCP_COMMAND") == "uvx --from . gemini-tts-mcp"
-
-
-def test_safe_env_nohup_explicit_mcp_command_wins(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """If a caller passes mcp_command explicitly, it should be serialised
-    into TTS_DUET_MCP_COMMAND (the contract is documented in §5.3)."""
-    env = _safe_env._safe_env_nohup(mcp_command=["gemini-tts-mcp", "--stdio"])
-    forwarded = env.get("TTS_DUET_MCP_COMMAND")
-    assert forwarded is not None
-    # Whatever the encoding (shlex.join / json), both tokens must survive.
-    assert "gemini-tts-mcp" in forwarded
-    assert "--stdio" in forwarded
 
 
 def test_parent_environment_is_not_mutated(
@@ -135,5 +100,5 @@ def test_parent_environment_is_not_mutated(
 ) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "sk-still-here")
     _ = _safe_env.safe_env(for_mcp=False)
-    _ = _safe_env._safe_env_nohup(mcp_command=None)
+    _ = _safe_env.safe_env(for_mcp=True)
     assert os.environ["GEMINI_API_KEY"] == "sk-still-here"

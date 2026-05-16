@@ -1,4 +1,4 @@
-"""Background-lane chunk-failure test (plan §9.2 ``test_background_chunk_failure``).
+"""Sync-lane chunk-failure test (plan §9.2 ``test_chunk_failure``).
 
 Force a non-MCP chunk failure (the fake returns
 ``failure_reason=tts_chunk_failed retryable=false``) and assert:
@@ -71,7 +71,6 @@ def test_non_retryable_chunk_failure_exits_three(tmp_path: Path) -> None:
         str(GENERATE_TTS),
         "--script",
         str(LONG_SCRIPT),
-        "--background",
         "--job-dir",
         str(job_dir),
         "--yes",
@@ -107,7 +106,6 @@ def test_partial_wavs_preserved_on_failure(tmp_path: Path) -> None:
         str(GENERATE_TTS),
         "--script",
         str(LONG_SCRIPT),
-        "--background",
         "--job-dir",
         str(job_dir),
         "--yes",
