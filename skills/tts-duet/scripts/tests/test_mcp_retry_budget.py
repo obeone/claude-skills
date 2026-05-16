@@ -76,7 +76,6 @@ def _run(
         str(GENERATE_TTS),
         "--script",
         str(LONG_SCRIPT),
-        "--background",
         "--job-dir",
         str(job_dir),
         "--yes",

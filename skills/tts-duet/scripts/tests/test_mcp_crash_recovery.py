@@ -1,6 +1,6 @@
 """MCP crash-recovery integration test (AC-19, plan §6.2).
 
-Drives ``generate_tts.py --background`` against the fake MCP with
+Drives the sync ``generate_tts.py`` lane against the fake MCP with
 ``FAKE_MCP_CRASH_AFTER=2`` so the server exits non-zero after the
 second chunk response. The skill must:
 
@@ -57,7 +57,7 @@ def _read_status(job_dir: Path) -> dict[str, str]:
     return out
 
 
-def _run_background(
+def _run_job(
     *,
     job_dir: Path,
     script: Path,
@@ -78,7 +78,6 @@ def _run_background(
         str(GENERATE_TTS),
         "--script",
         str(script),
-        "--background",
         "--job-dir",
         str(job_dir),
         "--yes",
@@ -102,7 +101,7 @@ def test_respawn_succeeds_within_budget(tmp_path: Path) -> None:
     _require_rewired_skill()
     job_dir = tmp_path / "job"
     job_dir.mkdir()
-    proc = _run_background(
+    proc = _run_job(
         job_dir=job_dir,
         script=LONG_SCRIPT,
         extra_env={
@@ -132,7 +131,7 @@ def test_respawn_budget_exhaustion_exits_five(tmp_path: Path) -> None:
     _require_rewired_skill()
     job_dir = tmp_path / "job-fail"
     job_dir.mkdir()
-    proc = _run_background(
+    proc = _run_job(
         job_dir=job_dir,
         script=LONG_SCRIPT,
         extra_env={
@@ -153,22 +152,22 @@ def test_respawn_budget_exhaustion_exits_five(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC-5: <job_dir>/mcp-stderr.log exists after any background run
+# AC-5: <job_dir>/mcp-stderr.log exists after any run with --job-dir
 # ---------------------------------------------------------------------------
 
 
-def test_background_writes_mcp_stderr_log(tmp_path: Path) -> None:
+def test_run_writes_mcp_stderr_log(tmp_path: Path) -> None:
     _require_rewired_skill()
     job_dir = tmp_path / "job-stderr"
     job_dir.mkdir()
-    _run_background(
+    _run_job(
         job_dir=job_dir,
         script=SHORT_SCRIPT,
         extra_env={"TTS_DUET_MCP_BACKOFF_OVERRIDE": "0.05"},
     )
     stderr_log = job_dir / "mcp-stderr.log"
     assert stderr_log.is_file(), (
-        "AC-5 violated: background lane must write "
+        "AC-5 violated: a --job-dir run must write "
         "<job_dir>/mcp-stderr.log; nothing found."
     )
 

@@ -35,17 +35,14 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import sys
 import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import audio_io, notify as notify_mod  # noqa: E402
-from lib._safe_env import _safe_env_nohup, safe_env  # noqa: E402
 from lib.config import (  # noqa: E402
     JOB_CONFIG_VERSION,
     MCPDefaults,
@@ -153,12 +150,25 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate TTS audio via the gemini-tts-mcp MCP.",
     )
-    parser.add_argument("--script", required=True, help="Path to the script file.")
+    parser.add_argument(
+        "--script",
+        help="Path to the script file. Required unless --check-key.",
+    )
+    parser.add_argument(
+        "--check-key",
+        action="store_true",
+        help=(
+            "Preflight only: probe the gemini-tts MCP for a present, "
+            "healthy API key, then exit (0 = key OK, 1 = missing/"
+            "unreachable). Does not require --script."
+        ),
+    )
     parser.add_argument(
         "--output",
         help=(
             "Output file stem (extension added automatically). Defaults "
-            "to ``<job_dir>/final`` in background mode."
+            "to ``<job_dir>/final`` when --job-dir is set, else "
+            "``./final``."
         ),
     )
     parser.add_argument("--preset", help="Named preset from voice_pairs.yaml.")
@@ -185,7 +195,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--require-format", action="store_true")
     parser.add_argument("--style", help="Extra styling hint.")
     parser.add_argument("--max-duration", type=float)
-    parser.add_argument("--background", action="store_true")
     parser.add_argument(
         "--chunk-if-over-output-seconds",
         type=float,
@@ -202,9 +211,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=None,
         help=(
             "Director-pass backend. 'agent' delegates the rewrite to the "
-            "calling agent (incompatible with --background); 'gemini' "
-            "uses the MCP text.transform tool; 'off' skips the rewrite. "
-            "Default: from user config (gemini if unset)."
+            "calling agent; 'gemini' uses the MCP text.transform tool; "
+            "'off' skips the rewrite. Default: from user config (gemini "
+            "if unset)."
         ),
     )
     parser.add_argument(
@@ -218,17 +227,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # Job-dir + status
 # ---------------------------------------------------------------------------
-
-
-def _make_job_dir(cli_dir: Path | None) -> tuple[str, Path]:
-    """Return ``(job_id, job_dir)``, creating the directory as needed."""
-    job_id = uuid.uuid4().hex[:8]
-    if cli_dir is None:
-        base = Path.cwd() / ".tts-jobs" / job_id
-    else:
-        base = cli_dir
-    base.mkdir(parents=True, exist_ok=True)
-    return job_id, base
 
 
 def _write_status(job_dir: Path, status: str, **extra: str) -> None:
@@ -368,58 +366,6 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
-
-
-# ---------------------------------------------------------------------------
-# Background re-exec
-# ---------------------------------------------------------------------------
-
-
-def _reexec_in_background(
-    argv: list[str],
-    job_dir: Path,
-    job_id: str,
-    mcp_command: list[str],
-) -> int:
-    """Re-exec the current script without ``--background`` using ``nohup``.
-
-    Parameters
-    ----------
-    argv : list of str
-        The parent's original CLI tokens (``sys.argv[1:]``).
-    job_dir : Path
-        Destination job directory.
-    job_id : str
-        Short identifier included in the foreground status message.
-    mcp_command : list of str
-        Resolved MCP spawn command to forward via
-        ``TTS_DUET_MCP_COMMAND``.
-    """
-    new_argv = [sys.executable, str(Path(__file__).resolve())]
-    for token in argv:
-        if token == "--background":
-            continue
-        new_argv.append(token)
-    if "--job-dir" not in new_argv:
-        new_argv.extend(["--job-dir", str(job_dir)])
-
-    log_path = job_dir / "job.log"
-    nohup = shutil.which("nohup") or "nohup"
-    child_env = _safe_env_nohup(mcp_command=mcp_command)
-    with open(log_path, "ab") as log_fh:
-        proc = subprocess.Popen(  # noqa: S603 — intentional detached spawn
-            [nohup, *new_argv],
-            stdout=log_fh,
-            stderr=log_fh,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
-            env=child_env,
-        )
-    (job_dir / "pid").write_text(f"{proc.pid}\n", encoding="utf-8")
-    print(f"Background job started: id={job_id} dir={job_dir}")
-    print(f"Follow with: tail -f {log_path}")
-    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -955,8 +901,8 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
             mcp_command=mcp_command,
         )
     if director_backend == "gemini":
-        # Background-lane stderr would normally be co-located with the
-        # job dir; sync lane uses ``~/.cache/tts-duet/mcp-stderr.log``.
+        # MCP stderr is co-located with the job dir when ``--job-dir``
+        # is set; otherwise it lands in ``~/.cache/tts-duet/``.
         if args.job_dir is not None:
             director_stderr_log = args.job_dir / "mcp-stderr.log"
         else:
@@ -1027,9 +973,9 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
     chunks_dir = (args.job_dir or work_dir) / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
-    # Persist / update config.json for background runs. ``user_config``,
-    # ``mcp_defaults`` and ``mcp_command`` are resolved earlier to feed
-    # the director pass.
+    # Persist / update config.json when a ``--job-dir`` is set.
+    # ``user_config``, ``mcp_defaults`` and ``mcp_command`` are resolved
+    # earlier to feed the director pass.
     config_json_path: Path | None = None
 
     if args.job_dir is not None:
@@ -1066,8 +1012,8 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
         script.notes, args.style, args.lang
     )
 
-    # Background-lane MCP stderr co-located with job artifacts; sync
-    # lane uses ``~/.cache/tts-duet/mcp-stderr.log``.
+    # MCP stderr co-located with job artifacts when ``--job-dir`` is
+    # set; otherwise ``~/.cache/tts-duet/mcp-stderr.log``.
     if args.job_dir is not None:
         stderr_log = args.job_dir / "mcp-stderr.log"
     else:
@@ -1163,6 +1109,81 @@ def _run_pipeline(args: argparse.Namespace) -> int:  # noqa: C901 — linear pip
 
 
 # ---------------------------------------------------------------------------
+# Key preflight
+# ---------------------------------------------------------------------------
+
+
+_KEY_REMEDIATION = (
+    "ERROR: the gemini-tts MCP has no usable Gemini API key.\n"
+    "\n"
+    "The skill never reads the key itself — only the MCP child does.\n"
+    "\n"
+    "Recommended — export GEMINI_API_KEY in the shell/session that\n"
+    "launches Claude Code. This can be sourced dynamically from your\n"
+    "password/secret manager so the secret never sits in plaintext on\n"
+    "disk, e.g.:\n"
+    "\n"
+    '    export GEMINI_API_KEY="$(your-password-manager read '
+    'gemini-key)"\n'
+    "\n"
+    "Simpler fallback — set it in the user-level Claude settings\n"
+    "(stores the key in plaintext on disk; restart Claude Code after\n"
+    "editing so the env applies):\n"
+    "\n"
+    "  ~/.claude/settings.json\n"
+    "    {\n"
+    '      "env": { "GEMINI_API_KEY": "your-key-here" }\n'
+    "    }\n"
+    "\n"
+    "Do not put the key in project-level config "
+    "(.claude/settings.json or\n"
+    ".claude/settings.local.json); the key is a user-level concern.\n"
+    "\n"
+    "Then restart Claude Code (or re-launch with the env set) and\n"
+    "re-run."
+)
+
+
+def _check_key() -> int:
+    """Probe the gemini-tts MCP for a present, healthy API key.
+
+    Returns ``0`` when ``meta.health`` reports the key present and the
+    server healthy, ``1`` otherwise (with a remediation message on
+    stderr). Never inspects or reports *where* the key came from — only
+    whether the MCP can see one.
+    """
+    user_config = load_user_config()
+    mcp_command = resolve_mcp_command(
+        config=user_config.raw, env=dict(os.environ)
+    )
+    stderr_log = Path.home() / ".cache" / "tts-duet" / "mcp-stderr.log"
+    try:
+        stderr_log.parent.mkdir(parents=True, exist_ok=True)
+        stderr_log.touch(exist_ok=True)
+    except OSError:
+        stderr_log = None  # type: ignore[assignment]
+
+    try:
+        with GeminiTTSMCPClient(
+            command=mcp_command, stderr_log=stderr_log
+        ) as client:
+            health = client.health()
+    except (MCPConnectionError, MCPToolError) as exc:
+        print(_KEY_REMEDIATION, file=sys.stderr)
+        LOG.debug("meta.health probe failed: %s", exc)
+        return 1
+
+    healthy = bool(health.get("ok")) or health.get("status") == "ok"
+    has_key = bool(health.get("has_api_key"))
+    if healthy and has_key:
+        print("gemini-tts MCP reachable; Gemini API key present and healthy.")
+        return 0
+
+    print(_KEY_REMEDIATION, file=sys.stderr)
+    return 1
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -1172,43 +1193,15 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     _setup_logging()
 
-    if args.background:
-        # Reject the agent backend before allocating a job dir: we
-        # cannot detach the calling agent from a nohup child.
-        guard_user_config = load_user_config()
-        guard_backend = _resolve_director_backend(args, guard_user_config)
-        if guard_backend == "agent":
-            print(
-                "ERROR: --director agent is incompatible with --background",
-                file=sys.stderr,
-            )
-            return 2
-        job_id, job_dir = _make_job_dir(args.job_dir)
-        args.job_dir = job_dir
-        try:
-            (job_dir / "script.md").write_text(
-                Path(args.script).read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
-        except OSError as exc:
-            print(f"ERROR: could not stage script: {exc}", file=sys.stderr)
-            return 1
-        _write_status(job_dir, "pending", job_id=job_id)
+    if args.check_key:
+        return _check_key()
 
-        # When the caller supplied an explicit ``--job-dir`` we stay in
-        # the same process so they can observe the exit code directly
-        # (this is what the skill-side integration tests exercise). The
-        # nohup re-exec path is reserved for ad-hoc CLI use without a
-        # job dir, where the parent must return control immediately.
-        if args.job_dir and args.job_dir == job_dir and "--job-dir" in (
-            sys.argv if argv is None else list(argv)
-        ):
-            return _run_pipeline(args)
-
-        user_config = load_user_config()
-        mcp_command = resolve_mcp_command(config=user_config.raw, env=dict(os.environ))
-        raw_argv = sys.argv[1:] if argv is None else list(argv)
-        return _reexec_in_background(raw_argv, job_dir, job_id, mcp_command)
+    if not args.script:
+        print(
+            "ERROR: --script is required unless --check-key is given",
+            file=sys.stderr,
+        )
+        return 1
 
     return _run_pipeline(args)
 

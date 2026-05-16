@@ -286,13 +286,17 @@ def handle_text_transform(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def handle_health(arguments: dict[str, Any]) -> dict[str, Any]:
     STATE.health_calls += 1
+    key_status = os.environ.get("FAKE_MCP_HEALTH_KEY_STATUS", "ok")
     return {
         "ok": True,
         "package_version": SERVER_VERSION,
         "protocol_version": os.environ.get(
             "FAKE_MCP_HEALTH_PROTOCOL", DEFAULT_PROTOCOL_VERSION
         ),
-        "api_key_status": os.environ.get("FAKE_MCP_HEALTH_KEY_STATUS", "ok"),
+        "api_key_status": key_status,
+        # Mirror the real server's boolean: a key is present unless the
+        # status was explicitly overridden to something non-``ok``.
+        "has_api_key": key_status == "ok",
         "model_availability": {
             "gemini-2.5-flash-preview-tts": True,
             "gemini-2.5-pro-preview-tts": True,
