@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gemini-tts-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Vendored MCP server exposing Gemini TTS + text tools for the tts-duet skill."
 readme = "README.md"
 requires-python = ">=3.11"

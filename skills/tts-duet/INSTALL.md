@@ -64,7 +64,7 @@ or `.claude/settings.local.json`) — the key is a user-level concern.
 
 ```bash
 mkdir -p ~/.claude/skills
-curl -L https://github.com/obeone/claude-skills/releases/download/v3.0.0/tts-duet.skill \
+curl -L https://github.com/obeone/claude-skills/releases/download/v4.0.0/tts-duet.skill \
   -o /tmp/tts-duet.skill
 rm -rf ~/.claude/skills/tts-duet
 unzip -q /tmp/tts-duet.skill -d ~/.claude/skills/
@@ -72,7 +72,7 @@ rm /tmp/tts-duet.skill
 ```
 
 Verify install: `head -5 ~/.claude/skills/tts-duet/SKILL.md` should show
-`name: tts-duet` and a `metadata.version` of `3.0.0` or higher.
+`name: tts-duet` and a `metadata.version` of `4.0.0` or higher.
 
 Then register the MCP server (see §5) and restart Claude Code. The
 slash command `/tts-duet-setup` writes user defaults to
@@ -128,15 +128,15 @@ Locate the MCP-server registry for your CLI:
 
 After registration the following tools become available:
 
-- `gemini-tts.tts.generate_chunk` — PCM dialogue, multi-speaker.
-- `gemini-tts.tts.preview_voice` — single-voice audition.
-- `gemini-tts.tts.count_tokens` — exact token count for a script.
-- `gemini-tts.text.transform` — generic Gemini text pipe.
-- `gemini-tts.meta.health` — readiness probe.
+- `gemini-tts.tts_generate_chunk` — PCM dialogue, multi-speaker.
+- `gemini-tts.tts_preview_voice` — single-voice audition.
+- `gemini-tts.tts_count_tokens` — exact token count for a script.
+- `gemini-tts.text_transform` — generic Gemini text pipe.
+- `gemini-tts.meta_health` — readiness probe.
 
 ## 5. MCP server registration snippet
 
-The pin `@v3.0.0` is intentional. **Do not change it without a reason**
+The pin `@v4.0.0` is intentional. **Do not change it without a reason**
 — a floating `git+` ref breaks reproducibility (plan §6.4).
 
 ### JSON (Claude Code, Gemini CLI)
@@ -148,7 +148,7 @@ The pin `@v3.0.0` is intentional. **Do not change it without a reason**
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/obeone/claude-skills@v3.0.0#subdirectory=skills/tts-duet/mcp",
+        "git+https://github.com/obeone/claude-skills@v4.0.0#subdirectory=skills/tts-duet/mcp",
         "gemini-tts-mcp"
       ],
       "env": {
@@ -169,7 +169,7 @@ overwrite the file.
 command = "uvx"
 args = [
   "--from",
-  "git+https://github.com/obeone/claude-skills@v3.0.0#subdirectory=skills/tts-duet/mcp",
+  "git+https://github.com/obeone/claude-skills@v4.0.0#subdirectory=skills/tts-duet/mcp",
   "gemini-tts-mcp",
 ]
 env = { GEMINI_API_KEY = "<paste-or-use-secret-manager>" }
@@ -192,7 +192,7 @@ env = { GEMINI_API_KEY = "<paste-or-use-secret-manager>" }
 
 After restarting the host CLI, ask the agent:
 
-> "Use the `gemini-tts` MCP to call `meta.health` and report
+> "Use the `gemini-tts` MCP to call `meta_health` and report
 > `protocol_version` and `api_key_status`."
 
 A working install returns:
@@ -202,7 +202,7 @@ A working install returns:
   "ok": true,
   "protocol_version": "1",
   "api_key_status": "ok",
-  "package_version": "0.1.0",
+  "package_version": "0.2.0",
   "model_availability": {
     "gemini-2.5-flash-preview-tts": true,
     "gemini-2.5-pro-preview-tts": true

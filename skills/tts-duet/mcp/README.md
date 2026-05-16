@@ -4,7 +4,7 @@ Vendored MCP server that owns every Gemini API call used by the
 [`tts-duet`](../) skill. The skill never reads `GEMINI_API_KEY` /
 `GOOGLE_API_KEY` itself; it speaks to this server over stdio.
 
-Status: **skeleton** (v0.1.0). Only `meta.health` is wired; TTS tools land
+Status: **skeleton** (v0.2.0). Only `meta_health` is wired; TTS tools land
 in the next commit.
 
 ## Install
@@ -42,7 +42,7 @@ uv tool install ./skills/tts-duet/mcp
 ## Reusability
 
 The tool surface is TTS-domain-scoped (`tts.*` plus a generic
-`text.transform` Gemini text pipe). Any future skill needing Gemini
+`text_transform` Gemini text pipe). Any future skill needing Gemini
 access can register this same MCP — no tts-duet domain knowledge leaks
 across the contract.
 

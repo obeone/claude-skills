@@ -1,6 +1,6 @@
 """``generate_tts.py --check-key`` preflight test.
 
-``--check-key`` probes the gemini-tts MCP via ``meta.health`` and exits:
+``--check-key`` probes the gemini-tts MCP via ``meta_health`` and exits:
 
 - ``0`` when the server is healthy AND reports a key present
   (``has_api_key`` truthy). It must NOT require ``--script``.

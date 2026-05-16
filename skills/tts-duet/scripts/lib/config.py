@@ -116,7 +116,7 @@ class DirectorDefaults:
     backend : {"agent", "gemini", "off"}, optional
         Which backend to use for the director rewrite pass.
 
-        * ``"gemini"`` — call the MCP ``text.transform`` tool (default).
+        * ``"gemini"`` — call the MCP ``text_transform`` tool (default).
         * ``"agent"`` — write a handoff prompt to the job dir and stop;
           the calling agent produces the rewritten script.
         * ``"off"`` — skip the director pass entirely.
@@ -124,10 +124,10 @@ class DirectorDefaults:
         Gemini model ID for the ``gemini`` backend. Default:
         ``"gemini-2.5-flash"``.
     temperature : float, optional
-        Sampling temperature forwarded to ``text.transform``. Default:
+        Sampling temperature forwarded to ``text_transform``. Default:
         ``0.2``.
     max_output_tokens : int, optional
-        Output-token budget forwarded to ``text.transform``. Default:
+        Output-token budget forwarded to ``text_transform``. Default:
         ``8192``.
     existing_notes_policy : {"preserve", "replace"}, optional
         How to handle pre-existing Director's Notes. Default:
@@ -152,17 +152,17 @@ class AdaptationDefaults:
 
         * ``"agent"`` — the calling agent does it locally; the skill
           writes a handoff prompt and exits (default).
-        * ``"gemini"`` — call the MCP ``text.transform`` tool with an
+        * ``"gemini"`` — call the MCP ``text_transform`` tool with an
           adaptation prompt.
     model : str, optional
         Gemini model ID for the ``gemini`` backend. Default:
         ``"gemini-2.5-flash"``.
     temperature : float, optional
-        Sampling temperature forwarded to ``text.transform``. Slightly
+        Sampling temperature forwarded to ``text_transform``. Slightly
         higher than the director's 0.2 because adaptation is creative.
         Default: ``0.3``.
     max_output_tokens : int, optional
-        Output-token budget forwarded to ``text.transform``. Default:
+        Output-token budget forwarded to ``text_transform``. Default:
         ``8192``.
     """
 

@@ -2,7 +2,7 @@
 
 When `adapt_script.py` runs with `--backend agent`, the skill delegates
 the raw-text-to-script rewrite to the calling agent instead of calling
-the MCP `text.transform` tool. This consumes zero Gemini API tokens.
+the MCP `text_transform` tool. This consumes zero Gemini API tokens.
 
 The pre-pass turns raw input (article, transcript, paper, notes, …)
 into a runnable script in one of three shapes — `dialogue`, `mono`, or

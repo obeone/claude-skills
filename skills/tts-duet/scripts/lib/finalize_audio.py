@@ -38,7 +38,7 @@ def wrap_pcm_to_wav(
     Parameters
     ----------
     pcm : bytes
-        Raw PCM bytes exactly as returned by ``tts.generate_chunk``.
+        Raw PCM bytes exactly as returned by ``tts_generate_chunk``.
     out_path : Path
         Destination WAV path.
     framerate, sampwidth, channels : int, optional

@@ -355,8 +355,8 @@ class GeminiTTSMCPClient:
         return self._submit(self._session.call(tool, dict(params)))
 
     def health(self) -> dict[str, Any]:
-        """Invoke ``meta.health``."""
-        payload = self.call("meta.health", {})
+        """Invoke ``meta_health``."""
+        payload = self.call("meta_health", {})
         # Normalise the `ok` bit for callers that expect it; the real
         # server returns ``status=ok`` while older fakes return ``ok``.
         if "ok" not in payload:
@@ -373,9 +373,9 @@ class GeminiTTSMCPClient:
         system_instruction: str | None = None,
         request_timeout_s: float = 300.0,
     ) -> dict[str, Any]:
-        """Invoke ``tts.generate_chunk``."""
+        """Invoke ``tts_generate_chunk``."""
         return self.call(
-            "tts.generate_chunk",
+            "tts_generate_chunk",
             {
                 "model": model,
                 "content": content,
@@ -394,15 +394,15 @@ class GeminiTTSMCPClient:
         model: str,
         seconds_hint: float | None = None,
     ) -> dict[str, Any]:
-        """Invoke ``tts.preview_voice``."""
+        """Invoke ``tts_preview_voice``."""
         params: dict[str, Any] = {"voice": voice, "text": text, "model": model}
         if seconds_hint is not None:
             params["seconds_hint"] = seconds_hint
-        return self.call("tts.preview_voice", params)
+        return self.call("tts_preview_voice", params)
 
     def tts_count_tokens(self, *, model: str, content: str) -> dict[str, Any]:
-        """Invoke ``tts.count_tokens``."""
-        return self.call("tts.count_tokens", {"model": model, "content": content})
+        """Invoke ``tts_count_tokens``."""
+        return self.call("tts_count_tokens", {"model": model, "content": content})
 
     def text_transform(
         self,
@@ -412,9 +412,9 @@ class GeminiTTSMCPClient:
         temperature: float = 0.2,
         max_output_tokens: int = 8192,
     ) -> dict[str, Any]:
-        """Invoke ``text.transform``."""
+        """Invoke ``text_transform``."""
         return self.call(
-            "text.transform",
+            "text_transform",
             {
                 "prompt": prompt,
                 "model": model,

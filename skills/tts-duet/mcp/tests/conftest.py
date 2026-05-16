@@ -56,7 +56,7 @@ def _build_count_tokens_response(total: int = 123) -> MagicMock:
 def fake_genai(monkeypatch, tmp_path):
     """Replace ``google.genai.Client`` with a deterministic mock.
 
-    Also redirects the ``meta.health`` model cache to ``tmp_path`` so
+    Also redirects the ``meta_health`` model cache to ``tmp_path`` so
     parallel runs don't share state with the developer's home cache.
     """
 

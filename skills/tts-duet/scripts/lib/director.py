@@ -2,7 +2,7 @@
 
 Plan §5.3 + AC-9: this module is the load-bearing boundary between
 skill-domain knowledge (genres, Director's-Notes format, existing-notes
-policy) and the generic ``text.transform`` MCP tool. The MCP sees only
+policy) and the generic ``text_transform`` MCP tool. The MCP sees only
 the assembled prompt string and the standard ``(model, temperature,
 max_output_tokens)`` trio — no ``genre``, no ``script``, no
 ``existing_notes_policy`` field crosses the contract boundary.
@@ -71,7 +71,7 @@ def compose_prompt(
     existing_notes: str | None = None,
     existing_notes_policy: str = "preserve",
 ) -> str:
-    """Assemble the prompt passed to ``text.transform``.
+    """Assemble the prompt passed to ``text_transform``.
 
     The prompt embeds:
 
@@ -99,7 +99,7 @@ def compose_prompt(
     Returns
     -------
     str
-        The composed prompt, ready to ship to ``text.transform``.
+        The composed prompt, ready to ship to ``text_transform``.
     """
     lines: list[str] = [
         "You are the director of a short audio piece. Produce an "
@@ -210,7 +210,7 @@ def auto_direct(
     temperature: float = 0.2,
     max_output_tokens: int = 8192,
 ) -> DirectorResult:
-    """Run a director pass through the MCP's ``text.transform`` tool.
+    """Run a director pass through the MCP's ``text_transform`` tool.
 
     Prompt composition and all genre-specific logic happen in this
     function; the MCP receives only ``(prompt, model, temperature,
@@ -234,10 +234,10 @@ def auto_direct(
     existing_notes_policy : {"preserve", "replace"}, optional
         Policy toggle, default ``"preserve"``.
     temperature : float, optional
-        Sampling temperature forwarded to ``text.transform``. Default:
+        Sampling temperature forwarded to ``text_transform``. Default:
         ``0.2``.
     max_output_tokens : int, optional
-        Output-token budget forwarded to ``text.transform``. Default:
+        Output-token budget forwarded to ``text_transform``. Default:
         ``8192``.
 
     Returns

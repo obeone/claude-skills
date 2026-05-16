@@ -1,4 +1,4 @@
-"""TTS tools: ``tts.generate_chunk``, ``tts.preview_voice``, ``tts.count_tokens``.
+"""TTS tools: ``tts_generate_chunk``, ``tts_preview_voice``, ``tts_count_tokens``.
 
 All three call into ``google-genai`` through the shared client supplied
 by the lifespan context. PCM is always 24 kHz / 16-bit / mono — the skill
@@ -96,7 +96,7 @@ _COUNT_TOKENS_OUTPUT_SCHEMA: dict[str, Any] = {
 
 DEFINITIONS: list[types.Tool] = [
     types.Tool(
-        name="tts.generate_chunk",
+        name="tts_generate_chunk",
         description=(
             "Generate one PCM audio chunk via Gemini TTS. Returns base64-"
             "encoded raw PCM (24 kHz, 16-bit, mono). Use one or two voice "
@@ -108,17 +108,17 @@ DEFINITIONS: list[types.Tool] = [
         _meta={"anthropic/maxResultSizeChars": MAX_RESULT_SIZE_CHARS},
     ),
     types.Tool(
-        name="tts.preview_voice",
+        name="tts_preview_voice",
         description=(
             "Generate a short audio sample of a single voice for "
-            "auditioning. Same return shape as ``tts.generate_chunk``."
+            "auditioning. Same return shape as ``tts_generate_chunk``."
         ),
         inputSchema=_PREVIEW_INPUT_SCHEMA,
         outputSchema=_TTS_CHUNK_OUTPUT_SCHEMA,
         _meta={"anthropic/maxResultSizeChars": MAX_RESULT_SIZE_CHARS},
     ),
     types.Tool(
-        name="tts.count_tokens",
+        name="tts_count_tokens",
         description=(
             "Deterministic token count for a TTS prompt. No billing, no "
             "audio generation."
@@ -283,10 +283,10 @@ async def _count_tokens(arguments: dict[str, Any], app: AppContext) -> dict[str,
 
 
 async def handle(name: str, arguments: dict[str, Any], app: AppContext) -> dict[str, Any]:
-    if name == "tts.generate_chunk":
+    if name == "tts_generate_chunk":
         return await _generate_chunk(arguments, app)
-    if name == "tts.preview_voice":
+    if name == "tts_preview_voice":
         return await _preview_voice(arguments, app)
-    if name == "tts.count_tokens":
+    if name == "tts_count_tokens":
         return await _count_tokens(arguments, app)
     raise ValueError(f"tts.handle received unknown tool name: {name}")

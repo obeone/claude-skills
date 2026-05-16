@@ -2,7 +2,7 @@
   "_meta": {
     "anthropic/maxResultSizeChars": 500000
   },
-  "description": "Generate a short audio sample of a single voice for auditioning. Same return shape as ``tts.generate_chunk``.",
+  "description": "Generate a short audio sample of a single voice for auditioning. Same return shape as ``tts_generate_chunk``.",
   "inputSchema": {
     "additionalProperties": false,
     "properties": {
@@ -29,7 +29,7 @@
     ],
     "type": "object"
   },
-  "name": "tts.preview_voice",
+  "name": "tts_preview_voice",
   "outputSchema": {
     "additionalProperties": false,
     "properties": {

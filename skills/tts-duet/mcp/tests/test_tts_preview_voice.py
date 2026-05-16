@@ -1,4 +1,4 @@
-"""Unit tests for ``tts.preview_voice``."""
+"""Unit tests for ``tts_preview_voice``."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_preview_voice_returns_chunk_shape(app_context):
     result = await tts.handle(
-        "tts.preview_voice",
+        "tts_preview_voice",
         {
             "voice": "Charon",
             "text": "the quick brown fox",
@@ -31,7 +31,7 @@ async def test_preview_voice_returns_chunk_shape(app_context):
 
 async def test_preview_voice_uses_single_speaker_config(app_context):
     await tts.handle(
-        "tts.preview_voice",
+        "tts_preview_voice",
         {
             "voice": "Aoede",
             "text": "hello",
@@ -50,7 +50,7 @@ async def test_preview_voice_uses_single_speaker_config(app_context):
 
 async def test_preview_voice_missing_field_returns_bad_input(app_context):
     result = await tts.handle(
-        "tts.preview_voice",
+        "tts_preview_voice",
         {"voice": "Charon", "model": "gemini-2.5-flash-preview-tts"},
         app_context,
     )

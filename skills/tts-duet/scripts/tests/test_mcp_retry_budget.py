@@ -3,7 +3,7 @@
 Whereas ``test_mcp_crash_recovery.py`` exercises *respawn* exhaustion,
 this module exercises the *per-chunk retry* axis: the fake MCP returns
 ``{failure_reason: "tts_chunk_failed", retryable: true}`` on every
-``tts.generate_chunk`` call, and the skill must:
+``tts_generate_chunk`` call, and the skill must:
 
 1. Retry up to ``mcp.chunk_retry_max`` times against the SAME client.
 2. On exhaustion, abort with exit 5 + ``status=failed

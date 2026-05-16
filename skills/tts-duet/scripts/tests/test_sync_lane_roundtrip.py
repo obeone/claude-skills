@@ -1,7 +1,7 @@
 """Sync-lane round-trip integration test (plan §9.2).
 
 Spawns the fake MCP fixture via ``lib.mcp_client.GeminiTTSMCPClient``
-on stdio, runs ``tts.preview_voice`` for one short utterance, decodes
+on stdio, runs ``tts_preview_voice`` for one short utterance, decodes
 the returned base64 PCM, and writes a WAV via
 ``lib.audio_io.pcm_to_wav``. We assert the file is non-empty and is a
 real RIFF/WAVE container.

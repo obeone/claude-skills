@@ -2,7 +2,7 @@
 
 This module is the load-bearing boundary between skill-domain knowledge
 (shape vocabulary, language directives, target-duration hints) and the
-generic ``text.transform`` MCP tool. Like :mod:`lib.director`, the MCP
+generic ``text_transform`` MCP tool. Like :mod:`lib.director`, the MCP
 sees only the assembled prompt string and the standard
 ``(model, temperature, max_output_tokens)`` trio — no ``shape``,
 ``language`` or ``target_duration_s`` field crosses the contract
@@ -91,7 +91,7 @@ def compose_prompt(
     target_duration_s: float,
     style: str | None = None,
 ) -> str:
-    """Assemble the adaptation prompt passed to ``text.transform``.
+    """Assemble the adaptation prompt passed to ``text_transform``.
 
     The prompt embeds:
 
@@ -121,7 +121,7 @@ def compose_prompt(
     Returns
     -------
     str
-        The composed prompt, ready to ship to ``text.transform``.
+        The composed prompt, ready to ship to ``text_transform``.
     """
     word_count = _target_word_count(target_duration_s)
     duration_line = (
@@ -242,7 +242,7 @@ def auto_adapt(
     temperature: float = 0.3,
     max_output_tokens: int = 8192,
 ) -> AdaptationResult:
-    """Run an adaptation pass through the MCP's ``text.transform`` tool.
+    """Run an adaptation pass through the MCP's ``text_transform`` tool.
 
     Prompt composition and all shape-/language-specific logic happen in
     this function; the MCP receives only ``(prompt, model,
@@ -267,10 +267,10 @@ def auto_adapt(
     style : str or None, optional
         Free-form style hint.
     temperature : float, optional
-        Sampling temperature forwarded to ``text.transform``. Default:
+        Sampling temperature forwarded to ``text_transform``. Default:
         ``0.3``.
     max_output_tokens : int, optional
-        Output-token budget forwarded to ``text.transform``. Default:
+        Output-token budget forwarded to ``text_transform``. Default:
         ``8192``.
 
     Returns

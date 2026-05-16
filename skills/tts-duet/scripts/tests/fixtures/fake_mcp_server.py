@@ -12,7 +12,7 @@ Failure injection
 Environment variables let tests drive specific fault paths:
 
 ``FAKE_MCP_FAIL_AFTER``
-    Non-negative integer ``n``. The first ``n`` ``tts.generate_chunk``
+    Non-negative integer ``n``. The first ``n`` ``tts_generate_chunk``
     calls succeed; every call after returns a structured error with
     ``failure_reason="tts_chunk_failed"``. Combine with
     ``FAKE_MCP_FAIL_RETRYABLE`` to toggle the ``retryable`` bit.
@@ -21,13 +21,13 @@ Environment variables let tests drive specific fault paths:
     on injected failures.
 ``FAKE_MCP_CRASH_AFTER``
     Non-negative integer ``n``. The server exits with code 1 *after*
-    serving its ``n``-th ``tts.generate_chunk`` response, simulating a
+    serving its ``n``-th ``tts_generate_chunk`` response, simulating a
     mid-session crash for ``test_mcp_crash_recovery``.
 ``FAKE_MCP_HEALTH_PROTOCOL``
-    Override the ``protocol_version`` returned by ``meta.health``. Used
+    Override the ``protocol_version`` returned by ``meta_health``. Used
     to exercise the version-skew guard.
 ``FAKE_MCP_HEALTH_KEY_STATUS``
-    Override the ``api_key_status`` field in ``meta.health`` (e.g.
+    Override the ``api_key_status`` field in ``meta_health`` (e.g.
     ``"missing"``). Defaults to ``"ok"``.
 ``FAKE_MCP_SCHEMAS_DIR``
     Path to a directory holding ``<tool>.json`` schema files. When set,
@@ -58,11 +58,11 @@ SERVER_VERSION = "fake-0.0.0"
 DEFAULT_PROTOCOL_VERSION = "1"
 
 TOOL_NAMES: tuple[str, ...] = (
-    "tts.generate_chunk",
-    "tts.preview_voice",
-    "tts.count_tokens",
-    "text.transform",
-    "meta.health",
+    "tts_generate_chunk",
+    "tts_preview_voice",
+    "tts_count_tokens",
+    "text_transform",
+    "meta_health",
 )
 
 # 0.02 s of silence at 24 kHz 16-bit mono = 960 bytes. Large enough for
@@ -139,7 +139,7 @@ def _load_recorded_schemas() -> dict[str, dict[str, Any]]:
 def _default_input_schemas() -> dict[str, dict[str, Any]]:
     """Conservative stand-ins used when no recorded schemas are provided."""
     return {
-        "tts.generate_chunk": {
+        "tts_generate_chunk": {
             "type": "object",
             "properties": {
                 "model": {"type": "string"},
@@ -150,7 +150,7 @@ def _default_input_schemas() -> dict[str, dict[str, Any]]:
             },
             "required": ["model", "content", "voice_a"],
         },
-        "tts.preview_voice": {
+        "tts_preview_voice": {
             "type": "object",
             "properties": {
                 "voice": {"type": "string"},
@@ -159,7 +159,7 @@ def _default_input_schemas() -> dict[str, dict[str, Any]]:
             },
             "required": ["voice", "text", "model"],
         },
-        "tts.count_tokens": {
+        "tts_count_tokens": {
             "type": "object",
             "properties": {
                 "model": {"type": "string"},
@@ -167,7 +167,7 @@ def _default_input_schemas() -> dict[str, dict[str, Any]]:
             },
             "required": ["model", "content"],
         },
-        "text.transform": {
+        "text_transform": {
             "type": "object",
             "properties": {
                 "prompt": {"type": "string"},
@@ -178,7 +178,7 @@ def _default_input_schemas() -> dict[str, dict[str, Any]]:
             "required": ["prompt", "model"],
             "additionalProperties": False,
         },
-        "meta.health": {"type": "object", "properties": {}, "additionalProperties": False},
+        "meta_health": {"type": "object", "properties": {}, "additionalProperties": False},
     }
 
 
@@ -205,15 +205,15 @@ def build_server() -> Server:
 
     @server.call_tool()  # type: ignore[misc]
     async def _call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        if name == "tts.generate_chunk":
+        if name == "tts_generate_chunk":
             return handle_generate_chunk(arguments)
-        if name == "tts.preview_voice":
+        if name == "tts_preview_voice":
             return handle_preview_voice(arguments)
-        if name == "tts.count_tokens":
+        if name == "tts_count_tokens":
             return handle_count_tokens(arguments)
-        if name == "text.transform":
+        if name == "text_transform":
             return handle_text_transform(arguments)
-        if name == "meta.health":
+        if name == "meta_health":
             return handle_health(arguments)
         raise ValueError(f"Unknown tool: {name}")
 

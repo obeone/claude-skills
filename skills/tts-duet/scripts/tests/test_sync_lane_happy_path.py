@@ -6,7 +6,7 @@ on a short script. Verifies:
 - ``status=done`` written to ``<job_dir>/status``.
 - ``<job_dir>/mcp-stderr.log`` is created (AC-5).
 - ``<job_dir>/config.json`` has every required v1 field (§5.5).
-- ``<job_dir>/mcp_trace.jsonl`` records a ``meta.health`` preflight as
+- ``<job_dir>/mcp_trace.jsonl`` records a ``meta_health`` preflight as
   the first entry (AC-5).
 - ``<job_dir>/notification`` exists.
 """
@@ -125,8 +125,8 @@ def test_mcp_trace_first_entry_is_meta_health(job_run: Path) -> None:
     first_line = trace.read_text(encoding="utf-8").splitlines()[0]
     record = json.loads(first_line)
     tool = record.get("tool") or record.get("method")
-    assert tool in {"meta.health", "meta_health"}, (
-        f"AC-5: first mcp_trace entry must be meta.health, got {tool!r}"
+    assert tool == "meta_health", (
+        f"AC-5: first mcp_trace entry must be meta_health, got {tool!r}"
     )
 
 

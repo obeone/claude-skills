@@ -7,7 +7,7 @@ description: "Interactively configure tts-duet defaults and verify the gemini-tt
 
 Gather sane defaults for the `tts-duet` skill, persist them to
 `~/.config/tts-duet/config.yaml`, and probe the `gemini-tts` MCP via
-`meta.health`. Emit a copy-pasteable `~/.claude.json` registration
+`meta_health`. Emit a copy-pasteable `~/.claude.json` registration
 snippet (pinned to `@v2.4.0`) when the MCP is missing. **This command
 never writes API keys and never mutates `~/.claude.json`.**
 
@@ -32,12 +32,12 @@ Ask the user for:
   (summarisation + dialogue rewrite)** at the start of every
   `/tts-duet` call. `agent` = the calling agent does it locally
   (free, richer context). `gemini` = delegate to the MCP
-  `text.transform` tool (useful for small agents or unattended
+  `text_transform` tool (useful for small agents or unattended
   pipelines).
 - Director backend (`agent` / `gemini` / `off`). Default: `gemini`.
   Runs **after** adaptation to add Director's Notes and per-turn
   cues. `agent` delegates the rewrite to the calling agent;
-  `gemini` uses the MCP `text.transform` tool; `off` skips the
+  `gemini` uses the MCP `text_transform` tool; `off` skips the
   rewrite. When `adaptation: gemini` produced the script, prefer
   `director: off` to avoid a double rewrite.
 - Notification preference (`auto` / `silent`). Default: `auto`.
@@ -113,7 +113,7 @@ is coerced to `false` under YAML 1.1, which makes the file harder to
 read (the parser tolerates both, but the on-disk form should match what
 the user typed).
 
-## Step 3 — probe `gemini-tts` MCP via `meta.health`
+## Step 3 — probe `gemini-tts` MCP via `meta_health`
 
 Call `mcp__gemini_tts__meta_health`. If the tool is available and
 returns `status=ok`, print:
