@@ -61,8 +61,8 @@ authored output.
 
 ## Why two backends?
 
-`gemini` is the load-bearing default for unattended jobs (a background
-run still needs an enriched script). `agent` exists for two reasons:
+`gemini` is the load-bearing default for unattended and synchronous
+jobs. `agent` exists for two reasons:
 
 1. **Cost control.** A capable calling agent can produce notes for
    free, and may have richer context than the MCP transform call.

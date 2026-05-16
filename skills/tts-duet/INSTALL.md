@@ -31,11 +31,40 @@ State the detected runtime in one sentence before proceeding.
 - A valid `GEMINI_API_KEY` from <https://aistudio.google.com/app/apikey>.
 - `unzip` and `curl` (only for the Claude Code path).
 
+### Where the API key goes
+
+The skill never reads the key — only the `gemini-tts` MCP child does.
+
+**Recommended:** export `GEMINI_API_KEY` in the shell/session that
+launches the host CLI. It can be sourced dynamically from your
+password/secret manager, so the secret never sits in plaintext on
+disk:
+
+```bash
+export GEMINI_API_KEY="$(your-password-manager read gemini-key)"
+```
+
+**Simpler fallback (Claude Code):** the user-level Claude settings
+file `~/.claude/settings.json`, under a top-level `"env"` block
+(stores the key in plaintext on disk; restart Claude Code after
+editing):
+
+```json
+{
+  "env": { "GEMINI_API_KEY": "your-key-here" }
+}
+```
+
+Do not put the key in project-level config (`.claude/settings.json`
+or `.claude/settings.local.json`) — the key is a user-level concern.
+(Other MCP-aware CLIs read the key from their own MCP-server registry
+`env` block — see §5.)
+
 ## 3. Claude Code path
 
 ```bash
 mkdir -p ~/.claude/skills
-curl -L https://github.com/obeone/claude-skills/releases/download/v2.4.0/tts-duet.skill \
+curl -L https://github.com/obeone/claude-skills/releases/download/v3.0.0/tts-duet.skill \
   -o /tmp/tts-duet.skill
 rm -rf ~/.claude/skills/tts-duet
 unzip -q /tmp/tts-duet.skill -d ~/.claude/skills/
@@ -43,11 +72,47 @@ rm /tmp/tts-duet.skill
 ```
 
 Verify install: `head -5 ~/.claude/skills/tts-duet/SKILL.md` should show
-`name: tts-duet` and a `metadata.version` of `2.4.0` or higher.
+`name: tts-duet` and a `metadata.version` of `3.0.0` or higher.
 
 Then register the MCP server (see §5) and restart Claude Code. The
 slash command `/tts-duet-setup` writes user defaults to
 `~/.config/tts-duet/config.yaml`.
+
+## 3a. Claude desktop app path
+
+The Claude desktop app (macOS/Windows) runs local MCP servers, so
+`tts-duet` is fully functional there — generation included — unlike
+claude.ai web (no local subprocess → the `gemini-tts` MCP cannot run,
+the Step 0 preflight will correctly refuse).
+
+1. **Skill bundle**: install the `.skill` the same way as any desktop
+   skill — upload it from a [release](../../releases) in the app's
+   skill settings. (If this machine also runs Claude Code, the bundle
+   under `~/.claude/skills/tts-duet/` is independent of the desktop
+   app's own skill store; install in whichever surface you use.)
+2. **MCP server**: register `gemini-tts` in the desktop config, then
+   fully quit and reopen the app.
+
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+   Merge the JSON snippet from §5 into the top-level `mcpServers`
+   object of that file (never overwrite it).
+
+### Where the key goes (desktop)
+
+There is no shell `export` around a GUI app, so the recommended
+shell-env path does not apply directly. Options, in order:
+
+- **Secret-manager wrapper**: launch the desktop app from a terminal
+  under your secret manager (e.g. `op run -- open -a Claude`) so
+  `GEMINI_API_KEY` is in the app's environment; leave the MCP `env`
+  block empty. Keeps the key out of plaintext.
+- **Plaintext in the MCP `env` block** of `claude_desktop_config.json`
+  (simpler; the key sits in plaintext in that file — your call).
+
+Do **not** put the key in any project-level config. The desktop
+config file is user-level, which is the correct scope.
 
 ## 4. Codex / Gemini CLI / generic MCP path
 
@@ -71,7 +136,7 @@ After registration the following tools become available:
 
 ## 5. MCP server registration snippet
 
-The pin `@v2.4.0` is intentional. **Do not change it without a reason**
+The pin `@v3.0.0` is intentional. **Do not change it without a reason**
 — a floating `git+` ref breaks reproducibility (plan §6.4).
 
 ### JSON (Claude Code, Gemini CLI)
@@ -83,7 +148,7 @@ The pin `@v2.4.0` is intentional. **Do not change it without a reason**
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/obeone/claude-skills@v2.4.0#subdirectory=skills/tts-duet/mcp",
+        "git+https://github.com/obeone/claude-skills@v3.0.0#subdirectory=skills/tts-duet/mcp",
         "gemini-tts-mcp"
       ],
       "env": {
@@ -104,7 +169,7 @@ overwrite the file.
 command = "uvx"
 args = [
   "--from",
-  "git+https://github.com/obeone/claude-skills@v2.4.0#subdirectory=skills/tts-duet/mcp",
+  "git+https://github.com/obeone/claude-skills@v3.0.0#subdirectory=skills/tts-duet/mcp",
   "gemini-tts-mcp",
 ]
 env = { GEMINI_API_KEY = "<paste-or-use-secret-manager>" }
@@ -147,8 +212,8 @@ A working install returns:
 
 ## 7. Updating
 
-Bump the pinned tag in the registration snippet (e.g. `@v2.4.0` →
-`@v2.5.0` once the next release ships) and restart the host CLI. `uvx` re-resolves the new revision
+Bump the pinned tag in the registration snippet (e.g. `@v3.0.0` →
+`@v3.1.0` once the next release ships) and restart the host CLI. `uvx` re-resolves the new revision
 automatically. The `tts-duet.skill` bundle (Claude Code only) must be
 re-downloaded from the matching release.
 
