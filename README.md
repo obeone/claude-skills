@@ -65,6 +65,38 @@ curl -L https://github.com/obeone/claude-skills/releases/latest/download/tts-due
 
 Any automation, doc, or agent still pointing to the old name will break at the first install/refresh after v2.0.0 ships.
 
+## 🔄 Breaking Change — `tts-duet` is command-first (skill v3.0.0)
+
+Starting with skill **v3.0.0**, `tts-duet` is no longer keyword
+auto-triggered. The `SKILL.md` is now a thin manifest; the authoritative
+workflow lives in **`commands/tts-duet.md`** and is invoked explicitly
+as **`/tts-duet`** (with **`/tts-duet-setup`** for configuration). The
+`.skill` package, scripts, references, and assets are unchanged.
+
+**What changes for you:**
+
+| Before (<= v2.x) | After (>= v3.0.0) |
+|---|---|
+| Auto-triggered on "TTS"/"podcast"/"voiceover" | Explicit `/tts-duet` invocation only |
+| Workflow in `SKILL.md` | Workflow in `commands/tts-duet.md` |
+| Self-detaching `--background` nohup lane | Removed — long jobs run synchronously |
+| API key from ad-hoc env | `GEMINI_API_KEY` export (recommended) or user-level `~/.claude/settings.json` `env` block |
+
+Any automation relying on implicit triggering must call `/tts-duet`
+(or the `scripts/*.py` entry points directly) instead.
+
+**Also in v3.0.0:** the self-detaching `--background` nohup lane has
+been **removed** — `generate_tts.py` no longer forks a detached child;
+long jobs run synchronously and the calling agent backgrounds the run
+via its own mechanism if it wants detachment. The recommended Gemini
+API-key channel is a `GEMINI_API_KEY` **shell export** in the session
+that launches Claude Code (it can be sourced from a password manager,
+so the key need not sit in plaintext on disk); the simpler fallback is
+the user-level `~/.claude/settings.json` `"env"` block (restart Claude
+Code after editing). A new `generate_tts.py --check-key` flag (and a
+Step 0 preflight in `/tts-duet`) fails fast when the MCP cannot see a
+healthy key.
+
 ---
 
 ## 📦 Installation
@@ -183,7 +215,7 @@ uv run skills/automode-config/scripts/scan_project.py
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
-| [**tts-duet**](./skills/tts-duet/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS | Adaptation pre-pass (agent or MCP), shape/language defaults, director enrichment, offline cost estimate, voice audition, background jobs |
+| [**tts-duet**](./skills/tts-duet/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS — command-first, invoked via `/tts-duet` | Adaptation pre-pass (agent or MCP), shape/language defaults, director enrichment, offline cost estimate, voice audition, synchronous generation |
 | [**automode-config**](./skills/automode-config/) | Author, validate, and migrate project-level Claude Code `autoMode` blocks (4-bucket model) | `claude auto-mode critique` gate, atomic flock-protected writes, hash-gated commits, `hard_deny` round-trip, automatic swap-file when `--settings` is missing, `--repair` for stranded state |
 
 ## 🧩 Architecture

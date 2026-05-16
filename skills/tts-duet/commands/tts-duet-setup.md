@@ -36,11 +36,10 @@ Ask the user for:
   pipelines).
 - Director backend (`agent` / `gemini` / `off`). Default: `gemini`.
   Runs **after** adaptation to add Director's Notes and per-turn
-  cues. `agent` delegates the rewrite to the calling agent
-  (incompatible with background runs); `gemini` uses the MCP
-  `text.transform` tool; `off` skips the rewrite. When
-  `adaptation: gemini` produced the script, prefer `director: off`
-  to avoid a double rewrite.
+  cues. `agent` delegates the rewrite to the calling agent;
+  `gemini` uses the MCP `text.transform` tool; `off` skips the
+  rewrite. When `adaptation: gemini` produced the script, prefer
+  `director: off` to avoid a double rewrite.
 - Notification preference (`auto` / `silent`). Default: `auto`.
 
 ## Step 1bis — call-time prompts
@@ -64,8 +63,8 @@ so the user understands what they are overriding:
   interactive sessions (where local-agent adaptation is best) and
   thin orchestrator runs (where `gemini` saves their context).
 - `director` — re-pick the director backend (`agent` / `gemini` /
-  `off`) every time. Useful for users who alternate between background
-  jobs (which require `gemini` or `off`) and interactive runs.
+  `off`) every time. Useful for users who alternate between `agent`
+  (richer local context) and `gemini` (MCP transform) backends.
 - `none` — keep the legacy behaviour: defaults are used silently.
 
 Persist the chosen subset as a YAML list under the top-level
