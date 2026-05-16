@@ -24,7 +24,7 @@
     ],
     "type": "object"
   },
-  "name": "text.transform",
+  "name": "text_transform",
   "outputSchema": {
     "additionalProperties": false,
     "properties": {

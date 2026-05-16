@@ -211,7 +211,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=None,
         help=(
             "Director-pass backend. 'agent' delegates the rewrite to the "
-            "calling agent; 'gemini' uses the MCP text.transform tool; "
+            "calling agent; 'gemini' uses the MCP text_transform tool; "
             "'off' skips the rewrite. Default: from user config (gemini "
             "if unset)."
         ),
@@ -448,7 +448,7 @@ def _run_chunk_loop(
         except Exception as exc:  # noqa: BLE001
             LOG.debug("error closing MCP client: %s", exc)
 
-    # --- Preflight: spawn + meta.health -------------------------------
+    # --- Preflight: spawn + meta_health -------------------------------
     try:
         client = _open_client()
     except MCPConnectionError as exc:
@@ -456,13 +456,13 @@ def _run_chunk_loop(
         return 5, chunk_wavs, "mcp_unavailable"
 
     try:
-        health = client.call("meta.health", {})
+        health = client.call("meta_health", {})
         _append_trace(
             job_dir,
-            {"tool": "meta.health", "result": {"ok": True}, "ts": time.time()},
+            {"tool": "meta_health", "result": {"ok": True}, "ts": time.time()},
         )
     except MCPConnectionError as exc:
-        LOG.error("meta.health failed: %s", exc)
+        LOG.error("meta_health failed: %s", exc)
         _close_client(client)
         return 5, chunk_wavs, "mcp_unavailable"
 
@@ -496,11 +496,11 @@ def _run_chunk_loop(
         if client is None:
             try:
                 client = _open_client()
-                client.call("meta.health", {})
+                client.call("meta_health", {})
                 _append_trace(
                     job_dir,
                     {
-                        "tool": "meta.health",
+                        "tool": "meta_health",
                         "result": {"ok": True, "respawn": respawn_count},
                         "ts": time.time(),
                     },
@@ -528,7 +528,7 @@ def _run_chunk_loop(
             _append_trace(
                 job_dir,
                 {
-                    "tool": "tts.generate_chunk",
+                    "tool": "tts_generate_chunk",
                     "chunk": chunk_index,
                     "error": exc.failure_reason,
                     "retryable": exc.retryable,
@@ -561,7 +561,7 @@ def _run_chunk_loop(
             _append_trace(
                 job_dir,
                 {
-                    "tool": "tts.generate_chunk",
+                    "tool": "tts_generate_chunk",
                     "chunk": chunk_index,
                     "error": f"connection_lost:{exc}",
                     "ts": time.time(),
@@ -606,7 +606,7 @@ def _run_chunk_loop(
         _append_trace(
             job_dir,
             {
-                "tool": "tts.generate_chunk",
+                "tool": "tts_generate_chunk",
                 "chunk": chunk_index,
                 "result": {"bytes": len(pcm)},
                 "ts": time.time(),
@@ -1147,7 +1147,7 @@ _KEY_REMEDIATION = (
 def _check_key() -> int:
     """Probe the gemini-tts MCP for a present, healthy API key.
 
-    Returns ``0`` when ``meta.health`` reports the key present and the
+    Returns ``0`` when ``meta_health`` reports the key present and the
     server healthy, ``1`` otherwise (with a remediation message on
     stderr). Never inspects or reports *where* the key came from — only
     whether the MCP can see one.
@@ -1170,7 +1170,7 @@ def _check_key() -> int:
             health = client.health()
     except (MCPConnectionError, MCPToolError) as exc:
         print(_KEY_REMEDIATION, file=sys.stderr)
-        LOG.debug("meta.health probe failed: %s", exc)
+        LOG.debug("meta_health probe failed: %s", exc)
         return 1
 
     healthy = bool(health.get("ok")) or health.get("status") == "ok"

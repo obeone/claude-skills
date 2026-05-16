@@ -39,7 +39,7 @@
     ],
     "type": "object"
   },
-  "name": "tts.generate_chunk",
+  "name": "tts_generate_chunk",
   "outputSchema": {
     "additionalProperties": false,
     "properties": {

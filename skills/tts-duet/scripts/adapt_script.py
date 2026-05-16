@@ -16,14 +16,14 @@ runnable Speaker A / B (or mono / interview) script that downstream
 - ``agent`` — the calling agent does it locally; this script writes a
   handoff prompt + input snapshot + ``HANDOFF.md`` and exits ``0`` with
   ``status=awaiting_adaptation``.
-- ``gemini`` — the script calls the MCP ``text.transform`` tool and
+- ``gemini`` — the script calls the MCP ``text_transform`` tool and
   writes the adapted script to ``--output``.
 
 Exit codes
 ----------
 - ``0`` success.
 - ``1`` bad input (missing file, missing flag, ...).
-- ``2`` reserved (no cost gate — text.transform is cheap).
+- ``2`` reserved (no cost gate — text_transform is cheap).
 - ``3`` MCP call failed.
 - ``4`` reserved.
 """
@@ -131,7 +131,7 @@ def _build_parser(user_config: UserConfig) -> argparse.ArgumentParser:
         "--model",
         default=user_config.adaptation.model or user_config.director.model,
         help=(
-            "Gemini model ID for text.transform. Default from "
+            "Gemini model ID for text_transform. Default from "
             "adaptation.model in user config."
         ),
     )
@@ -139,7 +139,7 @@ def _build_parser(user_config: UserConfig) -> argparse.ArgumentParser:
         "--temperature",
         type=float,
         default=user_config.adaptation.temperature,
-        help="Sampling temperature for text.transform. Default: 0.3.",
+        help="Sampling temperature for text_transform. Default: 0.3.",
     )
     parser.add_argument(
         "--yes",
@@ -239,7 +239,7 @@ def _run_gemini_backend(
     user_config: UserConfig,
     raw_input: str,
 ) -> int:
-    """Call the MCP ``text.transform`` tool and write the adapted script."""
+    """Call the MCP ``text_transform`` tool and write the adapted script."""
     if args.output is None:
         print(
             "ERROR: --backend gemini requires --output",

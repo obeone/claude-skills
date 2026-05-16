@@ -2,7 +2,7 @@
 name: tts-duet
 description: "Explicit-entry skill for Gemini TTS audio. Invoked deliberately via the /tts-duet command (generation) and /tts-duet-setup (configuration); not auto-triggered. Turns text into mono or dual-voice WAV/MP3 with an adaptation pre-pass, offline cost estimate, and voice audition. Long jobs run synchronously."
 metadata:
-  version: "3.0.0"
+  version: "4.0.0"
 tools:
   - Read
   - Write

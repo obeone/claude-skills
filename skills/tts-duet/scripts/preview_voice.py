@@ -8,7 +8,7 @@
 # ///
 """Generate a short audio preview for a single voice via the MCP.
 
-Calls ``tts.preview_voice`` on the ``gemini-tts-mcp`` MCP; this script
+Calls ``tts_preview_voice`` on the ``gemini-tts-mcp`` MCP; this script
 never reads ``GEMINI_API_KEY`` / ``GOOGLE_API_KEY`` and never imports
 ``google-genai``. The MCP subprocess is responsible for the API call.
 

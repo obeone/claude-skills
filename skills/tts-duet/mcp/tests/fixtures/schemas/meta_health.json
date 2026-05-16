@@ -5,7 +5,7 @@
     "properties": {},
     "type": "object"
   },
-  "name": "meta.health",
+  "name": "meta_health",
   "outputSchema": {
     "additionalProperties": true,
     "properties": {

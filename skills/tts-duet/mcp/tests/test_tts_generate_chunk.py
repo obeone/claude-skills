@@ -1,4 +1,4 @@
-"""Unit tests for ``tts.generate_chunk``."""
+"""Unit tests for ``tts_generate_chunk``."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_returns_base64_pcm_with_format_metadata(app_context):
     result = await tts.handle(
-        "tts.generate_chunk",
+        "tts_generate_chunk",
         {
             "model": "gemini-2.5-flash-preview-tts",
             "content": "A: hi\nB: hello",
@@ -37,7 +37,7 @@ async def test_returns_base64_pcm_with_format_metadata(app_context):
 
 async def test_single_voice_path_omits_multi_speaker(app_context):
     await tts.handle(
-        "tts.generate_chunk",
+        "tts_generate_chunk",
         {
             "model": "gemini-2.5-flash-preview-tts",
             "content": "solo",
@@ -54,7 +54,7 @@ async def test_single_voice_path_omits_multi_speaker(app_context):
 
 async def test_dual_voice_path_uses_multi_speaker(app_context):
     await tts.handle(
-        "tts.generate_chunk",
+        "tts_generate_chunk",
         {
             "model": "gemini-2.5-flash-preview-tts",
             "content": "A: hi\nB: ho",
@@ -75,7 +75,7 @@ async def test_dual_voice_path_uses_multi_speaker(app_context):
 
 async def test_missing_required_field_returns_bad_input(app_context):
     result = await tts.handle(
-        "tts.generate_chunk",
+        "tts_generate_chunk",
         {"model": "gemini-2.5-flash-preview-tts", "content": "hi"},
         app_context,
     )
@@ -89,7 +89,7 @@ async def test_upstream_deprecation_maps_to_upstream_break(app_context):
     )
 
     result = await tts.handle(
-        "tts.generate_chunk",
+        "tts_generate_chunk",
         {
             "model": "gemini-2.5-flash-preview-tts",
             "content": "hi",
@@ -105,7 +105,7 @@ async def test_transient_error_is_retryable(app_context):
     app_context.client.models.generate_content.side_effect = RuntimeError("rate limited")
 
     result = await tts.handle(
-        "tts.generate_chunk",
+        "tts_generate_chunk",
         {
             "model": "gemini-2.5-flash-preview-tts",
             "content": "hi",
@@ -118,6 +118,6 @@ async def test_transient_error_is_retryable(app_context):
 
 
 async def test_tool_definition_carries_max_result_size_meta():
-    chunk_def = next(t for t in tts.DEFINITIONS if t.name == "tts.generate_chunk")
+    chunk_def = next(t for t in tts.DEFINITIONS if t.name == "tts_generate_chunk")
     meta = getattr(chunk_def, "_meta", None) or getattr(chunk_def, "meta", None)
     assert meta == {"anthropic/maxResultSizeChars": 500_000}

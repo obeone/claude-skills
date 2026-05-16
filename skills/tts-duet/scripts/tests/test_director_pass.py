@@ -4,7 +4,7 @@ These tests pin the boundary that the plan calls *load-bearing*:
 
 - ``director.py`` owns prompt composition, genre vocabulary, the
   Director's-Notes output format, and the existing-notes policy.
-- The MCP's ``text.transform`` tool only sees the assembled prompt; it
+- The MCP's ``text_transform`` tool only sees the assembled prompt; it
   never receives ``genre``, ``existing_notes_policy``, ``script``,
   ``voices``, etc.
 
@@ -79,7 +79,7 @@ def _resolve_auto_direct():
 
 
 # ---------------------------------------------------------------------------
-# AC-9: text.transform call must carry only generic fields
+# AC-9: text_transform call must carry only generic fields
 # ---------------------------------------------------------------------------
 
 
@@ -98,12 +98,12 @@ def test_director_passes_only_generic_fields_to_text_transform() -> None:
     keys = set(last)
     leaked = keys & FORBIDDEN_TEXT_TRANSFORM_KEYS
     assert not leaked, (
-        f"director leaked TTS-domain keys to text.transform: {leaked}. "
+        f"director leaked TTS-domain keys to text_transform: {leaked}. "
         "AC-9 violated — those concepts must stay inside director.py."
     )
     unexpected = keys - ALLOWED_TEXT_TRANSFORM_KEYS
     assert not unexpected, (
-        f"director passed unexpected keys to text.transform: {unexpected}"
+        f"director passed unexpected keys to text_transform: {unexpected}"
     )
 
 

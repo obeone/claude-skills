@@ -1,4 +1,4 @@
-"""Unit tests for ``text.transform`` — the generic Gemini text pipe.
+"""Unit tests for ``text_transform`` — the generic Gemini text pipe.
 
 Critical AC: the input schema must contain EXACTLY
 ``{prompt, model, temperature, max_output_tokens}`` — no TTS-domain
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.asyncio
 
 
 def _input_schema() -> dict:
-    definition = next(t for t in text_tool.DEFINITIONS if t.name == "text.transform")
+    definition = next(t for t in text_tool.DEFINITIONS if t.name == "text_transform")
     return definition.inputSchema  # type: ignore[return-value]
 
 
@@ -44,7 +44,7 @@ async def test_returns_text_and_token_counts(app_context):
     )
 
     result = await text_tool.handle(
-        "text.transform",
+        "text_transform",
         {
             "prompt": "Rewrite the following script in a cinematic tone…",
             "model": "gemini-2.5-flash",
@@ -63,7 +63,7 @@ async def test_default_temperature_and_max_tokens(app_context):
     )
 
     await text_tool.handle(
-        "text.transform",
+        "text_transform",
         {"prompt": "hi", "model": "gemini-2.5-flash"},
         app_context,
     )
@@ -75,7 +75,7 @@ async def test_default_temperature_and_max_tokens(app_context):
 
 async def test_missing_field_returns_bad_input(app_context):
     result = await text_tool.handle(
-        "text.transform",
+        "text_transform",
         {"model": "gemini-2.5-flash"},
         app_context,
     )
@@ -88,7 +88,7 @@ async def test_deprecated_model_returns_upstream_break(app_context):
     )
 
     result = await text_tool.handle(
-        "text.transform",
+        "text_transform",
         {"prompt": "hi", "model": "gemini-2.5-flash"},
         app_context,
     )
@@ -101,7 +101,7 @@ async def test_transient_failure_is_retryable_text_transform(app_context):
     )
 
     result = await text_tool.handle(
-        "text.transform",
+        "text_transform",
         {"prompt": "hi", "model": "gemini-2.5-flash"},
         app_context,
     )

@@ -1,4 +1,4 @@
-"""End-to-end ``meta.health`` round-trip against the real stdio server.
+"""End-to-end ``meta_health`` round-trip against the real stdio server.
 
 Spawns ``python -m gemini_tts_mcp`` as a subprocess and drives it with
 the official MCP Python client over stdio — matching how Claude Code
@@ -43,13 +43,13 @@ async def test_meta_health_roundtrip() -> None:
 
             tools = await session.list_tools()
             tool_names = {tool.name for tool in tools.tools}
-            assert "meta.health" in tool_names
-            assert "tts.generate_chunk" in tool_names
-            assert "tts.preview_voice" in tool_names
-            assert "tts.count_tokens" in tool_names
-            assert "text.transform" in tool_names
+            assert "meta_health" in tool_names
+            assert "tts_generate_chunk" in tool_names
+            assert "tts_preview_voice" in tool_names
+            assert "tts_count_tokens" in tool_names
+            assert "text_transform" in tool_names
 
-            result = await session.call_tool("meta.health", {})
+            result = await session.call_tool("meta_health", {})
 
     # Low-level server serialises structured output both as
     # ``structuredContent`` (post-2025-06-18 clients) and as a

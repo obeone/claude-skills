@@ -1,4 +1,4 @@
-"""``text.transform`` — generic Gemini text pipe.
+"""``text_transform`` — generic Gemini text pipe.
 
 Zero TTS-domain fields. The caller assembles the prompt; this tool only
 dispatches it to ``client.models.generate_content`` and returns the
@@ -41,7 +41,7 @@ _OUTPUT_SCHEMA: dict[str, Any] = {
 
 DEFINITIONS: list[types.Tool] = [
     types.Tool(
-        name="text.transform",
+        name="text_transform",
         description=(
             "Run a generic Gemini text completion. The caller assembles "
             "the entire prompt; this tool returns the generated text and "
@@ -66,7 +66,7 @@ def _usage_tokens(response: Any) -> tuple[int, int]:
 
 
 async def handle(name: str, arguments: dict[str, Any], app: AppContext) -> dict[str, Any]:
-    if name != "text.transform":
+    if name != "text_transform":
         raise ValueError(f"text.handle received unknown tool name: {name}")
 
     try:

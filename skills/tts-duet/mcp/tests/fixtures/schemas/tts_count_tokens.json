@@ -16,7 +16,7 @@
     ],
     "type": "object"
   },
-  "name": "tts.count_tokens",
+  "name": "tts_count_tokens",
   "outputSchema": {
     "additionalProperties": false,
     "properties": {

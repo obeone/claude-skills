@@ -8,9 +8,9 @@ JSON Schema files via ``gemini-tts-mcp --dump-schemas`` into
 
 1. Loads every schema from that directory.
 2. Asserts the tool set exactly matches the skill's expected surface
-   (``tts.generate_chunk``, ``tts.preview_voice``, ``tts.count_tokens``,
-   ``text.transform``, ``meta.health``).
-3. Asserts domain-boundary invariants (AC-9): ``text.transform`` input
+   (``tts_generate_chunk``, ``tts_preview_voice``, ``tts_count_tokens``,
+   ``text_transform``, ``meta_health``).
+3. Asserts domain-boundary invariants (AC-9): ``text_transform`` input
    schema contains EXACTLY ``{prompt, model, temperature,
    max_output_tokens}`` — no TTS-domain fields such as ``genre``,
    ``script``, ``existing_notes_policy``.
@@ -40,11 +40,11 @@ import fake_mcp_server as fms  # noqa: E402
 
 
 EXPECTED_TOOLS = frozenset({
-    "tts.generate_chunk",
-    "tts.preview_voice",
-    "tts.count_tokens",
-    "text.transform",
-    "meta.health",
+    "tts_generate_chunk",
+    "tts_preview_voice",
+    "tts_count_tokens",
+    "text_transform",
+    "meta_health",
 })
 
 
@@ -81,54 +81,41 @@ def test_every_expected_tool_has_a_schema_fixture() -> None:
 
 def test_no_unexpected_tools_in_schema_dir() -> None:
     _require_schemas_dir()
-    found = {p.stem.replace("_", ".", 1) for p in SCHEMAS_DIR.glob("*.json")}
-    # Map filename convention back: "tts_generate_chunk.json" -> "tts.generate_chunk"
-    # We stored dots-as-underscores for the FIRST dot only; normalize to a set.
-    normalized = set()
-    for p in SCHEMAS_DIR.glob("*.json"):
-        stem = p.stem
-        # First underscore separates namespace from tool name.
-        if "_" in stem:
-            ns, rest = stem.split("_", 1)
-            normalized.add(f"{ns}.{rest.replace('_', '_')}")
-        else:
-            normalized.add(stem)
-    # Accept either the dot convention or the raw filename if worker-3
-    # picks a different format; the real invariant is the cardinality.
-    extra = normalized - EXPECTED_TOOLS - found
+    # Tool names are now underscore form; filenames match directly.
+    found = {p.stem for p in SCHEMAS_DIR.glob("*.json")}
     # soft check: just assert we at least cover every expected tool
-    assert EXPECTED_TOOLS.issubset(normalized) or EXPECTED_TOOLS.issubset(found), (
-        f"schema dir does not cover expected tools. found={normalized | found}"
+    assert EXPECTED_TOOLS.issubset(found), (
+        f"schema dir does not cover expected tools. found={found}"
     )
 
 
 # ---------------------------------------------------------------------------
-# AC-9: text.transform boundary — no TTS-domain fields
+# AC-9: text_transform boundary — no TTS-domain fields
 # ---------------------------------------------------------------------------
 
 
 def test_text_transform_input_has_no_tts_domain_fields() -> None:
     _require_schemas_dir()
-    schema = _load_schema("text.transform")
+    schema = _load_schema("text_transform")
     input_schema = schema.get("inputSchema", schema)
     props = set((input_schema.get("properties") or {}).keys())
     forbidden = {"genre", "script", "existing_notes_policy", "voices", "voice_a", "voice_b"}
     leaked = props & forbidden
     assert not leaked, (
-        f"text.transform input schema leaked TTS-domain fields: {leaked}. "
+        f"text_transform input schema leaked TTS-domain fields: {leaked}. "
         "AC-9 violated — director prompt composition must live in director.py."
     )
 
 
 def test_text_transform_input_allows_only_generic_fields() -> None:
     _require_schemas_dir()
-    schema = _load_schema("text.transform")
+    schema = _load_schema("text_transform")
     input_schema = schema.get("inputSchema", schema)
     props = set((input_schema.get("properties") or {}).keys())
     allowed = {"prompt", "model", "temperature", "max_output_tokens"}
     unexpected = props - allowed
     assert not unexpected, (
-        f"text.transform advertises unexpected input fields: {unexpected}. "
+        f"text_transform advertises unexpected input fields: {unexpected}. "
         "Only {prompt, model, temperature, max_output_tokens} are permitted."
     )
 

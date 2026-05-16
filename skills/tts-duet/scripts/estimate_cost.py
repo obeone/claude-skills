@@ -9,7 +9,7 @@
 """Estimate cost and duration for a TTS script (offline by default).
 
 Default mode is **offline heuristic**. ``--with-api`` opts into an
-MCP round-trip for a precise ``tts.count_tokens`` figure; if the MCP
+MCP round-trip for a precise ``tts_count_tokens`` figure; if the MCP
 command does not resolve to a reachable binary, the script warns on
 stderr and falls back to the heuristic (exit 0).
 
@@ -58,7 +58,7 @@ def _heuristic_input_tokens(content: str) -> int:
 def _count_tokens_via_mcp(
     model_id: str, content: str, mcp_command: list[str]
 ) -> int | None:
-    """Invoke ``tts.count_tokens`` via the MCP.
+    """Invoke ``tts_count_tokens`` via the MCP.
 
     Returns
     -------

@@ -132,8 +132,8 @@ def test_default_schemas_cover_all_tools() -> None:
 
 
 def test_text_transform_default_schema_excludes_domain_fields() -> None:
-    """AC-9: text.transform input schema has no tts-domain fields."""
-    schema = fms._default_input_schemas()["text.transform"]
+    """AC-9: text_transform input schema has no tts-domain fields."""
+    schema = fms._default_input_schemas()["text_transform"]
     props = set(schema["properties"])
     assert props == {"prompt", "model", "temperature", "max_output_tokens"}
     for forbidden in ("genre", "script", "existing_notes_policy", "voices"):
@@ -152,7 +152,7 @@ def test_recorded_schemas_loaded_when_dir_set(
     monkeypatch.setenv("FAKE_MCP_SCHEMAS_DIR", str(schemas))
     importlib.reload(fms)
     loaded = fms._load_recorded_schemas()
-    assert loaded["tts.generate_chunk"] == fake_schema
+    assert loaded["tts_generate_chunk"] == fake_schema
 
 
 def test_recorded_schemas_empty_when_unset() -> None:

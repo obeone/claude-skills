@@ -95,7 +95,7 @@ Q/A) script. Two backends mirror `--director`:
   `status=awaiting_adaptation`, and exits 0. **Zero Gemini API tokens
   are spent on that pass.** The contract is described in
   `references/adaptation_handoff.md`.
-- `--backend gemini` — the script calls the MCP `text.transform` tool
+- `--backend gemini` — the script calls the MCP `text_transform` tool
   with a composed prompt (shape rule + target-duration hint at
   ~150 wpm + language directive + optional style hint + raw input).
   Default temperature is `0.3` — slightly higher than the director
@@ -110,7 +110,7 @@ adaptation already enriched the script; running the director pass on
 top would either no-op or mangle the carefully-shaped turns).
 
 Token costs only kick in for `--backend gemini`; `agent` is free.
-Input is one `text.transform` request, output is roughly the
+Input is one `text_transform` request, output is roughly the
 target-duration × 4 words ≈ size of the request. For a 5 min target,
 expect ≈ 750 input + 750 output text tokens — a fraction of a cent at
 flash pricing.
@@ -121,7 +121,7 @@ flash pricing.
 delegates the script rewrite to the calling agent. The skill writes a
 composed prompt to `<job_dir>/director-prompt.md` and stops. **Zero
 Gemini API tokens are spent on that pass.** Token costs only kick in
-when the rewritten script is fed back to `tts.generate_chunk` on the
+when the rewritten script is fed back to `tts_generate_chunk` on the
 relaunch. See `references/director_handoff.md` for the artifact
 contract.
 

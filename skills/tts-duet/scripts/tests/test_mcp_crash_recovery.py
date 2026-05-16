@@ -6,7 +6,7 @@ second chunk response. The skill must:
 
 1. Detect the broken client (``BrokenPipeError`` / non-zero exit).
 2. Sleep the configured backoff (1 s / 4 s / 16 s).
-3. Respawn the MCP, re-run ``meta.health``, retry the failing chunk.
+3. Respawn the MCP, re-run ``meta_health``, retry the failing chunk.
 4. On success: ``status=done``.
 5. If respawns exceed ``mcp.respawn_max``: exit 5 +
    ``failure_reason=mcp_crashed respawns=<M>``.

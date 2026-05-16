@@ -2,7 +2,7 @@
 
 When `generate_tts.py` runs with `--director agent`, the skill
 delegates the script-rewrite step to the calling agent instead of
-calling the MCP `text.transform` tool. This consumes zero Gemini API
+calling the MCP `text_transform` tool. This consumes zero Gemini API
 tokens.
 
 ## Files written to `<job_dir>`

@@ -4,7 +4,7 @@ Pins the wiring between ``generate_tts._run_pipeline`` and
 ``lib.director.auto_direct``: when ``--director gemini`` runs, the
 pipeline must
 
-- spawn an MCP client and call ``text.transform`` exactly once before
+- spawn an MCP client and call ``text_transform`` exactly once before
   the chunk loop,
 - replace the in-memory script with the rewritten output, and
 - stamp ``config.json`` with ``director.ran=True`` and
@@ -12,7 +12,7 @@ pipeline must
 
 We swap ``GeminiTTSMCPClient`` with a recording stub that doubles as
 both the director-pass client AND the chunk-loop client. The chunk
-loop calls ``meta.health`` then ``tts.generate_chunk``; we serve canned
+loop calls ``meta_health`` then ``tts_generate_chunk``; we serve canned
 PCM for the latter so the pipeline reaches the ``done`` status.
 """
 
@@ -57,7 +57,7 @@ class _StubClient:
     """Stand-in for :class:`GeminiTTSMCPClient`.
 
     Records every ``text_transform`` call and serves canned responses
-    for ``meta.health`` and ``tts.generate_chunk`` so the chunk loop
+    for ``meta_health`` and ``tts_generate_chunk`` so the chunk loop
     reaches success.
     """
 
@@ -78,7 +78,7 @@ class _StubClient:
         return None
 
     def call(self, tool: str, params: dict[str, Any]) -> dict[str, Any]:
-        if tool == "meta.health":
+        if tool == "meta_health":
             self.health_calls += 1
             return {
                 "ok": True,
@@ -89,7 +89,7 @@ class _StubClient:
         raise AssertionError(f"unexpected low-level call: {tool}")
 
     def health(self) -> dict[str, Any]:
-        return self.call("meta.health", {})
+        return self.call("meta_health", {})
 
     def text_transform(self, **kwargs: Any) -> dict[str, Any]:
         self.text_transform_calls.append(dict(kwargs))
@@ -155,7 +155,7 @@ def test_director_gemini_calls_text_transform_once(
         len(c.text_transform_calls) for c in _StubClient.instances
     )
     assert text_transform_count == 1, (
-        f"expected exactly one text.transform call, got {text_transform_count}"
+        f"expected exactly one text_transform call, got {text_transform_count}"
     )
 
     # The chunk loop must have produced at least one generate_chunk call.
@@ -228,7 +228,7 @@ def test_director_off_skips_text_transform(
         len(c.text_transform_calls) for c in _StubClient.instances
     )
     assert text_transform_count == 0, (
-        "off backend must not invoke text.transform"
+        "off backend must not invoke text_transform"
     )
     cfg = json.loads((job_dir / "config.json").read_text(encoding="utf-8"))
     assert cfg.get("director") is None

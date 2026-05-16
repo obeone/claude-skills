@@ -140,7 +140,7 @@ the same file:
   dialogue-writing using your own context. Free, no extra tokens,
   richer context than a one-shot transform.
 - `gemini`: invoke `scripts/adapt_script.py --backend gemini …` to
-  delegate the rewrite to the MCP `text.transform` tool. Useful when
+  delegate the rewrite to the MCP `text_transform` tool. Useful when
   the calling agent is small, when the user wants Gemini's editorial
   style end-to-end, or for unattended pipelines.
 
@@ -224,7 +224,7 @@ non-interactively instead of prompting.
 `--director` rewrites the script with explicit Director's Notes and
 per-turn cues before chunking. Three backends:
 
-- `gemini` (default) — call the MCP `text.transform`. Output saved to
+- `gemini` (default) — call the MCP `text_transform`. Output saved to
   `<job_dir>/director-output.md`. On failure, falls back to the
   original; the error lands in `config.json`'s `director.error` field.
 - `agent` — the script writes `director-prompt.md`,
@@ -317,7 +317,7 @@ template: `assets/script_template.md`.
 
 - Read or echo `GEMINI_API_KEY` / `GOOGLE_API_KEY` (only the MCP child
   reads them); never write the key value into any file.
-- Skip the Step 0 preflight, or generate when `meta.health` is
+- Skip the Step 0 preflight, or generate when `meta_health` is
   unreachable / reports no key.
 - Feed raw user prose to TTS without an adaptation pass.
 - Generate before the cost estimate is shown and approved.

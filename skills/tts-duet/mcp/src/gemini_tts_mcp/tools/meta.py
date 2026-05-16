@@ -1,4 +1,4 @@
-"""``meta.health`` — readiness probe with cached model availability."""
+"""``meta_health`` — readiness probe with cached model availability."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ _OUTPUT_SCHEMA: dict[str, Any] = {
 
 DEFINITIONS: list[types.Tool] = [
     types.Tool(
-        name="meta.health",
+        name="meta_health",
         description=(
             "Probe MCP readiness. Returns package / protocol / SDK "
             "versions and a cached per-model availability map."
@@ -128,7 +128,7 @@ def _probe_model_availability(app: AppContext) -> dict[str, bool] | None:
 
 
 async def handle(name: str, arguments: dict[str, Any], app: AppContext) -> dict[str, Any]:
-    if name != "meta.health":
+    if name != "meta_health":
         raise ValueError(f"meta.handle received unknown tool name: {name}")
 
     cache_path = _cache_path()
