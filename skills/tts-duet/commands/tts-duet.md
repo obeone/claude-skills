@@ -18,8 +18,18 @@ Long jobs run synchronously; the skill never self-detaches.
 - `interview-style dialogue from this transcript`
 
 All deep specs live next to this command in the skill bundle
-(`../references/`, `../assets/`, `../scripts/`). Paths below are
-relative to `skills/tts-duet/`.
+(`../references/`, `../assets/`, `../scripts/`).
+
+**Script path.** When this command runs as the `tts-duet` *plugin*,
+invoke bundled scripts via the content-substituted literal
+`${CLAUDE_PLUGIN_ROOT}/scripts/<name>.py` — Claude Code rewrites that
+text in the prompt you read, so it resolves to the installed plugin
+root (it is not a bash environment variable; do not rely on a shell
+`$CLAUDE_PLUGIN_ROOT` expansion). In a standalone/dev checkout the
+same instructions run repo-relative as `skills/tts-duet/scripts/<name>.py`
+(the `uv run scripts/<name>.py …` snippets below use the repo-relative
+dev form for readability; under the plugin, read `scripts/` as
+`${CLAUDE_PLUGIN_ROOT}/scripts/`).
 
 ## Out of scope
 

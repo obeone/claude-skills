@@ -8,8 +8,17 @@ description: "Interactively configure tts-duet defaults and verify the gemini-tt
 Gather sane defaults for the `tts-duet` skill, persist them to
 `~/.config/tts-duet/config.yaml`, and probe the `gemini-tts` MCP via
 `meta_health`. Emit a copy-pasteable `~/.claude.json` registration
-snippet (pinned to `@v2.4.0`) when the MCP is missing. **This command
+snippet (legacy `git+…` form) when the MCP is missing. **This command
 never writes API keys and never mutates `~/.claude.json`.**
+
+**Script path.** When this command runs as the `tts-duet` *plugin*,
+invoke bundled scripts via the content-substituted literal
+`${CLAUDE_PLUGIN_ROOT}/scripts/<name>.py` — Claude Code rewrites that
+text in the prompt you read, so it resolves to the installed plugin
+root (it is not a bash environment variable; do not rely on a shell
+`$CLAUDE_PLUGIN_ROOT` expansion). In a standalone/dev checkout the
+same instructions run repo-relative as
+`skills/tts-duet/scripts/<name>.py`.
 
 ## Step 1 — gather defaults
 
@@ -113,18 +122,38 @@ is coerced to `false` under YAML 1.1, which makes the file harder to
 read (the parser tolerates both, but the on-disk form should match what
 the user typed).
 
-## Step 3 — probe `gemini-tts` MCP via `meta_health`
+## Step 3 — warm up the resolver (plugin only)
+
+When the `tts-duet` plugin is active, prime the MCP resolver cache once
+so the first real generation is not a cold network resolve:
+
+```bash
+uvx --from gemini-tts-mcp==0.3.0 gemini-tts-mcp --protocol-version
+```
+
+This is the corrected `--from` invocation; it is a pure
+resolver-cache prime, **not** a discriminating health assertion (the
+real probe is `meta_health` in Step 4). Online-first: this is a latency
+convenience, not an offline guarantee. Skip it in a standalone/dev
+checkout where the MCP resolves from the local tree.
+
+## Step 4 — probe `gemini-tts` MCP via `meta_health`
 
 Call `mcp__gemini_tts__meta_health`. If the tool is available and
 returns `status=ok`, print:
 
-```
+```text
 gemini-tts MCP: registered (package=<X.Y.Z>, protocol=<N>)
 ```
 
 If the tool is **not** registered (the Claude Code agent has no
-`mcp__gemini_tts__*` tool), emit the snippet below and instruct the
-user to paste it into their `~/.claude.json` and reload:
+`mcp__gemini_tts__*` tool), emit the **legacy** snippet below and
+instruct the user to paste it into their `~/.claude.json` and reload.
+**This `git+…` manual-registration snippet is the legacy /
+pre-this-release path** — the recommended route is now the `tts-duet`
+plugin (`claude plugin install tts-duet@obeone-claude-skills`), which
+registers the `gemini_tts` MCP from the pinned PyPI spec with no
+`~/.claude.json` editing. See `INSTALL.md`.
 
 ```json
 {
@@ -144,14 +173,31 @@ user to paste it into their `~/.claude.json` and reload:
 
 Never attempt to edit `~/.claude.json` programmatically.
 
-## Step 4 — summary line
+## Step 5 — summary line
 
 Print one line per write target with pass/fail, e.g.:
 
-```
+```text
 config.yaml: wrote /Users/<user>/.config/tts-duet/config.yaml
 gemini-tts MCP: not registered — snippet above
 ```
+
+## Step 6 — observability report
+
+Print the resolved MCP source and the key source per consumer so the
+user can confirm the plugin path is active:
+
+- **Consumer #1** (the plugin-registered `gemini_tts` MCP) — the
+  `meta_health` payload including `package_version` (proves the pinned
+  PyPI spec `gemini-tts-mcp==0.3.0` resolved, not the legacy `git+…`
+  fallback); the key comes from the sensitive `userConfig`
+  (system keychain).
+- **Consumer #2** (`generate_tts.py`'s own MCP child, driven by
+  `/tts-duet:tts-duet`) — the exact command `resolve_mcp_command()`
+  returns (must be the pinned PyPI `--from gemini-tts-mcp==0.3.0` form,
+  not `git+…@v2.3.0`), and whether the ambient `GEMINI_API_KEY` /
+  `GOOGLE_API_KEY` is present or absent (the documented residual the
+  full generation pipeline needs).
 
 ## Notes
 
