@@ -1,0 +1,25 @@
+{
+  "name": "tts-duet",
+  "version": "4.1.0",
+  "description": "Gemini TTS audio plugin. One-step install delivers the stdio MCP tool surface (mcp__gemini_tts__*) plus the /tts-duet:tts-duet and /tts-duet:tts-duet-setup commands. The full generation pipeline additionally requires an ambient Gemini API key (documented residual).",
+  "author": { "name": "Gregoire Compagnon", "email": "obeone@obeone.org" },
+  "commands": "./commands",
+  "skills": ["./"],
+  "userConfig": {
+    "gemini_api_key": {
+      "type": "string",
+      "title": "Gemini API key",
+      "sensitive": true,
+      "description": "Google Gemini API key (aka GOOGLE_API_KEY). Used by the plugin's MCP child for TTS. Stored in your system keychain; never written to project files. NOTE: the full /tts-duet:tts-duet generation pipeline drives a second MCP child that additionally needs this key available ambiently (shell export or ~/.claude/settings.json env) — see INSTALL.md."
+    }
+  },
+  "mcpServers": {
+    "gemini_tts": {
+      "command": "uvx",
+      "args": ["--from", "gemini-tts-mcp==0.3.0", "gemini-tts-mcp"],
+      "env": {
+        "GEMINI_API_KEY": "${user_config.gemini_api_key}"
+      }
+    }
+  }
+}
