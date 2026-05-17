@@ -5,4 +5,4 @@ Kept in sync with ``pyproject.toml`` ``[project].version``. Imported by
 ``cli.py`` for ``--version``.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
