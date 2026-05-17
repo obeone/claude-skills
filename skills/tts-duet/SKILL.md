@@ -36,6 +36,17 @@ ship in this bundle:
 
 Run `/tts-duet-setup` once before the first `/tts-duet` call.
 
+**Plugin install (recommended).** This skill also ships as the
+`tts-duet` Claude Code plugin:
+`claude plugin marketplace add obeone/claude-skills` then
+`claude plugin install tts-duet@obeone-claude-skills`. One step
+delivers the `mcp__gemini_tts__*` tool surface (key entered at the
+sensitive prompt, stored in the system keychain) plus the
+`/tts-duet:tts-duet` and `/tts-duet:tts-duet-setup` commands. The full
+generation pipeline additionally needs the Gemini key available
+ambiently — see `INSTALL.md` for the plugin flow, the documented
+ambient-key residual, and the legacy `.skill` path.
+
 ## Out of scope
 
 - Voice cloning or custom voices (prebuilt voices only).
