@@ -51,12 +51,15 @@ __all__ = [
 
 LOG = logging.getLogger("tts_duet.mcp_client")
 
-#: Vendored fallback command used when nothing else resolves. Pinned to
-#: ``@v2.3.0`` per plan §6.4.
+#: Fallback command used when nothing else resolves. Pinned to the
+#: published PyPI spec ``gemini-tts-mcp==0.3.0`` (the ``--from`` form is
+#: mandatory: the bare-positional ``uvx gemini-tts-mcp==0.3.0
+#: gemini-tts-mcp`` passes the trailing token as argv to the entrypoint
+#: and fails).
 _VENDORED_FALLBACK: tuple[str, ...] = (
     "uvx",
     "--from",
-    "git+https://github.com/obeone/claude-skills@v2.3.0#subdirectory=skills/tts-duet/mcp",
+    "gemini-tts-mcp==0.3.0",
     "gemini-tts-mcp",
 )
 
@@ -97,7 +100,8 @@ def resolve_mcp_command(
     2. ``config["mcp"]["command"]`` — either ``list[str]`` or a single
        string (shlex-split).
     3. ``shutil.which('gemini-tts-mcp')`` if the binary is on ``$PATH``.
-    4. Vendored ``uvx`` fallback pinned to ``@v2.3.0``.
+    4. ``uvx`` fallback pinned to the PyPI spec
+       ``gemini-tts-mcp==0.3.0``.
 
     Parameters
     ----------
