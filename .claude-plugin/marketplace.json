@@ -1,0 +1,17 @@
+{
+  "name": "obeone-claude-skills",
+  "owner": { "name": "Gregoire Compagnon", "email": "obeone@obeone.org" },
+  "description": "obeone Claude Agent Skills Stack — bundled Claude Code plugins.",
+  "plugins": [
+    {
+      "name": "tts-duet",
+      "description": "Gemini TTS audio: PyPI-published stdio MCP (mcp__gemini_tts__*) + /tts-duet:tts-duet & /tts-duet:tts-duet-setup commands. One-step for the MCP surface; the full generation pipeline needs an ambient Gemini key (see INSTALL.md).",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/obeone/claude-skills",
+        "path": "skills/tts-duet",
+        "ref": "v2026.05.3"
+      }
+    }
+  ]
+}
