@@ -34,6 +34,8 @@ import subprocess
 
 import pytest
 
+from lib._safe_env import safe_env  # noqa: E402 — sys.path patched by conftest
+
 _mcp_client = pytest.importorskip(
     "lib.mcp_client",
     reason="lib.mcp_client not importable from scripts/ (conftest sys.path)",
@@ -125,6 +127,7 @@ def test_uvx_from_form_resolves_and_runs_protocol_version() -> None:
         text=True,
         timeout=300.0,
         check=False,
+        env=safe_env(for_mcp=False),
     )
     assert proc.returncode == 0, (
         f"--from form must exit 0, got {proc.returncode}; "
@@ -163,6 +166,7 @@ def test_uvx_bare_positional_form_exits_nonzero() -> None:
         text=True,
         timeout=300.0,
         check=False,
+        env=safe_env(for_mcp=False),
     )
     assert proc.returncode != 0, (
         "bare-positional form must exit non-zero (the trailing token is "
