@@ -1,45 +1,57 @@
 ---
 name: helm-bjw-s-chart
-description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v4 and v5). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, HorizontalPodAutoscalers, ServiceMonitors/PodMonitors, NetworkPolicies, or handling StatefulSets and multi-controller deployments."
+description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v5, with v4 legacy support). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, HorizontalPodAutoscalers, ServiceMonitors/PodMonitors, NetworkPolicies, or handling StatefulSets and multi-controller deployments."
 metadata:
-  version: "4.0.0"
+  version: "5.0.0"
 ---
 
 # Helm bjw-s Chart Generator
 
-> **🆕 v4.0.0 — common 5.x support** — Default dependency is now `common: 5.0.1` (released 2026-05-14). Charts pinned to `4.x` continue to work; see "Library version compatibility" below for the migration matrix and breaking-change notes.
+> **🆕 v5.0.0 — common 5.x is now the default** — The skill is rebased on
+> `common: 5.0.1` (released 2026-05-14). New charts target 5.x out of the
+> box, and the migration path from 4.x is captured in
+> [`references/migration-4-to-5.md`](references/migration-4-to-5.md). 4.x
+> remains supported as a legacy track for clusters that can't meet the
+> Kubernetes 1.31 / Helm 3.18 prerequisites.
 >
-> **🔄 Renamed in v3.0.0** — This skill was previously published as `helm-chart-generator`. If an agent, automation, or documentation still references the old name (`helm-chart-generator`, `helm-chart-generator.skill`, `skills/helm-chart-generator/`), update it to `helm-bjw-s-chart`. The old asset URL will 404 from v3.0.0 onward.
+> **🔄 Renamed in v3.0.0** — This skill was previously published as
+> `helm-chart-generator`. Update any agent, automation, or documentation
+> that still references the old name.
 
-Generate production-ready Helm charts using the bjw-s-labs common library (app-template v4 and v5).
+Generate production-ready Helm charts using the bjw-s-labs common library
+(app-template v5, with v4 legacy support).
 
-## Library version compatibility
+## Library version matrix
 
-| common version | Kubernetes | Helm | Status                                  |
-| :------------- | :--------- | :--- | :-------------------------------------- |
-| `5.0.1`        | `>= 1.31`  | `>= 3.18` | **Default** — latest, recommended  |
-| `4.6.0`        | `>= 1.25`  | `>= 3.14` | Supported — use on older clusters  |
+| common  | Kubernetes | Helm      | Status                                              |
+| :------ | :--------- | :-------- | :-------------------------------------------------- |
+| `5.0.1` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
+| `4.6.2` | `>= 1.25`  | `>= 3.14` | Legacy — pin when the cluster can't meet 5.x reqs   |
 
-The skill is **backward-compatible**: every pattern documented here works on
-both `4.x` and `5.x`. New 5.x-only features (HorizontalPodAutoscaler,
-PodMonitor, generic ephemeral volumes, container/pod `resizePolicy`,
-NetworkPolicy single-controller auto-detection) are flagged with
-**`(common ≥ 5.0)`** so agents targeting `4.x` can skip them.
+Everything documented here works on **common 5.x** by default. When a
+pattern is **not available on 4.x** it's tagged **`(5.x only)`** so
+agents pinned to the legacy track can skip it. See
+[`references/migration-4-to-5.md`](references/migration-4-to-5.md) for
+the full 4 → 5 upgrade procedure.
 
-### Breaking changes when migrating 4.x → 5.x
+## Migration 4.x → 5.x at a glance
 
-1. **`automountServiceAccountToken` now defaults to `false`** (was `true`).
-   Set it back to `true` per-pod if your workload reads the token.
-2. **A default unprivileged ServiceAccount is created**. Opt out with
-   `global.createDefaultServiceAccount: false` if you reference an
-   externally-managed ServiceAccount.
-3. **ServiceMonitor / PodMonitor `jobLabel`** now defaults to
-   `app.kubernetes.io/name`. Override if your Prometheus rules depend on
-   the old default.
-4. **`rawResources`** schema restructured — manifest content moved out of
-   `spec:` into a manifest wrapper key. Only relevant if you used
-   `rawResources` (rare).
-5. **Minimum Kubernetes 1.31** and **Helm 3.18** required.
+Five things to know — full details in
+[`references/migration-4-to-5.md`](references/migration-4-to-5.md):
+
+1. **`automountServiceAccountToken: false`** is now the default. Flip it
+   back to `true` per-pod if the workload needs to call the Kubernetes
+   API.
+2. **A default unprivileged ServiceAccount is created** for every release.
+   Opt out with `global.createDefaultServiceAccount: false` when you
+   reference an externally-managed SA.
+3. **`rawResources` was restructured** — manifest content moved out of
+   `spec:` into a `manifest:` wrapper, and labels/annotations now live
+   under `metadata:`. Only relevant if you use `rawResources` (rare).
+4. **ServiceMonitor / PodMonitor `jobLabel`** defaults to
+   `app.kubernetes.io/name`. Override if your Prometheus rules depended on
+   the old `metadata.name` default.
+5. **Minimums bumped**: Kubernetes **≥ 1.31**, Helm **≥ 3.18**.
 
 ## Quick Start Workflow
 
@@ -93,8 +105,7 @@ appVersion: "<app version>"
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 5.0.1  # Latest stable (needs K8s >= 1.31 / Helm >= 3.18)
-    # Pin to 4.6.0 for clusters that don't meet the 5.x prerequisites.
+    version: 5.0.1  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
 ```
 
 ### templates/common.yaml (Always the same)
@@ -118,6 +129,8 @@ Follow this order for clarity:
 ```yaml
 # 1. Default Pod options (optional)
 defaultPodOptions:
+  # 5.x default is false; set to true only if the pod calls the K8s API.
+  automountServiceAccountToken: false
   securityContext: {}
   annotations: {}
 
@@ -146,7 +159,7 @@ ingress:
 persistence:
   config:
     type: persistentVolumeClaim
-    # or: emptyDir, configMap, secret, nfs, hostPath
+    # or: emptyDir, configMap, secret, nfs, hostPath, ephemeral
 
 # 6. ConfigMaps/Secrets (optional)
 configMaps: {}
@@ -192,8 +205,8 @@ controllers:
       main:
         image:
           repository: myapp
-          tag: latest
-      
+          tag: "1.0.0"
+
       sidecar:
         dependsOn: main
         image:
@@ -201,7 +214,7 @@ controllers:
           tag: "1.0.0"
 ```
 
-See `references/patterns.md` for more examples:
+See [`references/patterns.md`](references/patterns.md) for more examples:
 
 - Multi-controller setups
 - Init containers
@@ -210,14 +223,15 @@ See `references/patterns.md` for more examples:
 - Shared volumes between containers
 - Private registries with `imagePullSecrets`
 - StatefulSets with headless service
-- HorizontalPodAutoscaler **(common ≥ 5.0)**
-- PodMonitor (scrape pods without a Service) **(common ≥ 5.0)**
-- Generic ephemeral volumes **(common ≥ 5.0)**
+- HorizontalPodAutoscaler **(5.x only)**
+- PodMonitor (scrape pods without a Service) **(5.x only)**
+- Generic ephemeral volumes **(5.x only)**
+- NetworkPolicy with single-controller auto-targeting **(5.x only)**
 
-## What's new in common 5.x
+## 5.x-only features
 
-These options are **only** available when the chart depends on
-`common >= 5.0.0`. They are silently ignored by `4.x`.
+The patterns below require `common >= 5.0.0`. They are silently ignored
+or rejected on 4.x.
 
 ```yaml
 # 1. HorizontalPodAutoscaler tied to a controller
@@ -256,23 +270,29 @@ persistence:
       - path: /scratch
 
 # 4. Container / Pod resizePolicy (in-place vertical scaling)
-#    container: Kubernetes >= 1.35   |   pod: Kubernetes >= 1.36
+#    container resizePolicy: Kubernetes >= 1.35
+#    pod resizePolicy:       Kubernetes >= 1.36
 controllers:
   main:
     pod:
-      resizePolicy: PreferNoRestart   # (k8s >= 1.36)
+      resizePolicy: PreferNoRestart   # k8s >= 1.36
     containers:
       main:
-        resizePolicy:                 # (k8s >= 1.35)
+        resizePolicy:                 # k8s >= 1.35
           - resourceName: cpu
             restartPolicy: NotRequired
           - resourceName: memory
             restartPolicy: RestartContainer
-```
 
-NetworkPolicies also gained an ergonomic improvement: when exactly one
-controller is defined and you omit both `controller` and `podSelector`,
-the policy automatically targets that controller.
+# 5. NetworkPolicy auto-targets the only controller when neither
+#    `controller` nor `podSelector` is given. `controller` and
+#    `podSelector` are now mutually exclusive.
+networkpolicies:
+  default-deny:
+    enabled: true
+    policyTypes:
+      - Egress
+```
 
 ## Best Practices
 
@@ -292,7 +312,9 @@ the policy automatically targets that controller.
 
 **Security:**
 
-- Set `automountServiceAccountToken: false` unless needed
+- Keep `automountServiceAccountToken: false` (5.x default) unless the
+  workload calls the K8s API — and even then, pair it with an explicit
+  ServiceAccount + RBAC, not the auto-created default
 - Configure proper `securityContext`
 - Use secrets for sensitive data
 - Use `imagePullSecrets` for private registries (see `references/patterns.md`)
@@ -302,8 +324,10 @@ the policy automatically targets that controller.
 - Use `globalMounts` for simple cases
 - Use `advancedMounts` for complex multi-container scenarios
 - Specify `existingClaim` for pre-created PVCs
+- Use `type: ephemeral` for scratch space tied to the pod lifecycle (5.x only)
 
-See `references/best-practices.md` for comprehensive guidelines.
+See [`references/best-practices.md`](references/best-practices.md) for
+comprehensive guidelines.
 
 ## Validation
 
@@ -327,6 +351,11 @@ helm template . --debug
 helm install --dry-run --debug my-release .
 ```
 
+The validator warns when the chart still pins `common 4.x`, when
+`rawResources` uses the legacy `spec:` shape (removed in 5.x), or when
+an external ServiceAccount is referenced without
+`global.createDefaultServiceAccount: false`.
+
 ## Pre-Deploy Checklist
 
 Before deploying to a cluster, verify:
@@ -336,6 +365,8 @@ Before deploying to a cluster, verify:
 - [ ] Health probes configured (liveness + readiness minimum)
 - [ ] `securityContext` set: non-root, `readOnlyRootFilesystem`, drop ALL capabilities
 - [ ] `automountServiceAccountToken: false` unless explicitly needed
+- [ ] If using an external ServiceAccount, `global.createDefaultServiceAccount: false` is set
+- [ ] If `rawResources` is in play, manifest uses the 5.x `manifest:` wrapper (not legacy `spec:`)
 - [ ] Secrets reference external sources, not hardcoded values
 - [ ] `helm dependency update` run and `Chart.lock` committed
 - [ ] `helm lint` passes with no errors
@@ -346,10 +377,13 @@ Before deploying to a cluster, verify:
 **Mounts not working**: Check `globalMounts` vs `advancedMounts` usage
 **Names too long**: Use `nameOverride` or `fullnameOverride` in global settings
 **Controller not starting**: Check `dependsOn` order for init/sidecar containers
+**Unexpected ServiceAccount appears (5.x)**: Set `global.createDefaultServiceAccount: false` or define your own SA
+**Pod can't talk to the K8s API (5.x)**: Set `automountServiceAccountToken: true` on the pod AND grant RBAC
 
 ## References
 
-- `references/patterns.md` - Common deployment patterns
-- `references/best-practices.md` - Kubernetes/Helm best practices
-- `references/values-schema.md` - Complete values.yaml reference
-- `assets/templates/` - Base templates for quick start
+- [`references/migration-4-to-5.md`](references/migration-4-to-5.md) - Full 4 → 5 upgrade procedure
+- [`references/patterns.md`](references/patterns.md) - Common deployment patterns
+- [`references/best-practices.md`](references/best-practices.md) - Kubernetes/Helm best practices
+- [`references/values-schema.md`](references/values-schema.md) - Complete values.yaml reference
+- [`assets/templates/`](assets/templates/) - Base templates for quick start
