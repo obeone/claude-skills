@@ -1,9 +1,10 @@
 # Values Schema Quick Reference
 
-Quick reference for common values.yaml configuration options in bjw-s common library v4+ (covers v4.x and v5.x).
+Quick reference for common values.yaml configuration options in bjw-s common library v5.x (with v4.x legacy notes).
 
-> Fields marked **`(common ≥ 5.0)`** require the 5.x chart and are silently
-> ignored on 4.x. Everything else is shared by both branches.
+> Default target is **common 5.x**. Fields marked **`(5.x only)`** are
+> unavailable on the legacy 4.x track. Everything else is shared by
+> both branches. See `migration-4-to-5.md` for breaking changes.
 
 ## Controllers
 
@@ -24,7 +25,7 @@ controllers:
       annotations: {}
       labels: {}
       # resizePolicy — pod-level in-place vertical scaling
-      # (common ≥ 5.0, K8s ≥ 1.36)
+      # (5.x only, K8s ≥ 1.36)
       resizePolicy: PreferNoRestart        # PreferNoRestart | RestartContainer
       # ... other pod options
     
@@ -54,7 +55,7 @@ controllers:
         
         securityContext: {}
 
-        # resizePolicy — in-place vertical scaling (common ≥ 5.0, K8s ≥ 1.35)
+        # resizePolicy — in-place vertical scaling (5.x only, K8s ≥ 1.35)
         resizePolicy:
           - resourceName: cpu
             restartPolicy: NotRequired      # NotRequired or RestartContainer
@@ -181,12 +182,12 @@ persistence:
             subPath: ""
 ```
 
-### Ephemeral (generic ephemeral volume) — common ≥ 5.0
+### Ephemeral (generic ephemeral volume) — 5.x only
 
 ```yaml
 persistence:
   <identifier>:
-    type: ephemeral                  # (common ≥ 5.0)
+    type: ephemeral                  # (5.x only)
     accessMode: ReadWriteOnce
     size: 1Gi
     storageClass: ""                 # Empty for default
@@ -301,7 +302,7 @@ controllers:
       name: <serviceaccount-name>
 ```
 
-> **(common ≥ 5.0)** — A default unprivileged ServiceAccount is created
+> **(5.x only)** — A default unprivileged ServiceAccount is created
 > automatically. Disable when you bring your own:
 >
 > ```yaml
@@ -361,7 +362,7 @@ serviceMonitor:
     annotations: {}
     labels: {}
     serviceName: '{{ include "bjw-s.common.lib.chart.names.fullname" $ }}'
-    jobLabel: app.kubernetes.io/name # (common ≥ 5.0 default — was unset)
+    jobLabel: app.kubernetes.io/name # (5.x only default — was unset)
 
     endpoints:
       - port: metrics
@@ -370,7 +371,7 @@ serviceMonitor:
         scrapeTimeout: 10s
 ```
 
-## PodMonitor (Prometheus) — common ≥ 5.0
+## PodMonitor (Prometheus) — 5.x only
 
 Scrape pods directly without needing a Service.
 
@@ -390,7 +391,7 @@ podMonitor:
         scrapeTimeout: 10s
 ```
 
-## HorizontalPodAutoscaler — common ≥ 5.0
+## HorizontalPodAutoscaler — 5.x only
 
 ```yaml
 horizontalPodAutoscaler:
@@ -601,13 +602,36 @@ service:
       service-specific: annotation
 ```
 
+## rawResources
+
+Ship arbitrary Kubernetes manifests alongside the chart-managed
+resources. **5.x requires the `manifest:` wrapper** — the legacy 4.x
+top-level shape is not accepted.
+
+```yaml
+rawResources:
+  <identifier>:
+    enabled: true
+    manifest:
+      apiVersion: <group>/<version>
+      kind: <Kind>
+      metadata:
+        labels: {}                   # Merged with chart-managed labels
+        annotations: {}              # Merged with chart-managed annotations
+        # metadata.name is ignored — library derives the name
+      # Everything else from the K8s schema goes here:
+      # - spec: ...                  # For kinds that have a spec
+      # - data: ...                  # For ConfigMaps
+      # - rules: ...                 # For webhook configs, RBAC, etc.
+```
+
 ## Network Policies
 
 ```yaml
 networkpolicies:
   <identifier>:
     enabled: true
-    # (common ≥ 5.0) If you omit both `controller` and `podSelector`
+    # (5.x only) If you omit both `controller` and `podSelector`
     # and exactly one controller exists, it is auto-targeted.
     controller: <controller-id>      # Which controller to target
     

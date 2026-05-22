@@ -2,8 +2,10 @@
 
 Proven patterns for common Kubernetes deployment scenarios using bjw-s common library.
 
-> All patterns work on **common 4.x and 5.x** unless tagged
-> **`(common ≥ 5.0)`**. See `SKILL.md` for the version matrix.
+> Default target is **common 5.x**. Patterns marked **`(5.x only)`**
+> are unavailable on the legacy 4.x track. Everything else works on
+> both. See `SKILL.md` for the version matrix and
+> `migration-4-to-5.md` for the upgrade procedure.
 
 ## Single Container App
 
@@ -619,7 +621,7 @@ persistence:
             subPath: feature.yaml
 ```
 
-## HorizontalPodAutoscaler **(common ≥ 5.0)**
+## HorizontalPodAutoscaler **(5.x only)**
 
 Autoscale a stateless workload on CPU + memory pressure. Leave
 `replicas: null` on the controller so the HPA owns the replica count.
@@ -664,7 +666,7 @@ horizontalPodAutoscaler:
         stabilizationWindowSeconds: 300
 ```
 
-## PodMonitor (Prometheus, no Service required) **(common ≥ 5.0)**
+## PodMonitor (Prometheus, no Service required) **(5.x only)**
 
 When the workload exposes metrics but has no `Service` (e.g. CronJobs,
 exporters that should be scraped per-pod):
@@ -690,7 +692,7 @@ podMonitor:
         interval: 30s
 ```
 
-## Generic Ephemeral Volume **(common ≥ 5.0)**
+## Generic Ephemeral Volume **(5.x only)**
 
 A throwaway PVC scoped to the pod lifecycle — useful for scratch space
 on dynamic provisioners without committing to a long-lived PVC:
@@ -706,7 +708,46 @@ persistence:
       - path: /scratch
 ```
 
-## NetworkPolicy with single-controller auto-detection **(common ≥ 5.0)**
+## rawResources with the 5.x manifest wrapper **(5.x only)**
+
+Use `rawResources` to ship an arbitrary Kubernetes manifest alongside
+the chart-managed resources. 5.x requires the `manifest:` wrapper and
+moves labels/annotations under `metadata:`:
+
+```yaml
+rawResources:
+  webhook:
+    enabled: true
+    manifest:
+      apiVersion: admissionregistration.k8s.io/v1
+      kind: ValidatingWebhookConfiguration
+      metadata:
+        labels:
+          app: my-app
+        annotations:
+          description: "My webhook"
+      rules:
+        - apiGroups: [""]
+          apiVersions: ["v1"]
+          operations: ["CREATE"]
+          resources: ["pods"]
+          scope: "Namespaced"
+```
+
+Notes:
+
+- `metadata.labels` / `metadata.annotations` are merged with the
+  chart-managed labels/annotations.
+- `metadata.name` is ignored — the library derives the name from its
+  naming scheme.
+- For resources with a `spec` field (Deployment, Service, …) keep
+  `spec:` underneath `manifest:`.
+
+The 4.x shape (manifest fields at top level, optional `spec:`
+indirection) is **not accepted** in 5.x. See
+[`migration-4-to-5.md`](migration-4-to-5.md) for the conversion.
+
+## NetworkPolicy with single-controller auto-detection **(5.x only)**
 
 When the chart only defines one controller, the policy is auto-targeted —
 no need to repeat `controller:` or `podSelector:`:
