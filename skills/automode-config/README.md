@@ -55,7 +55,24 @@ single command instead of five careful manual steps.
 
 ## Install
 
-### From a release bundle
+### Recommended — `skills` CLI
+
+The [`skills`](https://skills.sh/) CLI resolves the repo and drops the
+bundle into the right agent directory. Run via `npx` — no global Node
+install required.
+
+```bash
+# User-global (works in every project)
+npx skills add obeone/claude-skills -g --skill automode-config -y
+
+# Project-scoped (./.claude/skills)
+npx skills add obeone/claude-skills --skill automode-config -y
+```
+
+Update later with `npx skills update automode-config`, remove with
+`npx skills remove automode-config`. Full options: `npx skills -h`.
+
+### From a release bundle (fallback)
 
 ```bash
 mkdir -p ~/.claude/skills

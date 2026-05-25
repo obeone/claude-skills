@@ -28,11 +28,10 @@ Starting with release **v3.0.0**, the skill formerly known as **`helm-chart-gene
 
 ```bash
 # 1. Remove the old skill
-rm -rf ~/.claude/skills/helm-chart-generator
+npx skills remove helm-chart-generator -g -y
 
 # 2. Install the new one (see Installation section below)
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+npx skills add obeone/claude-skills -g --skill helm-bjw-s-chart -y
 ```
 
 Any automation, doc, or agent still pointing to the old URL or name will break at the first install/refresh after v3.0.0 ships.
@@ -41,39 +40,31 @@ Any automation, doc, or agent still pointing to the old URL or name will break a
 
 ## 📦 Installation
 
-### Claude Code (CLI)
+### Recommended — `skills` CLI
+
+The [`skills`](https://skills.sh/) CLI resolves any GitHub repo and wires
+the bundles into the right agent directories (Claude Code, Cursor, …).
+Run it via `npx` — no global Node install required.
 
 ```bash
-# Personal skills (available in all projects)
-mkdir -p ~/.claude/skills
+# Interactive — pick scope and agents
+npx skills add obeone/claude-skills
 
-# Install dockerfile-best-practices
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+# All skills, user-global (~/.claude/skills)
+npx skills add obeone/claude-skills -g --all
 
-# Install helm-bjw-s-chart
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+# All skills, current project (./.claude/skills)
+npx skills add obeone/claude-skills --all
 
-# Install automode-config
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/automode-config.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+# A single skill (project-scoped; add -g for global)
+npx skills add obeone/claude-skills --skill dockerfile-best-practices -y
+
+# List available skills in the repo without installing
+npx skills add obeone/claude-skills -l
 ```
 
-For project-specific skills, use `.claude/skills` instead of `~/.claude/skills`:
-
-```bash
-mkdir -p .claude/skills
-
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
-
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
-
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/automode-config.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
-```
+Update later with `npx skills update`, remove with `npx skills remove`,
+inspect with `npx skills list`. Full options: `npx skills -h`.
 
 ### Claude.ai (Web)
 
@@ -81,14 +72,25 @@ curl -L https://github.com/obeone/claude-skills/releases/latest/download/automod
 2. Go to **Settings** → **Skills**
 3. Click **Upload skill** and select each `.skill` file
 
-### From Source
+### Manual — release bundle (fallback)
 
-Clone the repository to use skills directly:
+If you can't run Node on the host:
+
+```bash
+mkdir -p ~/.claude/skills
+
+for skill in dockerfile-best-practices helm-bjw-s-chart automode-config; do
+  curl -L "https://github.com/obeone/claude-skills/releases/latest/download/${skill}.skill" \
+    -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+done
+```
+
+Swap `~/.claude/skills/` for `.claude/skills/` for a project-scoped install.
+
+### From Source
 
 ```bash
 git clone https://github.com/obeone/claude-skills.git
-
-# Copy all skills to your skills directory
 cp -r claude-skills/skills/dockerfile-best-practices ~/.claude/skills/
 cp -r claude-skills/skills/helm-bjw-s-chart ~/.claude/skills/
 cp -r claude-skills/skills/automode-config ~/.claude/skills/
@@ -96,11 +98,9 @@ cp -r claude-skills/skills/automode-config ~/.claude/skills/
 
 ### Other Platforms
 
-| Platform | Installation |
-|----------|--------------|
-| [Roo Code](https://roo.ai) | Add to `.roo/skills/` directory |
-| [Cline](https://github.com/cline/cline) | Add to `.cline/skills/` directory |
-| Generic | Extract `.skill` to your agent's skills directory |
+The `skills` CLI auto-detects supported agents; pass `--agent <name>` to
+target a specific one (e.g. `--agent cursor`). For unsupported agents,
+extract the `.skill` bundle into the agent's skills directory.
 
 > **How it works**: Skills are packaged using [Skill Pack](https://github.com/marketplace/actions/skill-pack) on every release. The action creates `.skill` bundles (ZIP archives) and uploads them to GitHub releases.
 
