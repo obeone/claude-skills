@@ -39,66 +39,6 @@ Any automation, doc, or agent still pointing to the old URL or name will break a
 
 ---
 
-## 🔄 Breaking Change — `gemini-tts-script` renamed to `tts-duet` (v2.0.0)
-
-Starting with release **v2.0.0**, the skill formerly known as **`gemini-tts-script`** is now called **`tts-duet`** to better reflect its dual-voice and MCP-based architecture.
-
-**What changes for you:**
-
-| Before (<= v1.x) | After (>= v2.0.0) |
-|---|---|
-| Skill directory: `skills/gemini-tts-script/` | `skills/tts-duet/` |
-| Release asset: `gemini-tts-script.skill` | `tts-duet.skill` |
-| Install path: `~/.claude/skills/gemini-tts-script/` | `~/.claude/skills/tts-duet/` |
-| Agent/skill reference: `gemini-tts-script` | `tts-duet` |
-
-**Migration:**
-
-```bash
-# 1. Remove the old skill
-rm -rf ~/.claude/skills/gemini-tts-script
-
-# 2. Install the new one (see Installation section below)
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/tts-duet.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
-```
-
-Any automation, doc, or agent still pointing to the old name will break at the first install/refresh after v2.0.0 ships.
-
-## 🔄 Breaking Change — `tts-duet` is command-first (skill v3.0.0)
-
-Starting with skill **v3.0.0**, `tts-duet` is no longer keyword
-auto-triggered. The `SKILL.md` is now a thin manifest; the authoritative
-workflow lives in **`commands/tts-duet.md`** and is invoked explicitly
-as **`/tts-duet`** (with **`/tts-duet-setup`** for configuration). The
-`.skill` package, scripts, references, and assets are unchanged.
-
-**What changes for you:**
-
-| Before (<= v2.x) | After (>= v3.0.0) |
-|---|---|
-| Auto-triggered on "TTS"/"podcast"/"voiceover" | Explicit `/tts-duet` invocation only |
-| Workflow in `SKILL.md` | Workflow in `commands/tts-duet.md` |
-| Self-detaching `--background` nohup lane | Removed — long jobs run synchronously |
-| API key from ad-hoc env | `GEMINI_API_KEY` export (recommended) or user-level `~/.claude/settings.json` `env` block |
-
-Any automation relying on implicit triggering must call `/tts-duet`
-(or the `scripts/*.py` entry points directly) instead.
-
-**Also in v3.0.0:** the self-detaching `--background` nohup lane has
-been **removed** — `generate_tts.py` no longer forks a detached child;
-long jobs run synchronously and the calling agent backgrounds the run
-via its own mechanism if it wants detachment. The recommended Gemini
-API-key channel is a `GEMINI_API_KEY` **shell export** in the session
-that launches Claude Code (it can be sourced from a password manager,
-so the key need not sit in plaintext on disk); the simpler fallback is
-the user-level `~/.claude/settings.json` `"env"` block (restart Claude
-Code after editing). A new `generate_tts.py --check-key` flag (and a
-Step 0 preflight in `/tts-duet`) fails fast when the MCP cannot see a
-healthy key.
-
----
-
 ## 📦 Installation
 
 ### Claude Code (CLI)
@@ -215,7 +155,6 @@ uv run skills/automode-config/scripts/scan_project.py
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
-| [**tts-duet**](./skills/tts-duet/) | Author mono or dual-voice audio scripts and generate them with Gemini TTS — command-first, invoked via `/tts-duet` | Adaptation pre-pass (agent or MCP), shape/language defaults, director enrichment, offline cost estimate, voice audition, synchronous generation |
 | [**automode-config**](./skills/automode-config/) | Author, validate, and migrate project-level Claude Code `autoMode` blocks (4-bucket model) | `claude auto-mode critique` gate, atomic flock-protected writes, hash-gated commits, `hard_deny` round-trip, automatic swap-file when `--settings` is missing, `--repair` for stranded state |
 
 ## 🧩 Architecture
@@ -321,7 +260,6 @@ uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfi
 └── skills/
     ├── dockerfile-best-practices/
     ├── helm-bjw-s-chart/
-    ├── tts-duet/
     └── automode-config/
 ```
 

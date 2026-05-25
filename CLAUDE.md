@@ -22,7 +22,6 @@ skills/<skill-name>/
 | :------------------------ | :------------------------------------------------------------- | :-------------------------------------------- |
 | dockerfile-best-practices | `skills/dockerfile-best-practices/SKILL.md`                    | `analyze_dockerfile.py`, `analyze_compose.py` |
 | helm-bjw-s-chart          | `skills/helm-bjw-s-chart/SKILL.md`                             | `validate_chart.py`                           |
-| tts-duet                  | `/tts-duet` command (`skills/tts-duet/commands/tts-duet.md`)    | `list_voices.py --validate`, `_gen_api_notes_pricing.py --check` |
 | automode-config           | `skills/automode-config/SKILL.md`                              | `scan_project.py`, `inspect_automode.py`, `apply_automode.py --dry-run` |
 
 > **⚠️ Rename notice (v3.0.0)**: The skill previously named `helm-chart-generator` was renamed to `helm-bjw-s-chart`. Any agent, automation, or doc still referencing `helm-chart-generator` (directory, asset filename, or skill name) must be updated. See the "Breaking Change" banner in `README.md` for the migration path.
@@ -44,29 +43,6 @@ uv run skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/comp
 ```bash
 # Validate a bjw-s common library chart
 uv run skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
-```
-
-### TTS Duet
-
-```bash
-# List voices / presets (and validate preset coverage)
-uv run skills/tts-duet/scripts/list_voices.py --validate
-
-# Adapt raw text into a runnable Speaker A/B script (--backend gemini
-# routes through the MCP text.transform; --backend agent writes a
-# handoff prompt for the calling agent to fill).
-uv run skills/tts-duet/scripts/adapt_script.py \
-  --input raw.md --output script.md \
-  --backend gemini --shape dialogue --target-duration 300 --yes
-
-# Estimate cost offline
-uv run skills/tts-duet/scripts/estimate_cost.py \
-  --script skills/tts-duet/assets/script_template.md --model flash --json
-
-# Generate (the gemini-tts-mcp child reads GEMINI_API_KEY)
-uv run skills/tts-duet/scripts/generate_tts.py \
-  --script skills/tts-duet/assets/script_template.md \
-  --preset podcast-chill --output /tmp/demo --format mp3 --yes
 ```
 
 ### Dependencies
