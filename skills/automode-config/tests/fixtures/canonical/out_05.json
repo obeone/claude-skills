@@ -1,0 +1,16 @@
+{
+  "array": [
+    1,
+    2,
+    3
+  ],
+  "bool_f": false,
+  "bool_t": true,
+  "float": 1.5,
+  "int": 1,
+  "null": null,
+  "object": {
+    "nested": true
+  },
+  "string": "s"
+}

@@ -22,6 +22,7 @@ skills/<skill-name>/
 | :------------------------ | :------------------------------------------------------------- | :-------------------------------------------- |
 | dockerfile-best-practices | `skills/dockerfile-best-practices/SKILL.md`                    | `analyze_dockerfile.py`, `analyze_compose.py` |
 | helm-bjw-s-chart          | `skills/helm-bjw-s-chart/SKILL.md`                             | `validate_chart.py`                           |
+| automode-config           | `skills/automode-config/SKILL.md`                              | `scan_project.py`, `inspect_automode.py`, `apply_automode.py --dry-run` |
 | apple-shortcuts           | `skills/apple-shortcuts/SKILL.md`                              | `validate-shortcut.py`, `inspect-shortcut.py`, `list-app-intents.py` |
 
 > **⚠️ Rename notice (v3.0.0)**: The skill previously named `helm-chart-generator` was renamed to `helm-bjw-s-chart`. Any agent, automation, or doc still referencing `helm-chart-generator` (directory, asset filename, or skill name) must be updated. See the "Breaking Change" banner in `README.md` for the migration path.
@@ -32,22 +33,22 @@ skills/<skill-name>/
 
 ```bash
 # Analyze a Dockerfile for anti-patterns
-python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py <path/to/Dockerfile>
+uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py <path/to/Dockerfile>
 
 # Analyze a Docker Compose file
-python skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/compose.yaml>
+uv run skills/dockerfile-best-practices/scripts/analyze_compose.py <path/to/compose.yaml>
 ```
 
 ### Helm Chart Validation
 
 ```bash
 # Validate a bjw-s common library chart
-python skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py <path/to/chart/>
 ```
 
 ### Dependencies
 
-Scripts use `uv` for Python execution. The `analyze_compose.py` and `validate_chart.py` scripts require `pyyaml`.
+Every entry-point script declares its dependencies inline as a [PEP 723](https://peps.python.org/pep-0723/) header (`# /// script` block). `uv run path/to/script.py` resolves and caches them automatically — no `requirements.txt` install step required.
 
 ## Mandatory Requirements
 

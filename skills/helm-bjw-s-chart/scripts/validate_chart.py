@@ -1,4 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "pyyaml>=6.0",
+# ]
+# ///
 """
 Helm Chart Validator for bjw-s common library charts.
 
@@ -110,6 +116,40 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                         'warning',
                         'Common library repository URL may be incorrect',
                         'Use: https://bjw-s-labs.github.io/helm-charts'
+                    ))
+                # Surface major-version info so callers know which
+                # feature set is in scope. 5.x is the default; 4.x is
+                # treated as a legacy track and 5.x-only features are
+                # not validated against 4.x.
+                raw_version = str(dep.get('version', '')).lstrip('^~=v ')
+                major = raw_version.split('.', 1)[0] if raw_version else ''
+                if not raw_version:
+                    issues.append(Issue(
+                        'Chart.yaml',
+                        'warning',
+                        'common library has no version pin',
+                        'Pin a version (current default: 5.0.1)'
+                    ))
+                elif major.isdigit() and int(major) < 4:
+                    issues.append(Issue(
+                        'Chart.yaml',
+                        'error',
+                        f'common library version {raw_version} is older than v4',
+                        'Upgrade to 5.x (or 4.6.2 for legacy clusters) — pre-v4 is unsupported'
+                    ))
+                elif major == '4':
+                    issues.append(Issue(
+                        'Chart.yaml',
+                        'warning',
+                        f'common library pinned to {raw_version} (legacy 4.x track)',
+                        'Migrate to 5.0.1 when K8s ≥ 1.31 / Helm ≥ 3.18 — see references/migration-4-to-5.md'
+                    ))
+                elif major == '5':
+                    issues.append(Issue(
+                        'Chart.yaml',
+                        'info',
+                        f'common library pinned to {raw_version} (5.x, current default)',
+                        ''
                     ))
                 break
 
@@ -457,6 +497,66 @@ def validate_values(chart_path: Path) -> List[Issue]:
                             'Service reference missing identifier or name',
                             'Add identifier: <service-identifier>'
                         ))
+
+    # Check rawResources for legacy 4.x shape
+    raw_resources = values.get('rawResources') or {}
+    for rr_name, rr_config in raw_resources.items():
+        if not isinstance(rr_config, dict):
+            continue
+        location = f'rawResources.{rr_name}'
+        if 'manifest' in rr_config:
+            continue
+        # Legacy 4.x shape: manifest fields live at the top level,
+        # optionally under a 'spec:' key.
+        legacy_keys = {'apiVersion', 'kind', 'spec', 'labels', 'annotations'}
+        if legacy_keys & set(rr_config.keys()):
+            issues.append(Issue(
+                location,
+                'error',
+                'rawResources uses the legacy 4.x shape (no `manifest:` wrapper)',
+                'Wrap the K8s manifest under a `manifest:` key and move labels/annotations under `metadata:` — see references/migration-4-to-5.md'
+            ))
+
+    # ServiceAccount opt-out hint: a chart that wires an external SA
+    # without disabling the 5.x default will end up with two SAs in the
+    # namespace. Only emit the hint when the common dep is 5.x. Re-read
+    # Chart.yaml — validate_values runs independently of validate_chart_yaml.
+    common_major = ''
+    chart_yaml_path = chart_path / "Chart.yaml"
+    if chart_yaml_path.exists():
+        try:
+            with open(chart_yaml_path) as cf:
+                chart_meta = yaml.safe_load(cf) or {}
+            for dep in (chart_meta.get('dependencies') or []):
+                if isinstance(dep, dict) and dep.get('name') == 'common':
+                    raw_v = str(dep.get('version', '')).lstrip('^~=v ')
+                    common_major = raw_v.split('.', 1)[0] if raw_v else ''
+                    break
+        except yaml.YAMLError:
+            pass
+
+    def _references_external_sa(ctrls):
+        for cfg in (ctrls or {}).values():
+            if not isinstance(cfg, dict):
+                continue
+            sa = cfg.get('serviceAccount')
+            if isinstance(sa, dict) and sa.get('name'):
+                return True
+        return False
+
+    if common_major == '5':
+        global_section = values.get('global') or {}
+        if (
+            _references_external_sa(values.get('controllers'))
+            and not values.get('serviceAccount')
+            and global_section.get('createDefaultServiceAccount') is not False
+        ):
+            issues.append(Issue(
+                'global.createDefaultServiceAccount',
+                'info',
+                'Controllers reference an external ServiceAccount but the 5.x default SA is still being created',
+                'Set `global.createDefaultServiceAccount: false` to suppress the auto-generated unprivileged SA'
+            ))
 
     # Check persistence
     if 'persistence' in values:

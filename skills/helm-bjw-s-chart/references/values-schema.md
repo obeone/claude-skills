@@ -1,6 +1,10 @@
 # Values Schema Quick Reference
 
-Quick reference for common values.yaml configuration options in bjw-s common library v4+.
+Quick reference for common values.yaml configuration options in bjw-s common library v5.x (with v4.x legacy notes).
+
+> Default target is **common 5.x**. Fields marked **`(5.x only)`** are
+> unavailable on the legacy 4.x track. Everything else is shared by
+> both branches. See `migration-4-to-5.md` for breaking changes.
 
 ## Controllers
 
@@ -20,6 +24,9 @@ controllers:
       securityContext: {}
       annotations: {}
       labels: {}
+      # resizePolicy — pod-level in-place vertical scaling
+      # (5.x only, K8s ≥ 1.36)
+      resizePolicy: PreferNoRestart        # PreferNoRestart | RestartContainer
       # ... other pod options
     
     # Container definitions
@@ -47,7 +54,14 @@ controllers:
             memory: ""
         
         securityContext: {}
-        
+
+        # resizePolicy — in-place vertical scaling (5.x only, K8s ≥ 1.35)
+        resizePolicy:
+          - resourceName: cpu
+            restartPolicy: NotRequired      # NotRequired or RestartContainer
+          - resourceName: memory
+            restartPolicy: RestartContainer
+
         probes:
           liveness:
             enabled: true
@@ -168,6 +182,23 @@ persistence:
             subPath: ""
 ```
 
+### Ephemeral (generic ephemeral volume) — 5.x only
+
+```yaml
+persistence:
+  <identifier>:
+    type: ephemeral                  # (5.x only)
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    storageClass: ""                 # Empty for default
+    globalMounts:
+      - path: /scratch
+```
+
+Generic ephemeral volumes look like a PVC but are bound to the pod
+lifecycle — they're created when the pod is scheduled and deleted when
+it terminates, with no `PersistentVolumeClaim` left behind.
+
 ### EmptyDir
 
 ```yaml
@@ -271,12 +302,22 @@ controllers:
       name: <serviceaccount-name>
 ```
 
+> **(5.x only)** — A default unprivileged ServiceAccount is created
+> automatically. Disable when you bring your own:
+>
+> ```yaml
+> global:
+>   createDefaultServiceAccount: false
+> ```
+
 ## Default Pod Options
 
 ```yaml
 defaultPodOptions:
-  # Applied to all controllers
-  automountServiceAccountToken: true
+  # Applied to all controllers.
+  # (common 4.x default: true | common 5.x default: false)
+  # Set to true if your workload needs the SA token.
+  automountServiceAccountToken: false
   enableServiceLinks: false
 
   imagePullSecrets:
@@ -321,13 +362,62 @@ serviceMonitor:
     annotations: {}
     labels: {}
     serviceName: '{{ include "bjw-s.common.lib.chart.names.fullname" $ }}'
-    
+    jobLabel: app.kubernetes.io/name # (5.x only default — was unset)
+
     endpoints:
       - port: metrics
         path: /metrics
         interval: 30s
         scrapeTimeout: 10s
 ```
+
+## PodMonitor (Prometheus) — 5.x only
+
+Scrape pods directly without needing a Service.
+
+```yaml
+podMonitor:
+  <identifier>:
+    enabled: true
+    controller: <controller-id>      # Target controller (auto-detected if only one)
+    annotations: {}
+    labels: {}
+    jobLabel: app.kubernetes.io/name
+
+    endpoints:
+      - port: metrics
+        path: /metrics
+        interval: 30s
+        scrapeTimeout: 10s
+```
+
+## HorizontalPodAutoscaler — 5.x only
+
+```yaml
+horizontalPodAutoscaler:
+  <identifier>:
+    enabled: true
+    controller: <controller-id>      # Target controller
+    minReplicas: 1
+    maxReplicas: 10
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 80
+    behavior: {}                     # Optional scale-up/down behavior
+```
+
+> Set `controllers.<id>.replicas: null` on the targeted controller so the
+> HPA controls the replica count without Helm reverting it.
 
 ## Routes (Gateway API)
 
@@ -512,12 +602,37 @@ service:
       service-specific: annotation
 ```
 
+## rawResources
+
+Ship arbitrary Kubernetes manifests alongside the chart-managed
+resources. **5.x requires the `manifest:` wrapper** — the legacy 4.x
+top-level shape is not accepted.
+
+```yaml
+rawResources:
+  <identifier>:
+    enabled: true
+    manifest:
+      apiVersion: <group>/<version>
+      kind: <Kind>
+      metadata:
+        labels: {}                   # Merged with chart-managed labels
+        annotations: {}              # Merged with chart-managed annotations
+        # metadata.name is ignored — library derives the name
+      # Everything else from the K8s schema goes here:
+      # - spec: ...                  # For kinds that have a spec
+      # - data: ...                  # For ConfigMaps
+      # - rules: ...                 # For webhook configs, RBAC, etc.
+```
+
 ## Network Policies
 
 ```yaml
 networkpolicies:
   <identifier>:
     enabled: true
+    # (5.x only) If you omit both `controller` and `podSelector`
+    # and exactly one controller exists, it is auto-targeted.
     controller: <controller-id>      # Which controller to target
     
     policyTypes:

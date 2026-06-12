@@ -28,11 +28,10 @@ Starting with release **v3.0.0**, the skill formerly known as **`helm-chart-gene
 
 ```bash
 # 1. Remove the old skill
-rm -rf ~/.claude/skills/helm-chart-generator
+npx skills remove helm-chart-generator -g -y
 
 # 2. Install the new one (see Installation section below)
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+npx skills add obeone/claude-skills -g --skill helm-bjw-s-chart -y
 ```
 
 Any automation, doc, or agent still pointing to the old URL or name will break at the first install/refresh after v3.0.0 ships.
@@ -41,32 +40,31 @@ Any automation, doc, or agent still pointing to the old URL or name will break a
 
 ## 📦 Installation
 
-### Claude Code (CLI)
+### Recommended — `skills` CLI
+
+The [`skills`](https://skills.sh/) CLI resolves any GitHub repo and wires
+the bundles into the right agent directories (Claude Code, Cursor, …).
+Run it via `npx` — no global Node install required.
 
 ```bash
-# Personal skills (available in all projects)
-mkdir -p ~/.claude/skills
+# Interactive — pick scope and agents
+npx skills add obeone/claude-skills
 
-# Install dockerfile-best-practices
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+# All skills, user-global (~/.claude/skills)
+npx skills add obeone/claude-skills -g --all
 
-# Install helm-bjw-s-chart
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+# All skills, current project (./.claude/skills)
+npx skills add obeone/claude-skills --all
+
+# A single skill (project-scoped; add -g for global)
+npx skills add obeone/claude-skills --skill dockerfile-best-practices -y
+
+# List available skills in the repo without installing
+npx skills add obeone/claude-skills -l
 ```
 
-For project-specific skills, use `.claude/skills` instead of `~/.claude/skills`:
-
-```bash
-mkdir -p .claude/skills
-
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
-
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bjw-s-chart.skill \
-  -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d .claude/skills/
-```
+Update later with `npx skills update`, remove with `npx skills remove`,
+inspect with `npx skills list`. Full options: `npx skills -h`.
 
 ### Claude.ai (Web)
 
@@ -74,25 +72,35 @@ curl -L https://github.com/obeone/claude-skills/releases/latest/download/helm-bj
 2. Go to **Settings** → **Skills**
 3. Click **Upload skill** and select each `.skill` file
 
-### From Source
+### Manual — release bundle (fallback)
 
-Clone the repository to use skills directly:
+If you can't run Node on the host:
+
+```bash
+mkdir -p ~/.claude/skills
+
+for skill in dockerfile-best-practices helm-bjw-s-chart automode-config; do
+  curl -L "https://github.com/obeone/claude-skills/releases/latest/download/${skill}.skill" \
+    -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
+done
+```
+
+Swap `~/.claude/skills/` for `.claude/skills/` for a project-scoped install.
+
+### From Source
 
 ```bash
 git clone https://github.com/obeone/claude-skills.git
-
-# Copy all skills to your skills directory
 cp -r claude-skills/skills/dockerfile-best-practices ~/.claude/skills/
 cp -r claude-skills/skills/helm-bjw-s-chart ~/.claude/skills/
+cp -r claude-skills/skills/automode-config ~/.claude/skills/
 ```
 
 ### Other Platforms
 
-| Platform | Installation |
-|----------|--------------|
-| [Roo Code](https://roo.ai) | Add to `.roo/skills/` directory |
-| [Cline](https://github.com/cline/cline) | Add to `.cline/skills/` directory |
-| Generic | Extract `.skill` to your agent's skills directory |
+The `skills` CLI auto-detects supported agents; pass `--agent <name>` to
+target a specific one (e.g. `--agent cursor`). For unsupported agents,
+extract the `.skill` bundle into the agent's skills directory.
 
 > **How it works**: Skills are packaged using [Skill Pack](https://github.com/marketplace/actions/skill-pack) on every release. The action creates `.skill` bundles (ZIP archives) and uploads them to GitHub releases.
 
@@ -119,19 +127,26 @@ Skills are automatically discovered when you run Claude Code in this repository.
 "Create a Dockerfile for my Python FastAPI application"
 "Generate a Helm chart for this container image"
 "Analyze my Dockerfile for best practices"
+"Set up Claude Code autoMode for this project"
 ```
 
 ### Manual Usage
 
 ```bash
-# Analyze a Dockerfile
-python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
+# Analyze a Dockerfile (uv reads PEP 723 metadata in the script header)
+uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
 
 # Analyze a Docker Compose file
-python skills/dockerfile-best-practices/scripts/analyze_compose.py ./compose.yaml
+uv run skills/dockerfile-best-practices/scripts/analyze_compose.py ./compose.yaml
 
 # Validate a Helm chart
-python skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
+
+# Inspect Claude Code autoMode state for the current project
+uv run skills/automode-config/scripts/inspect_automode.py
+
+# Scan the project for autoMode adoption candidates
+uv run skills/automode-config/scripts/scan_project.py
 ```
 
 ## 🎯 Available Skills
@@ -140,6 +155,7 @@ python skills/helm-bjw-s-chart/scripts/validate_chart.py ./my-chart/
 |-------|-------------|--------------|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
+| [**automode-config**](./skills/automode-config/) | Author, validate, and migrate project-level Claude Code `autoMode` blocks (4-bucket model) | `claude auto-mode critique` gate, atomic flock-protected writes, hash-gated commits, `hard_deny` round-trip, automatic swap-file when `--settings` is missing, `--repair` for stranded state |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | Generate importable Apple Shortcuts (.shortcut / plist XML) for macOS and iOS | Native + third-party action catalogs, validator, inspector, App Intents discovery |
 
 ## 🧩 Architecture
@@ -150,9 +166,8 @@ skills/<skill-name>/
 │                         # Contains: name, description
 │
 ├── scripts/              # Python validation tools
-│   ├── analyze_*.py      # Static analyzers
-│   ├── validate_*.py     # Structure validators
-│   └── requirements.txt  # Dependencies (uv compatible)
+│   ├── analyze_*.py      # Static analyzers — PEP 723 inline deps
+│   └── validate_*.py     # Structure validators — PEP 723 inline deps
 │
 ├── assets/               # Templates and static files
 │   └── templates/        # Boilerplate code
@@ -195,14 +210,14 @@ This repository includes GitHub Actions workflows:
 
 ### Python Scripts
 
-All scripts use `uv` for dependency management:
+Every entry-point script declares its dependencies inline as a [PEP 723](https://peps.python.org/pep-0723/) header. `uv run path/to/script.py` resolves and caches them automatically — no `pip install` step.
 
 ```bash
 # Install uv if needed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Run a script (dependencies auto-installed)
-uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
+# Run a script (uv reads the script's PEP 723 header and prepares the env)
+uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfile
 ```
 
 ## 🔍 Key Features by Skill
@@ -223,6 +238,15 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 - **Best practices**: Resource limits, security contexts, health probes
 - **Chart validator**: Verifies structure and bjw-s compatibility
 
+### automode-config
+
+- **Four-bucket model**: `allow` / `ask` / `deny` / `hard_deny` with `hard_deny` round-trip
+- **Critique-gated writes**: `claude auto-mode critique` exit code is the contract; raw output archived per run
+- **Atomic + reversible**: per-file flock, `O_EXCL` write, five rolling backups, sha256 commit predicate
+- **Capability auto-detection**: silently swaps `~/.claude/settings.json` when the CLI lacks `--settings`
+- **Recovery**: `--repair` reclaims stale flocks and restores `.preview-orig` orphans
+- **Requires** Claude Code 2.1.136+
+
 ## 🔨 Development
 
 ### Repository Structure
@@ -236,7 +260,8 @@ uv run python skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./D
 │   └── workflows/        # CI/CD automation
 └── skills/
     ├── dockerfile-best-practices/
-    └── helm-bjw-s-chart/
+    ├── helm-bjw-s-chart/
+    └── automode-config/
 ```
 
 ### Mandatory Requirements

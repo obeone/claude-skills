@@ -1,0 +1,7 @@
+Usage: claude auto-mode critique [options]
+
+Get AI feedback on your custom auto mode rules
+
+Options:
+  -h, --help       Display help for command
+  --model <model>  Override which model is used

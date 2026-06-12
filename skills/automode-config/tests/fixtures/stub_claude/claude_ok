@@ -1,0 +1,56 @@
+#!/bin/sh
+# Stub claude CLI: well-formed --settings, well-formed critique, exit 0.
+
+case "$1" in
+    --version)
+        echo "claude 1.42.0"
+        exit 0
+        ;;
+    --help)
+        cat <<'EOF'
+Usage: claude [options]
+
+Options:
+  --version                Show version
+  --help                   Show this help
+  --settings <path>        Path to settings file
+EOF
+        exit 0
+        ;;
+    auto-mode)
+        shift
+        case "$1" in
+            critique)
+                shift
+                # Detect --help
+                for arg in "$@"; do
+                    if [ "$arg" = "--help" ]; then
+                        cat <<'EOF'
+Usage: claude auto-mode critique [options]
+
+Options:
+  --settings <path>        Settings file to critique
+  --defaults <path>        Defaults file
+  --config <path>          Config file
+  --model <name>           Model to use
+  --help                   Show this help
+EOF
+                        exit 0
+                    fi
+                done
+                # Otherwise: emit a well-formed critique.
+                cat <<'EOF'
+# Critique of Custom Rules
+
+## Major issues
+
+## Smaller issues
+
+EOF
+                exit 0
+                ;;
+        esac
+        ;;
+esac
+
+exit 0
