@@ -23,6 +23,7 @@ skills/<skill-name>/
 | dockerfile-best-practices | `skills/dockerfile-best-practices/SKILL.md`                    | `analyze_dockerfile.py`, `analyze_compose.py` |
 | helm-bjw-s-chart          | `skills/helm-bjw-s-chart/SKILL.md`                             | `validate_chart.py`                           |
 | automode-config           | `skills/automode-config/SKILL.md`                              | `scan_project.py`, `inspect_automode.py`, `apply_automode.py --dry-run` |
+| apple-shortcuts           | `skills/apple-shortcuts/SKILL.md`                              | `validate-shortcut.py`, `inspect-shortcut.py`, `list-app-intents.py` |
 
 > **⚠️ Rename notice (v3.0.0)**: The skill previously named `helm-chart-generator` was renamed to `helm-bjw-s-chart`. Any agent, automation, or doc still referencing `helm-chart-generator` (directory, asset filename, or skill name) must be updated. See the "Breaking Change" banner in `README.md` for the migration path.
 

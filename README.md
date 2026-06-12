@@ -156,6 +156,7 @@ uv run skills/automode-config/scripts/scan_project.py
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | Create and optimize Dockerfiles with BuildKit, multi-stage builds, and security hardening | BuildKit syntax, cache mounts, non-root users, Python/uv integration |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | Generate production-ready Helm charts using bjw-s common library | app-template v4+, sidecars, init containers, ingress patterns |
 | [**automode-config**](./skills/automode-config/) | Author, validate, and migrate project-level Claude Code `autoMode` blocks (4-bucket model) | `claude auto-mode critique` gate, atomic flock-protected writes, hash-gated commits, `hard_deny` round-trip, automatic swap-file when `--settings` is missing, `--repair` for stranded state |
+| [**apple-shortcuts**](./skills/apple-shortcuts/) | Generate importable Apple Shortcuts (.shortcut / plist XML) for macOS and iOS | Native + third-party action catalogs, validator, inspector, App Intents discovery |
 
 ## 🧩 Architecture
 

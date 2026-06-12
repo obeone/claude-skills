@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  menu-driven-shortcut.plist
+
+  Presents a menu; each branch does something different.
+  Demonstrates: Choose from Menu (control flow), branching with
+  GroupingIdentifier + WFControlFlowMode, Show Notification per branch.
+
+  Customize:
+  - WFMenuPrompt / WFMenuItems: the menu text and items.
+  - Actions inside each branch.
+
+  Sign and import:
+    mv menu-driven-shortcut.plist menu.shortcut
+    shortcuts sign -i menu.shortcut -o menu.signed.shortcut -m anyone
+    open -a Shortcuts menu.signed.shortcut
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>WFWorkflowClientVersion</key>
+  <string>2607.0.3</string>
+  <key>WFWorkflowMinimumClientVersion</key>
+  <integer>900</integer>
+  <key>WFWorkflowMinimumClientVersionString</key>
+  <string>900</string>
+  <key>WFWorkflowIcon</key>
+  <dict>
+    <key>WFWorkflowIconGlyphNumber</key>
+    <integer>59833</integer>
+    <key>WFWorkflowIconStartColor</key>
+    <integer>4274264319</integer>
+  </dict>
+  <key>WFWorkflowImportQuestions</key>
+  <array/>
+  <key>WFWorkflowInputContentItemClasses</key>
+  <array/>
+  <key>WFWorkflowTypes</key>
+  <array/>
+  <key>WFWorkflowActions</key>
+  <array>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.choosefrommenu</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>GroupingIdentifier</key>
+        <string>E1E1E1E1-E1E1-4E1E-8E1E-E1E1E1E1E1E1</string>
+        <key>WFControlFlowMode</key>
+        <integer>0</integer>
+        <key>WFMenuPrompt</key>
+        <string>Choose an action</string>
+        <key>WFMenuItems</key>
+        <array>
+          <string>Open Safari</string>
+          <string>Open Maps</string>
+          <string>Open Mail</string>
+        </array>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.choosefrommenu</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>GroupingIdentifier</key>
+        <string>E1E1E1E1-E1E1-4E1E-8E1E-E1E1E1E1E1E1</string>
+        <key>WFControlFlowMode</key>
+        <integer>1</integer>
+        <key>WFMenuItemTitle</key>
+        <string>Open Safari</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.url</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>WFURLActionURL</key>
+        <string>https://www.apple.com</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.openurl</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict/>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.choosefrommenu</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>GroupingIdentifier</key>
+        <string>E1E1E1E1-E1E1-4E1E-8E1E-E1E1E1E1E1E1</string>
+        <key>WFControlFlowMode</key>
+        <integer>1</integer>
+        <key>WFMenuItemTitle</key>
+        <string>Open Maps</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.url</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>WFURLActionURL</key>
+        <string>maps://</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.openurl</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict/>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.choosefrommenu</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>GroupingIdentifier</key>
+        <string>E1E1E1E1-E1E1-4E1E-8E1E-E1E1E1E1E1E1</string>
+        <key>WFControlFlowMode</key>
+        <integer>1</integer>
+        <key>WFMenuItemTitle</key>
+        <string>Open Mail</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.url</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>WFURLActionURL</key>
+        <string>mailto:</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.openurl</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict/>
+    </dict>
+    <dict>
+      <key>WFWorkflowActionIdentifier</key>
+      <string>is.workflow.actions.choosefrommenu</string>
+      <key>WFWorkflowActionParameters</key>
+      <dict>
+        <key>GroupingIdentifier</key>
+        <string>E1E1E1E1-E1E1-4E1E-8E1E-E1E1E1E1E1E1</string>
+        <key>WFControlFlowMode</key>
+        <integer>2</integer>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>
