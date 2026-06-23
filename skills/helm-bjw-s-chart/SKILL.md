@@ -2,7 +2,7 @@
 name: helm-bjw-s-chart
 description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v5, with v4 legacy support). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, HorizontalPodAutoscalers, ServiceMonitors/PodMonitors, NetworkPolicies, or handling StatefulSets and multi-controller deployments."
 metadata:
-  version: "5.0.0"
+  version: "5.1.0"
 ---
 
 # Helm bjw-s Chart Generator
@@ -352,9 +352,11 @@ helm install --dry-run --debug my-release .
 ```
 
 The validator warns when the chart still pins `common 4.x`, when
-`rawResources` uses the legacy `spec:` shape (removed in 5.x), or when
+`rawResources` uses the legacy `spec:` shape (removed in 5.x), when
 an external ServiceAccount is referenced without
-`global.createDefaultServiceAccount: false`.
+`global.createDefaultServiceAccount: false`, when `Chart.lock` is
+missing, or when a declared dependency has no vendored tarball under
+`charts/`.
 
 ## Pre-Deploy Checklist
 
@@ -368,8 +370,45 @@ Before deploying to a cluster, verify:
 - [ ] If using an external ServiceAccount, `global.createDefaultServiceAccount: false` is set
 - [ ] If `rawResources` is in play, manifest uses the 5.x `manifest:` wrapper (not legacy `spec:`)
 - [ ] Secrets reference external sources, not hardcoded values
-- [ ] `helm dependency update` run and `Chart.lock` committed
+- [ ] `helm dependency update` run, with `Chart.lock` **and** the populated `charts/` published (see [Publishing the Chart](#publishing-the-chart))
 - [ ] `helm lint` passes with no errors
+
+## Publishing the Chart
+
+A published chart must be **self-contained**. Both of these have to ship
+inside the packaged `.tgz` (and the committed chart):
+
+- `Chart.lock` — pins the exact resolved dependency versions and digests.
+- The full `charts/` directory — the vendored dependency tarballs
+  (`common-<version>.tgz`, …) materialized by `helm dependency update`.
+
+`helm package` bundles whatever is under `charts/` at package time, and the
+default `.helmignore` excludes neither `Chart.lock` nor `charts/`. The rule
+is therefore about making sure both are present *before* you package:
+
+```bash
+# Vendor dependencies into charts/ and (re)generate Chart.lock
+helm dependency update
+
+# ...then package — the .tgz now embeds charts/common-<version>.tgz
+helm package .
+```
+
+Two equally valid ways to satisfy it:
+
+- **Commit `charts/` to git** (vendoring): the checkout is already
+  self-contained; the publish step is just `helm package`.
+- **Gitignore `charts/`** but commit `Chart.lock`, then run
+  `helm dependency build` in the publish pipeline before `helm package`.
+  `helm dependency build` repopulates `charts/` from the locked versions
+  without re-resolving them.
+
+Never publish a chart whose `charts/` is empty while `Chart.yaml` declares
+dependencies: consumers without the `bjw-s-labs.github.io/helm-charts` repo
+pre-added (offline / air-gapped installs) cannot resolve the common library
+at install time. `scripts/validate_chart.py` warns when `Chart.lock` is
+missing or when a declared dependency has no matching tarball under
+`charts/`.
 
 ## Common Issues
 

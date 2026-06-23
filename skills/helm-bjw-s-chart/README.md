@@ -105,7 +105,7 @@ After generating a chart:
 
 ```bash
 cd /path/to/chart
-helm dependency update         # fetch common, write Chart.lock
+helm dependency update         # fetch common into charts/, write Chart.lock
 helm lint .
 helm template . --debug
 helm install --dry-run --debug my-release .
@@ -128,7 +128,9 @@ helm install --dry-run --debug my-release .
   (`automountServiceAccountToken`, default SA, `rawResources` shape,
   `jobLabel`, version bumps) with a full upgrade procedure.
 - **Static validator.** `validate_chart.py` flags missing dependencies,
-  4.x → 5.x migration debt, and the most common structural mistakes.
+  a missing `Chart.lock` or unvendored `charts/` tarballs (a chart must be
+  self-contained to publish), 4.x → 5.x migration debt, and the most common
+  structural mistakes.
 
 ## Layout
 
