@@ -684,6 +684,50 @@ helm status myapp
 kubectl get pods -l app.kubernetes.io/instance=myapp
 ```
 
+## Publishing and Dependency Vendoring
+
+A bjw-s chart is mostly a thin wrapper around the `common` library, so a
+published chart is only usable if that dependency travels with it. The
+published artifact must contain **both** the lock file and the vendored
+dependency tarballs.
+
+```bash
+# ✅ GOOD - vendor dependencies, then package
+helm dependency update          # writes Chart.lock + charts/common-<ver>.tgz
+helm package .                   # .tgz embeds charts/ and Chart.lock
+
+# ❌ BAD - packaging without vendored deps
+helm package .                   # charts/ empty -> install fails offline
+```
+
+- **`Chart.lock`** pins the resolved version and digest of every dependency.
+  Commit it so builds are reproducible.
+- **`charts/`** holds the actual dependency tarballs
+  (`common-<version>.tgz`). `helm package` includes them, and the default
+  `.helmignore` does not strip them, so they end up in the published `.tgz`
+  as long as they exist at package time.
+
+Pick one of two strategies, never neither:
+
+```bash
+# Strategy A - vendor in git: commit charts/ and Chart.lock
+git add Chart.lock charts/
+
+# Strategy B - rebuild at publish: gitignore charts/, commit Chart.lock,
+# then restore the locked tarballs in CI before packaging
+helm dependency build           # repopulates charts/ from Chart.lock
+helm package .
+```
+
+`helm dependency build` reconstructs `charts/` from an existing `Chart.lock`
+without re-resolving versions — use it in CI when `charts/` is gitignored.
+`helm dependency update` re-resolves against `Chart.yaml` and rewrites the
+lock — use it when bumping a dependency.
+
+Without the vendored tarballs, any consumer who has not pre-added
+`https://bjw-s-labs.github.io/helm-charts` (air-gapped clusters, offline
+CI) cannot resolve the common library and the install fails.
+
 ## Common Pitfalls
 
 ### Services Not Found in Ingress
