@@ -171,6 +171,47 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
             'Run: helm dependency update'
         ))
 
+    # Check vendored dependency tarballs under charts/. A published chart
+    # must be self-contained: `helm dependency update` (or `helm dependency
+    # build` from Chart.lock) materializes every dependency as
+    # charts/<name>-<resolved-version>.tgz. Without them, a consumer must
+    # have each dependency repo pre-added to resolve the chart at install
+    # time, which breaks offline / air-gapped installs.
+    declared_deps = chart.get('dependencies') or []
+    if declared_deps:
+        charts_dir = chart_path / "charts"
+        if not charts_dir.is_dir():
+            issues.append(Issue(
+                'charts/',
+                'warning',
+                'charts/ directory missing — dependencies not vendored',
+                'Run `helm dependency update`, then publish charts/ alongside '
+                'Chart.lock so the packaged chart is self-contained'
+            ))
+        else:
+            # The Chart.yaml version may be a range, so the resolved tarball
+            # version is unknown here. Match on "<name>-<digit>" to avoid a
+            # sibling dependency (e.g. common-extra) satisfying "common".
+            vendored = [p.name for p in charts_dir.glob('*.tgz')]
+            for dep in declared_deps:
+                if not isinstance(dep, dict):
+                    continue
+                dep_name = dep.get('name')
+                if not dep_name:
+                    continue
+                prefix = f'{dep_name}-'
+                if not any(
+                    name.startswith(prefix) and name[len(prefix):][:1].isdigit()
+                    for name in vendored
+                ):
+                    issues.append(Issue(
+                        'charts/',
+                        'warning',
+                        f'Dependency "{dep_name}" has no vendored tarball under charts/',
+                        f'Run `helm dependency update` (or `helm dependency build`) '
+                        f'to fetch {dep_name}-<version>.tgz before publishing'
+                    ))
+
     return issues
 
 
