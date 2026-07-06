@@ -18,7 +18,7 @@ controllers:
     replicas: 1                      # Number of replicas (null for HPA)
     strategy: RollingUpdate          # Update strategy
     revisionHistoryLimit: 3          # History to keep
-    
+
     # Pod-level options
     pod:
       securityContext: {}
@@ -28,7 +28,7 @@ controllers:
       # (5.x only, K8s ≥ 1.36)
       resizePolicy: PreferNoRestart        # PreferNoRestart | RestartContainer
       # ... other pod options
-    
+
     # Container definitions
     containers:
       <identifier>:
@@ -37,14 +37,14 @@ controllers:
           tag: ""
           digest: ""
           pullPolicy: IfNotPresent
-        
+
         command: []
         args: []
         workingDir: ""
-        
+
         env: {}
         envFrom: []
-        
+
         resources:
           requests:
             cpu: ""
@@ -52,7 +52,7 @@ controllers:
           limits:
             cpu: ""
             memory: ""
-        
+
         securityContext: {}
 
         # resizePolicy — in-place vertical scaling (5.x only, K8s ≥ 1.35)
@@ -65,7 +65,7 @@ controllers:
         probes:
           liveness:
             enabled: true
-            type: TCP              # TCP, HTTP, EXEC
+            type: TCP              # TCP, HTTP, HTTPS, GRPC, AUTO (default TCP)
             custom: false
             spec:
               initialDelaySeconds: 0
@@ -74,15 +74,15 @@ controllers:
               failureThreshold: 3
           readiness: {}            # Same structure
           startup: {}              # Same structure
-    
+
     # Init containers
     initContainers: {}               # Same structure as containers
-    
+
     # For StatefulSets
     statefulset:
       podManagementPolicy: OrderedReady  # OrderedReady or Parallel
       volumeClaimTemplates: []
-    
+
     # For CronJobs
     cronjob:
       schedule: "*/20 * * * *"
@@ -91,7 +91,7 @@ controllers:
       failedJobsHistory: 1
       startingDeadlineSeconds: 30
       ttlSecondsAfterFinished: null
-    
+
     # For Jobs
     job:
       backoffLimit: 6
@@ -109,7 +109,7 @@ service:
     type: ClusterIP                      # ClusterIP, LoadBalancer, NodePort
     annotations: {}
     labels: {}
-    
+
     ports:
       <port-name>:
         enabled: true
@@ -130,7 +130,7 @@ ingress:
     className: nginx
     annotations: {}
     labels: {}
-    
+
     hosts:
       - host: example.com
         paths:
@@ -141,7 +141,7 @@ ingress:
               # OR
               name: <service-name>     # Reference by name
               port: http               # Port name or number
-    
+
     tls:
       - secretName: example-tls
         hosts:
@@ -157,22 +157,22 @@ persistence:
   <identifier>:
     enabled: true
     type: persistentVolumeClaim
-    
+
     # For new PVC
     accessMode: ReadWriteOnce        # ReadWriteOnce, ReadOnlyMany, ReadWriteMany
     size: 1Gi
     storageClass: ""                 # Empty for default
     retain: false                    # Keep PVC on uninstall
-    
+
     # For existing PVC
     existingClaim: my-pvc-name
-    
+
     # Mount configuration
     globalMounts:
       - path: /data
         readOnly: false
         subPath: ""
-    
+
     # OR for complex scenarios
     advancedMounts:
       <controller-id>:
@@ -329,31 +329,34 @@ defaultPodOptions:
     runAsNonRoot: true
     fsGroup: 10001
     fsGroupChangePolicy: OnRootMismatch
-  
+
   annotations: {}
   labels: {}
-  
+
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  
+
   topologySpreadConstraints: []
-  
+
   dnsConfig: {}
   dnsPolicy: ClusterFirst
-  
+
   hostNetwork: false
   hostIPC: false
   hostPID: false
-  
+
   priorityClassName: ""
   runtimeClassName: ""
   schedulerName: ""
-  
+
   terminationGracePeriodSeconds: 30
 ```
 
 ## ServiceMonitor (Prometheus)
+
+ServiceMonitor targets a `Service` via `service:` (not `controller:`) and
+uses `endpoints:`.
 
 ```yaml
 serviceMonitor:
@@ -361,7 +364,10 @@ serviceMonitor:
     enabled: true
     annotations: {}
     labels: {}
-    serviceName: '{{ include "bjw-s.common.lib.chart.names.fullname" $ }}'
+    service:
+      identifier: <service-id>       # References service.<service-id>
+      # OR
+      name: <external-service-name>  # A Service not managed by this chart
     jobLabel: app.kubernetes.io/name # (5.x only default — was unset)
 
     endpoints:
@@ -373,18 +379,22 @@ serviceMonitor:
 
 ## PodMonitor (Prometheus) — 5.x only
 
-Scrape pods directly without needing a Service.
+Scrape pods directly without needing a Service. PodMonitor targets a
+controller via `controller: {identifier: ...}` (an object, not a bare
+string) and uses `podMetricsEndpoints:` — not `endpoints:`. Don't
+conflate this with ServiceMonitor above (`service:` + `endpoints:`).
 
 ```yaml
 podMonitor:
   <identifier>:
     enabled: true
-    controller: <controller-id>      # Target controller (auto-detected if only one)
+    controller:
+      identifier: <controller-id>    # Object form; a bare string fails schema validation
     annotations: {}
     labels: {}
     jobLabel: app.kubernetes.io/name
 
-    endpoints:
+    podMetricsEndpoints:              # Not `endpoints:` — that key is rejected by the schema
       - port: metrics
         path: /metrics
         interval: 30s
@@ -393,31 +403,36 @@ podMonitor:
 
 ## HorizontalPodAutoscaler — 5.x only
 
+There is no top-level `horizontalPodAutoscaler:` key. It nests under the
+target controller, and has no `controller:` field — the parent
+controller is implicitly the target.
+
 ```yaml
-horizontalPodAutoscaler:
-  <identifier>:
-    enabled: true
-    controller: <controller-id>      # Target controller
-    minReplicas: 1
-    maxReplicas: 10
-    metrics:
-      - type: Resource
-        resource:
-          name: cpu
-          target:
-            type: Utilization
-            averageUtilization: 70
-      - type: Resource
-        resource:
-          name: memory
-          target:
-            type: Utilization
-            averageUtilization: 80
-    behavior: {}                     # Optional scale-up/down behavior
+controllers:
+  <controller-id>:
+    replicas: null                   # HPA owns the replica count
+    horizontalPodAutoscaler:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 10
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
+        - type: Resource
+          resource:
+            name: memory
+            target:
+              type: Utilization
+              averageUtilization: 80
+      behavior: {}                   # Optional scale-up/down behavior
 ```
 
-> Set `controllers.<id>.replicas: null` on the targeted controller so the
-> HPA controls the replica count without Helm reverting it.
+> Set `replicas: null` on the targeted controller so the HPA controls
+> the replica count without Helm reverting it.
 
 ## Routes (Gateway API)
 
@@ -426,17 +441,17 @@ route:
   <identifier>:
     enabled: true
     kind: HTTPRoute                  # HTTPRoute, TCPRoute, TLSRoute, UDPRoute, GRPCRoute
-    
+
     parentRefs:
       - group: gateway.networking.k8s.io
         kind: Gateway
         name: gateway-name
         namespace: gateway-namespace
         sectionName: ""
-    
+
     hostnames:
       - example.com
-    
+
     rules:
       - matches:
           - path:
@@ -452,14 +467,22 @@ route:
 
 ### Simple Values
 
+Map form (recommended):
+
 ```yaml
 env:
   KEY1: value1
   KEY2: value2
-  
-  # OR list format
+```
+
+A list form is also accepted:
+
+```yaml
+env:
   - name: KEY1
     value: value1
+  - name: KEY2
+    value: value2
 ```
 
 ### From ConfigMap
@@ -469,10 +492,7 @@ env:
   CONFIG_KEY:
     valueFrom:
       configMapKeyRef:
-        identifier: <configmap-id>   # From configMaps section
-        key: key-name
-        # OR
-        name: external-configmap     # External ConfigMap
+        name: my-configmap           # Rendered ConfigMap name — `identifier` is NOT valid inside valueFrom
         key: key-name
 ```
 
@@ -483,10 +503,7 @@ env:
   SECRET_KEY:
     valueFrom:
       secretKeyRef:
-        identifier: <secret-id>      # From secrets section
-        key: key-name
-        # OR
-        name: external-secret        # External Secret
+        name: my-secret              # Rendered Secret name — `identifier` is NOT valid inside valueFrom
         key: key-name
 ```
 
@@ -502,19 +519,19 @@ envFrom:
 
 ## Probes
 
-### HTTP Probe
+### HTTP Probe (standard)
+
+Standard (non-custom) probe: `type`/`path`/`port` sit at probe level; `spec`
+holds only timing tuning.
 
 ```yaml
 probes:
   liveness:
     enabled: true
     type: HTTP
+    path: /healthz
+    port: http
     spec:
-      httpGet:
-        path: /healthz
-        port: http
-        scheme: HTTP
-        httpHeaders: []
       initialDelaySeconds: 0
       periodSeconds: 10
       timeoutSeconds: 1
@@ -522,23 +539,29 @@ probes:
       failureThreshold: 3
 ```
 
-### TCP Probe
+### TCP Probe (standard)
 
 ```yaml
 probes:
   liveness:
+    enabled: true
     type: TCP
+    port: 8080
     spec:
-      tcpSocket:
-        port: 8080
+      initialDelaySeconds: 0
+      periodSeconds: 10
 ```
 
-### Exec Probe
+### Exec Probe (custom)
+
+There is no `EXEC` type. Exec/command probes require `custom: true` with a
+raw pod-probe `spec` containing `exec.command`.
 
 ```yaml
 probes:
   liveness:
-    type: EXEC
+    enabled: true
+    custom: true
     spec:
       exec:
         command:
@@ -546,11 +569,15 @@ probes:
           - /tmp/healthy
 ```
 
-### Custom Probe
+### Custom Probe (raw spec)
+
+Set `custom: true` and provide a raw pod-probe `spec` (`httpGet`,
+`tcpSocket`, or `exec`) for anything the standard fields can't express.
 
 ```yaml
 probes:
   liveness:
+    enabled: true
     custom: true
     spec:
       httpGet:
@@ -584,7 +611,7 @@ global:
   labels:
     team: platform
     environment: production
-  
+
   annotations:
     example.com/managed-by: automation
 
@@ -634,11 +661,11 @@ networkpolicies:
     # (5.x only) If you omit both `controller` and `podSelector`
     # and exactly one controller exists, it is auto-targeted.
     controller: <controller-id>      # Which controller to target
-    
+
     policyTypes:
       - Ingress
       - Egress
-    
+
     rules:
       ingress:
         - from:
@@ -648,7 +675,7 @@ networkpolicies:
           ports:
             - protocol: TCP
               port: 8080
-      
+
       egress:
         - to:
             - namespaceSelector:

@@ -125,7 +125,7 @@ persistence:
     type: emptyDir
     globalMounts:
       - path: /tmp
-  
+
   cache:
     type: emptyDir
     globalMounts:
@@ -195,9 +195,9 @@ probes:
   liveness:
     enabled: true
     type: HTTP
+    path: /healthz
+    port: http
     spec:
-      path: /healthz
-      port: http
       initialDelaySeconds: 30  # Wait for app to start
       periodSeconds: 10
       timeoutSeconds: 5
@@ -213,9 +213,9 @@ probes:
   readiness:
     enabled: true
     type: HTTP
+    path: /ready
+    port: http
     spec:
-      path: /ready
-      port: http
       initialDelaySeconds: 5
       periodSeconds: 5
       timeoutSeconds: 3
@@ -231,19 +231,38 @@ probes:
   startup:
     enabled: true
     type: HTTP
+    path: /startup
+    port: http
     spec:
-      path: /startup
-      port: http
       initialDelaySeconds: 0
       periodSeconds: 5
       timeoutSeconds: 3
       failureThreshold: 30  # 30 * 5s = 150s max startup time
 ```
 
-**Probe Types:**
-- `HTTP`: Best for web services
+**Probe Types** — the `type` enum is exactly `TCP`, `HTTP`, `HTTPS`, `GRPC`,
+`AUTO` (default `TCP`):
+
 - `TCP`: For non-HTTP services
-- `EXEC`: For custom checks
+- `HTTP` / `HTTPS`: Best for web services
+- `GRPC`: gRPC health-checking protocol
+- `AUTO`: Infers the check from the container's declared ports
+
+There is no `EXEC` type. For exec/command probes, set `custom: true` and
+provide a raw pod-probe `spec` with `exec.command`:
+
+```yaml
+probes:
+  liveness:
+    enabled: true
+    custom: true
+    spec:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - pg_isready -U myuser
+```
 
 ## Persistence
 
@@ -326,7 +345,7 @@ ingress:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
       nginx.ingress.kubernetes.io/rate-limit: "100"
-    
+
     hosts:
       - host: app.example.com
         paths:
@@ -335,7 +354,7 @@ ingress:
             service:
               identifier: app
               port: http
-    
+
     tls:
       - secretName: app-tls
         hosts:
@@ -419,7 +438,7 @@ env:
   APP_MODE:
     valueFrom:
       configMapKeyRef:
-        identifier: app-config
+        name: app-config
         key: APP_MODE
 
 # From Secret
@@ -427,7 +446,7 @@ env:
   API_KEY:
     valueFrom:
       secretKeyRef:
-        identifier: app-secrets
+        name: app-secrets
         key: api-key
 
 # Load all from ConfigMap/Secret
@@ -437,6 +456,10 @@ envFrom:
   - secretRef:
       identifier: app-secrets
 ```
+
+> Per-variable `valueFrom` refs (`configMapKeyRef` / `secretKeyRef`) take
+> only the rendered object `name` and `key`; the `identifier` shorthand is
+> valid solely in `envFrom` and `persistence` refs.
 
 ## Labels and Annotations
 
@@ -597,11 +620,11 @@ service:
 controllers:
   migration:
     type: job
-    
+
     job:
       backoffLimit: 3
       ttlSecondsAfterFinished: 86400  # Clean up after 24h
-    
+
     containers:
       migrate:
         command:
@@ -614,7 +637,7 @@ controllers:
 controllers:
   backup:
     type: cronjob
-    
+
     cronjob:
       schedule: "0 2 * * *"  # 2 AM daily
       concurrencyPolicy: Forbid
@@ -639,11 +662,18 @@ service:
 serviceMonitor:
   app:
     enabled: true
+    service:
+      identifier: app     # References service.app — NOT `controller:`
     endpoints:
       - port: metrics
         path: /metrics
         interval: 30s
 ```
+
+> ServiceMonitor targets a Service (`service: {identifier: ...}` +
+> `endpoints:`); PodMonitor targets a controller
+> (`controller: {identifier: ...}` + `podMetricsEndpoints:`). Don't mix
+> the two up — each schema rejects the other's fields.
 
 ### Logging
 
@@ -777,7 +807,7 @@ persistence:
 containers:
   app:
     image: myapp
-  
+
   sidecar:
     dependsOn: app  # Starts after app
     image: sidecar
