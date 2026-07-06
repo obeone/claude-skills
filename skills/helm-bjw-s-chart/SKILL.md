@@ -1,8 +1,8 @@
 ---
 name: helm-bjw-s-chart
-description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v5, with v4 legacy support). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, HorizontalPodAutoscalers, ServiceMonitors/PodMonitors, NetworkPolicies, or handling StatefulSets and multi-controller deployments."
+description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v5, with v4 legacy support). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, HorizontalPodAutoscalers, ServiceMonitors/PodMonitors, NetworkPolicies, or handling StatefulSets and multi-controller deployments. Also covers exposing services through Gateway API HTTPRoutes, including migrating an existing Ingress to a route."
 metadata:
-  version: "5.1.1"
+  version: "5.2.0"
 ---
 
 # Helm bjw-s Chart Generator
@@ -234,27 +234,30 @@ The patterns below require `common >= 5.0.0`. They are silently ignored
 or rejected on 4.x.
 
 ```yaml
-# 1. HorizontalPodAutoscaler tied to a controller
-horizontalPodAutoscaler:
+# 1. HorizontalPodAutoscaler nests under the target controller — there is
+#    no top-level `horizontalPodAutoscaler:` key and no `controller:` field.
+controllers:
   main:
-    enabled: true
-    controller: main           # Target controller identifier
-    minReplicas: 2
-    maxReplicas: 10
-    metrics:
-      - type: Resource
-        resource:
-          name: cpu
-          target:
-            type: Utilization
-            averageUtilization: 70
+    replicas: null              # HPA owns the replica count
+    horizontalPodAutoscaler:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
 
 # 2. PodMonitor (alternative to ServiceMonitor — scrapes pods directly)
 podMonitor:
   main:
     enabled: true
-    controller: main
-    endpoints:
+    controller:
+      identifier: main          # Object form; a bare string fails schema validation
+    podMetricsEndpoints:        # Not `endpoints:` — that key is rejected by the schema
       - port: metrics
         path: /metrics
         interval: 30s
@@ -339,9 +342,9 @@ cd /path/to/chart
 helm dependency update
 
 # 2. Validate structure
-python scripts/validate_chart.py /path/to/chart
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py /path/to/chart
 # Or with JSON output for CI:
-python scripts/validate_chart.py --json /path/to/chart
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py --json /path/to/chart
 
 # 3. Helm validation
 helm lint .
@@ -422,7 +425,8 @@ missing or when a declared dependency has no matching tarball under
 ## References
 
 - [`references/migration-4-to-5.md`](references/migration-4-to-5.md) - Full 4 → 5 upgrade procedure
-- [`references/patterns.md`](references/patterns.md) - Common deployment patterns
+- [`references/patterns.md`](references/patterns.md) - Common deployment patterns, including Gateway API HTTPRoute
 - [`references/best-practices.md`](references/best-practices.md) - Kubernetes/Helm best practices
 - [`references/values-schema.md`](references/values-schema.md) - Complete values.yaml reference
+- [`references/compose-mapping.md`](references/compose-mapping.md) - Docker Compose → bjw-s values.yaml mapping
 - [`assets/templates/`](assets/templates/) - Base templates for quick start
