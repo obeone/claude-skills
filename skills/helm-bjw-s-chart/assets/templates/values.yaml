@@ -13,30 +13,33 @@ controllers:
   main:
     type: deployment
     replicas: 1
-    
+
     containers:
       main:
         image:
           repository: CHANGEME
           tag: CHANGEME
           pullPolicy: IfNotPresent
-        
+
         env: {}
-        
+
         resources:
           requests:
             cpu: 100m
             memory: 128Mi
           limits:
             memory: 512Mi
-        
+
         probes:
           liveness:
             enabled: true
+            type: TCP
           readiness:
             enabled: true
+            type: TCP
           startup:
             enabled: true
+            type: TCP
             spec:
               failureThreshold: 30
               periodSeconds: 5
