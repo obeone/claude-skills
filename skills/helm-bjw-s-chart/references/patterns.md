@@ -129,7 +129,7 @@ controllers:
         dependsOn: app
         image:
           repository: ghcr.io/qdm12/gluetun
-          tag: latest
+          tag: "v3.41.1"
         env:
           VPN_TYPE: wireguard
           VPN_INTERFACE: wg0
@@ -317,7 +317,7 @@ controllers:
       backup:
         image:
           repository: backup-tool
-          tag: latest
+          tag: "1.2.0"
         command:
           - /bin/backup.sh
         env:

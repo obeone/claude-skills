@@ -166,7 +166,7 @@ skills/helm-bjw-s-chart/
 
 ## Status
 
-`metadata.version: 5.0.0`.
+`metadata.version: 5.1.1`.
 
 ## License
 
