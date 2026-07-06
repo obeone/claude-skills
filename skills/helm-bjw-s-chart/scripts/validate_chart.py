@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import json
+import re
 import sys
 import yaml
 from dataclasses import dataclass, field, asdict
@@ -45,6 +46,611 @@ class Issue:
         if self.suggestion:
             result += f"\n   → {self.suggestion}"
         return result
+
+
+def _detect_common_majors(constraint: str) -> set:
+    """
+    Determine which common-library major versions a version constraint admits.
+
+    This is a deliberately small heuristic, not a full SemVer range solver. It
+    recognises 4.x legacy pins written as bare versions (``4.6.2``), tilde/caret
+    ranges (``~4.6.0``, ``^4``), wildcard forms (``4.x``) and explicit bounded
+    ranges (``>=4.0.0 <5.0.0``, ``>=4 <6``). Each version token is paired with
+    the comparator that precedes it so an exclusive upper bound (``<5.0.0``,
+    which admits up to 4.x) is not mistaken for admitting 5.x.
+
+    Parameters
+    ----------
+    constraint : str
+        Raw ``version`` string from the common dependency in Chart.yaml.
+
+    Returns
+    -------
+    set
+        The set of integer major versions the constraint admits. Empty when no
+        numeric major can be parsed.
+    """
+    # Capture (comparator, version-token) pairs. The optional leading ``v`` on
+    # a token (``v4.6.0``) is consumed so it never leaks into the major parse.
+    tokens = re.findall(r'(>=|<=|>|<|\^|~|=)?\s*v?(\d+(?:\.[\dxX*]+)*)', constraint)
+    lowers = []  # majors introduced by lower/exact/caret/tilde bounds
+    uppers = []  # top admitted major implied by each upper bound
+    for op, token in tokens:
+        try:
+            major = int(token.split('.')[0])
+        except (ValueError, IndexError):
+            continue
+        if op == '<':
+            # Exclusive upper bound: the highest admitted major is major - 1
+            # (``<5.0.0`` / ``<5`` admits 4.x, never 5.x).
+            uppers.append(major - 1)
+        elif op == '<=':
+            uppers.append(major)
+        else:
+            # >=, >, ^, ~, =, or no operator: this major is admitted.
+            lowers.append(major)
+    if not lowers and not uppers:
+        return set()
+    # Collapse to an inclusive [low, high] band. When only one side is present
+    # the band degenerates to that side, so a bare pin admits just its major.
+    low = min(lowers) if lowers else min(uppers)
+    high = max(uppers) if uppers else max(lowers)
+    if high < low:
+        high = low
+    return set(range(low, high + 1))
+
+
+def _common_major_set(chart_path: Path) -> set:
+    """
+    Read Chart.yaml and return the common-library majors its version pin admits.
+
+    Parameters
+    ----------
+    chart_path : Path
+        Root directory of the Helm chart.
+
+    Returns
+    -------
+    set
+        Integer major versions admitted by the ``common`` dependency pin, or an
+        empty set when Chart.yaml is missing/unparseable or has no common dep.
+    """
+    chart_yaml_path = chart_path / "Chart.yaml"
+    if not chart_yaml_path.exists():
+        return set()
+    try:
+        with open(chart_yaml_path) as cf:
+            chart_meta = yaml.safe_load(cf) or {}
+    except yaml.YAMLError:
+        return set()
+    for dep in (chart_meta.get('dependencies') or []):
+        if isinstance(dep, dict) and dep.get('name') == 'common':
+            return _detect_common_majors(str(dep.get('version', '')))
+    return set()
+
+
+def _collect_controllers(values: dict) -> dict:
+    """
+    Map declared controller ids to the set of container names each defines.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+
+    Returns
+    -------
+    dict
+        ``{controller_id: set(container_names)}`` for every declared controller.
+    """
+    result = {}
+    controllers = values.get('controllers')
+    if not isinstance(controllers, dict):
+        return result
+    for cid, cfg in controllers.items():
+        containers = set()
+        if isinstance(cfg, dict) and isinstance(cfg.get('containers'), dict):
+            containers = set(cfg['containers'].keys())
+        result[cid] = containers
+    return result
+
+
+def _collect_services(values: dict) -> dict:
+    """
+    Map declared service ids to the set of port names each exposes.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+
+    Returns
+    -------
+    dict
+        ``{service_id: set(port_names)}`` for every declared service.
+    """
+    result = {}
+    services = values.get('service')
+    if not isinstance(services, dict):
+        return result
+    for sid, cfg in services.items():
+        ports = set()
+        if isinstance(cfg, dict) and isinstance(cfg.get('ports'), dict):
+            ports = set(cfg['ports'].keys())
+        result[sid] = ports
+    return result
+
+
+def _check_service_controller_refs(values: dict, controller_ids: set) -> List[Issue]:
+    """
+    Verify each ``service.<id>.controller`` points at a declared controller.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    controller_ids : set
+        Declared controller identifiers.
+
+    Returns
+    -------
+    List[Issue]
+        One error per dangling controller reference. Empty when nothing can be
+        resolved (no services or no controllers) to stay conservative.
+    """
+    issues: List[Issue] = []
+    services = values.get('service')
+    if not isinstance(services, dict) or not controller_ids:
+        return issues
+    for sid, cfg in services.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled') is False:
+            continue
+        ref = cfg.get('controller')
+        # Only resolve explicit string references; a missing controller may be
+        # auto-targeted by bjw-s when a single controller exists.
+        if isinstance(ref, str) and ref not in controller_ids:
+            issues.append(Issue(
+                f'service.{sid}.controller',
+                'error',
+                f'References controller "{ref}" which is not defined under controllers',
+                f'Point controller: at one of: {", ".join(sorted(controller_ids))}'
+            ))
+    return issues
+
+
+def _check_ingress_service_refs(values: dict, services: dict) -> List[Issue]:
+    """
+    Verify ingress path references resolve to a declared service and port.
+
+    Only in-chart ``identifier`` references are resolved; a ``name`` reference
+    targets an external Service and is left alone. A numeric ``port`` is passed
+    through untouched by bjw-s, so only string port names are checked.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    services : dict
+        ``{service_id: set(port_names)}`` from :func:`_collect_services`.
+
+    Returns
+    -------
+    List[Issue]
+        Errors for dangling service identifiers or unknown port names.
+    """
+    issues: List[Issue] = []
+    ingresses = values.get('ingress')
+    if not isinstance(ingresses, dict) or not services:
+        return issues
+    for iid, cfg in ingresses.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is False:
+            continue
+        hosts = cfg.get('hosts')
+        if not isinstance(hosts, list):
+            continue
+        for host in hosts:
+            if not isinstance(host, dict):
+                continue
+            paths = host.get('paths')
+            if not isinstance(paths, list):
+                continue
+            for path in paths:
+                if not isinstance(path, dict):
+                    continue
+                svc = path.get('service')
+                if not isinstance(svc, dict):
+                    continue
+                identifier = svc.get('identifier')
+                # 'name' targets an external Service; skip it. Only 'identifier'
+                # resolves against chart-declared services.
+                if not isinstance(identifier, str):
+                    continue
+                if identifier not in services:
+                    issues.append(Issue(
+                        f'ingress.{iid}',
+                        'error',
+                        f'Path references service identifier "{identifier}" which is not defined under service',
+                        f'Use one of: {", ".join(sorted(services))}'
+                    ))
+                    continue
+                port = svc.get('port')
+                port_names = services[identifier]
+                # Resolve named ports only; a bare integer is a literal port.
+                if isinstance(port, str) and port_names and port not in port_names:
+                    issues.append(Issue(
+                        f'ingress.{iid}',
+                        'error',
+                        f'Path references port "{port}" not defined on service "{identifier}"',
+                        f'Use one of: {", ".join(sorted(port_names))}'
+                    ))
+    return issues
+
+
+def _check_persistence_mount_refs(values: dict, controllers: dict) -> List[Issue]:
+    """
+    Verify ``persistence.<id>.advancedMounts.<controller>.<container>`` targets.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    controllers : dict
+        ``{controller_id: set(container_names)}`` from
+        :func:`_collect_controllers`.
+
+    Returns
+    -------
+    List[Issue]
+        Errors for advancedMounts pointing at unknown controllers or containers.
+    """
+    issues: List[Issue] = []
+    persistence = values.get('persistence')
+    if not isinstance(persistence, dict) or not controllers:
+        return issues
+    for pid, cfg in persistence.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is False:
+            continue
+        adv = cfg.get('advancedMounts')
+        if not isinstance(adv, dict):
+            continue
+        # advancedMounts nests as {controllerKey: {containerKey: [mounts]}}.
+        for ctrl_key, containers in adv.items():
+            if ctrl_key not in controllers:
+                issues.append(Issue(
+                    f'persistence.{pid}.advancedMounts.{ctrl_key}',
+                    'error',
+                    f'advancedMounts targets controller "{ctrl_key}" which is not defined',
+                    f'Use one of: {", ".join(sorted(controllers))}'
+                ))
+                continue
+            if not isinstance(containers, dict):
+                continue
+            valid_containers = controllers[ctrl_key]
+            for cont_key in containers.keys():
+                # Only flag when the controller actually declares containers;
+                # an empty set means we could not enumerate them safely.
+                if valid_containers and cont_key not in valid_containers:
+                    issues.append(Issue(
+                        f'persistence.{pid}.advancedMounts.{ctrl_key}.{cont_key}',
+                        'error',
+                        f'advancedMounts targets container "{cont_key}" not defined in controller "{ctrl_key}"',
+                        f'Use one of: {", ".join(sorted(valid_containers))}'
+                    ))
+    return issues
+
+
+def _check_controller_ref_block(values: dict, block_key: str, controller_ids: set) -> List[Issue]:
+    """
+    Verify each ``<block>.<id>.controller`` points at a declared controller.
+
+    Generic resolver for top-level blocks that reference a controller through
+    a bare-string ``controller:`` key. Only ``networkpolicies`` uses this exact
+    shape in common 5.x — ``horizontalPodAutoscaler`` has no top-level block
+    (it nests under ``controllers.<id>``, see
+    :func:`_check_controller_hpa_replicas_null` and
+    :func:`_check_top_level_hpa_key`) and ``podMonitor.<id>.controller`` is an
+    object, not a bare string (see :func:`_check_podmonitor_refs`).
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    block_key : str
+        Top-level block name to inspect (e.g. ``networkpolicies``).
+    controller_ids : set
+        Declared controller identifiers.
+
+    Returns
+    -------
+    List[Issue]
+        One error per dangling controller reference.
+    """
+    issues: List[Issue] = []
+    block = values.get(block_key)
+    if not isinstance(block, dict) or not controller_ids:
+        return issues
+    for bid, cfg in block.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is False:
+            continue
+        ref = cfg.get('controller')
+        # controller is optional (auto-targeted when a single controller
+        # exists); resolve only explicit string references.
+        if isinstance(ref, str) and ref not in controller_ids:
+            issues.append(Issue(
+                f'{block_key}.{bid}.controller',
+                'error',
+                f'References controller "{ref}" which is not defined under controllers',
+                f'Use one of: {", ".join(sorted(controller_ids))}'
+            ))
+    return issues
+
+
+def _check_top_level_hpa_key(values: dict) -> List[Issue]:
+    """
+    Detect a top-level ``horizontalPodAutoscaler:`` block (invalid in v5).
+
+    In bjw-s common 5.x the HorizontalPodAutoscaler is declared per-controller
+    under ``controllers.<id>.horizontalPodAutoscaler``; there is no top-level
+    ``horizontalPodAutoscaler:`` key in the v5 schema. A chart that still uses
+    the pre-v5 top-level shape renders zero HPA resources with no error from
+    Helm itself — a silent no-op that is easy to miss in review.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+
+    Returns
+    -------
+    List[Issue]
+        One error per entry found under a stray top-level
+        ``horizontalPodAutoscaler`` block.
+    """
+    issues: List[Issue] = []
+    block = values.get('horizontalPodAutoscaler')
+    if not isinstance(block, dict) or not block:
+        return issues
+    for hid in block:
+        issues.append(Issue(
+            f'horizontalPodAutoscaler.{hid}',
+            'error',
+            'In common 5.x, HPA is defined per-controller under '
+            'controllers.<id>.horizontalPodAutoscaler, not as a top-level block; '
+            'a top-level horizontalPodAutoscaler renders no resource',
+            'Move this HPA definition under controllers.<controller-id>.horizontalPodAutoscaler'
+        ))
+    return issues
+
+
+def _check_controller_hpa_replicas_null(values: dict) -> List[Issue]:
+    """
+    Warn when a controller with a per-controller HPA pins concrete replicas.
+
+    In common 5.x the HorizontalPodAutoscaler nests under
+    ``controllers.<id>.horizontalPodAutoscaler`` (deployment/statefulset only).
+    The bjw-s docs stress leaving that controller's ``replicas: null`` so the
+    HPA owns the replica count; a fixed value fights the autoscaler on every
+    Helm upgrade. Absent ``replicas`` is left alone to avoid false positives.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+
+    Returns
+    -------
+    List[Issue]
+        Warnings for controllers with an enabled per-controller HPA that still
+        pin replicas to a concrete value.
+    """
+    issues: List[Issue] = []
+    controllers = values.get('controllers')
+    if not isinstance(controllers, dict):
+        return issues
+    for ctrl_id, ctrl_cfg in controllers.items():
+        if not isinstance(ctrl_cfg, dict):
+            continue
+        hpa = ctrl_cfg.get('horizontalPodAutoscaler')
+        if not isinstance(hpa, dict) or not hpa or hpa.get('enabled', True) is False:
+            continue
+        # A present, non-null replicas value overrides the autoscaler on every
+        # Helm upgrade. Only warn on an explicit value; None (null) is correct.
+        if 'replicas' in ctrl_cfg and ctrl_cfg['replicas'] is not None:
+            issues.append(Issue(
+                f'controllers.{ctrl_id}.replicas',
+                'warning',
+                f'controllers.{ctrl_id} defines a horizontalPodAutoscaler but replicas is set to {ctrl_cfg["replicas"]!r}',
+                'Set replicas: null so the HorizontalPodAutoscaler owns the replica count'
+            ))
+    return issues
+
+
+def _check_podmonitor_refs(values: dict, controller_ids: set) -> List[Issue]:
+    """
+    Validate the podMonitor controller shape/reference and endpoints key.
+
+    In common 5.x, ``podMonitor.<id>.controller`` must be an object
+    ``{identifier: <controller-id>}``; a bare string crashes ``helm template``.
+    The metrics-endpoint key is ``podMetricsEndpoints:`` — the Prometheus
+    Operator ``ServiceMonitor`` spelling ``endpoints:`` parses as valid YAML
+    but is not part of the schema, so it is silently dropped, producing a
+    PodMonitor with no endpoints.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    controller_ids : set
+        Declared controller identifiers.
+
+    Returns
+    -------
+    List[Issue]
+        Errors for a bare-string controller, a dangling controller identifier,
+        and a misspelled ``endpoints`` key.
+    """
+    issues: List[Issue] = []
+    pod_monitors = values.get('podMonitor')
+    if not isinstance(pod_monitors, dict):
+        return issues
+    for pid, cfg in pod_monitors.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is False:
+            continue
+        location = f'podMonitor.{pid}'
+        ref = cfg.get('controller')
+        if isinstance(ref, str):
+            # The v5 schema requires the object form; a bare string here
+            # crashes `helm template` rather than merely failing to resolve.
+            issues.append(Issue(
+                f'{location}.controller',
+                'error',
+                'podMonitor.<id>.controller must be an object {identifier: <controller-id>}; '
+                'a bare string crashes helm template',
+                f'Use controller: {{identifier: {ref}}}'
+            ))
+        elif isinstance(ref, dict) and controller_ids:
+            identifier = ref.get('identifier')
+            if isinstance(identifier, str) and identifier not in controller_ids:
+                issues.append(Issue(
+                    f'{location}.controller.identifier',
+                    'error',
+                    f'References controller "{identifier}" which is not defined under controllers',
+                    f'Use one of: {", ".join(sorted(controller_ids))}'
+                ))
+        if 'endpoints' in cfg:
+            issues.append(Issue(
+                f'{location}.endpoints',
+                'error',
+                'podMonitor uses `podMetricsEndpoints:`, not `endpoints:`',
+                'Rename the key to podMetricsEndpoints'
+            ))
+    return issues
+
+
+def _check_servicemonitor_refs(values: dict, services: dict) -> List[Issue]:
+    """
+    Validate serviceMonitor service references and flag the invalid controller key.
+
+    ``serviceMonitor.<id>`` targets a Service via ``service: {identifier: <id>}``
+    (chart-managed) or ``service: {name: <ext>}`` (external) — never via
+    ``controller:``. A stray ``controller:`` key is silently ignored by the
+    schema and breaks once a controller exposes more than one Service.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    services : dict
+        ``{service_id: set(port_names)}`` from :func:`_collect_services`.
+
+    Returns
+    -------
+    List[Issue]
+        Errors for a stray ``controller:`` key and for a dangling service
+        identifier.
+    """
+    issues: List[Issue] = []
+    service_monitors = values.get('serviceMonitor')
+    if not isinstance(service_monitors, dict):
+        return issues
+    for sid, cfg in service_monitors.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is False:
+            continue
+        location = f'serviceMonitor.{sid}'
+        if 'controller' in cfg:
+            issues.append(Issue(
+                f'{location}.controller',
+                'error',
+                'serviceMonitor targets a Service via service: {identifier: <id>} (or {name:}), not controller:; '
+                'the controller key is ignored and breaks with 2+ services',
+                'Remove controller: and add service: {identifier: <service-id>}'
+            ))
+        svc = cfg.get('service')
+        if isinstance(svc, dict) and services:
+            identifier = svc.get('identifier')
+            # 'name' targets an external Service; skip it, same treatment as
+            # the ingress service-reference check.
+            if isinstance(identifier, str) and identifier not in services:
+                issues.append(Issue(
+                    f'{location}.service.identifier',
+                    'error',
+                    f'References service identifier "{identifier}" which is not defined under service',
+                    f'Use one of: {", ".join(sorted(services))}'
+                ))
+    return issues
+
+
+def _check_env_valuefrom_identifier(values: dict) -> List[Issue]:
+    """
+    Flag ``identifier`` used inside a per-variable ``env`` ``valueFrom`` ref.
+
+    The bjw-s common-5.0.1 schema (``schemas/envVars.json``) resolves both
+    ``configMapKeyRef`` and ``secretKeyRef`` under a per-variable ``valueFrom``
+    to ``$defs/objectKeySelector``, which is ``additionalProperties: false``
+    with only ``name`` and ``key`` allowed. ``identifier`` there is schema
+    -invalid and Helm rejects the chart. ``identifier`` only resolves
+    chart-managed objects in ``envFrom`` and in persistence refs — never in a
+    per-variable ``valueFrom``, which always needs the rendered object name.
+
+    Handles both accepted ``env`` shapes: the mapping form
+    (``env: {VAR: {valueFrom: {...}}}``) and the list form
+    (``env: [{name: VAR, valueFrom: {...}}]``).
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+
+    Returns
+    -------
+    List[Issue]
+        One error per ``configMapKeyRef``/``secretKeyRef`` that uses
+        ``identifier`` instead of ``name``.
+    """
+    issues: List[Issue] = []
+    controllers = values.get('controllers')
+    if not isinstance(controllers, dict):
+        return issues
+
+    def _check_value_from(value_from, location):
+        """Inspect a single valueFrom block for a schema-invalid identifier key."""
+        if not isinstance(value_from, dict):
+            return
+        for ref_key in ('configMapKeyRef', 'secretKeyRef'):
+            ref = value_from.get(ref_key)
+            if isinstance(ref, dict) and 'identifier' in ref:
+                issues.append(Issue(
+                    f'{location}.valueFrom.{ref_key}',
+                    'error',
+                    f'"identifier" is not valid inside a per-variable valueFrom.{ref_key} '
+                    '(schema only allows name + key)',
+                    'Use "name: <rendered-object-name>" instead — identifier only '
+                    'works in envFrom and persistence refs'
+                ))
+
+    for ctrl_id, ctrl_cfg in controllers.items():
+        if not isinstance(ctrl_cfg, dict):
+            continue
+        containers = ctrl_cfg.get('containers')
+        if not isinstance(containers, dict):
+            continue
+        for cont_name, cont_cfg in containers.items():
+            if not isinstance(cont_cfg, dict):
+                continue
+            env = cont_cfg.get('env')
+            base_location = f'controllers.{ctrl_id}.containers.{cont_name}.env'
+            if isinstance(env, dict):
+                # Mapping form: env.<VAR>.valueFrom...
+                for var_name, var_cfg in env.items():
+                    if isinstance(var_cfg, dict):
+                        _check_value_from(var_cfg.get('valueFrom'), f'{base_location}.{var_name}')
+            elif isinstance(env, list):
+                # List form: env: [{name: VAR, valueFrom: {...}}]
+                for entry in env:
+                    if isinstance(entry, dict):
+                        var_name = entry.get('name', '?')
+                        _check_value_from(entry.get('valueFrom'), f'{base_location}.{var_name}')
+    return issues
 
 
 def validate_chart_yaml(chart_path: Path) -> List[Issue]:
@@ -121,8 +727,11 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                 # feature set is in scope. 5.x is the default; 4.x is
                 # treated as a legacy track and 5.x-only features are
                 # not validated against 4.x.
-                raw_version = str(dep.get('version', '')).lstrip('^~=v ')
-                major = raw_version.split('.', 1)[0] if raw_version else ''
+                raw_version = str(dep.get('version', '')).strip()
+                # Robustly detect the major(s) a constraint admits so ranges
+                # like ">=4.0.0 <5.0.0", "~4.6.0" or "4.x" still surface the
+                # legacy-4.x warning (a naive first-segment parse misses them).
+                majors = _detect_common_majors(raw_version)
                 if not raw_version:
                     issues.append(Issue(
                         'Chart.yaml',
@@ -130,27 +739,39 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                         'common library has no version pin',
                         'Pin a version (current default: 5.0.1)'
                     ))
-                elif major.isdigit() and int(major) < 4:
-                    issues.append(Issue(
-                        'Chart.yaml',
-                        'error',
-                        f'common library version {raw_version} is older than v4',
-                        'Upgrade to 5.x (or 4.6.2 for legacy clusters) — pre-v4 is unsupported'
-                    ))
-                elif major == '4':
-                    issues.append(Issue(
-                        'Chart.yaml',
-                        'warning',
-                        f'common library pinned to {raw_version} (legacy 4.x track)',
-                        'Migrate to 5.0.1 when K8s ≥ 1.31 / Helm ≥ 3.18 — see references/migration-4-to-5.md'
-                    ))
-                elif major == '5':
-                    issues.append(Issue(
-                        'Chart.yaml',
-                        'info',
-                        f'common library pinned to {raw_version} (5.x, current default)',
-                        ''
-                    ))
+                elif majors:
+                    min_major = min(majors)
+                    max_major = max(majors)
+                    if min_major < 4:
+                        issues.append(Issue(
+                            'Chart.yaml',
+                            'error',
+                            f'common library version {raw_version} admits a release older than v4',
+                            'Upgrade to 5.x (or 4.6.2 for legacy clusters) — pre-v4 is unsupported'
+                        ))
+                    if 4 in majors and max_major >= 5:
+                        # The range straddles a major boundary (e.g. ">=4 <6"),
+                        # so which feature set applies is ambiguous.
+                        issues.append(Issue(
+                            'Chart.yaml',
+                            'warning',
+                            f'common library constraint {raw_version} spans majors 4.x and 5.x',
+                            'Tighten the pin to a single major (e.g. 5.0.1) — a range across majors is ambiguous'
+                        ))
+                    elif 4 in majors:
+                        issues.append(Issue(
+                            'Chart.yaml',
+                            'warning',
+                            f'common library pinned to {raw_version} (legacy 4.x track)',
+                            'Migrate to 5.0.1 when K8s ≥ 1.31 / Helm ≥ 3.18 — see references/migration-4-to-5.md'
+                        ))
+                    elif min_major >= 5:
+                        issues.append(Issue(
+                            'Chart.yaml',
+                            'info',
+                            f'common library pinned to {raw_version} (5.x, current default)',
+                            ''
+                        ))
                 break
 
         if not common_found:
@@ -396,27 +1017,50 @@ def validate_values(chart_path: Path) -> List[Issue]:
                 ))
             else:
                 image = container_config['image']
-                if 'repository' not in image:
+                # A present-but-null image (`image:` with no children) parses
+                # to None and is not subscriptable — guard before indexing.
+                if not isinstance(image, dict) or not image:
                     issues.append(Issue(
                         f'{cont_location}.image',
                         'error',
-                        'Missing image repository',
-                        'Add image.repository'
+                        'image block is empty/null',
+                        'Define image.repository and image.tag'
                     ))
-                if 'tag' not in image:
-                    issues.append(Issue(
-                        f'{cont_location}.image',
-                        'warning',
-                        'Missing image tag',
-                        'Add explicit image.tag (avoid :latest)'
-                    ))
-                elif str(image.get('tag', '')).lower() == 'latest':
-                    issues.append(Issue(
-                        f'{cont_location}.image',
-                        'warning',
-                        'Using :latest tag',
-                        'Use specific version tag for reproducibility'
-                    ))
+                else:
+                    if 'repository' not in image:
+                        issues.append(Issue(
+                            f'{cont_location}.image',
+                            'error',
+                            'Missing image repository',
+                            'Add image.repository'
+                        ))
+                    if 'tag' not in image:
+                        issues.append(Issue(
+                            f'{cont_location}.image',
+                            'warning',
+                            'Missing image tag',
+                            'Add explicit image.tag (avoid :latest)'
+                        ))
+                    else:
+                        raw_tag = image.get('tag')
+                        # An unquoted numeric tag is reinterpreted by YAML:
+                        # `tag: 1.10` -> float 1.1, `tag: 16` -> int 16, both
+                        # silently losing the intended string. bool is a subclass
+                        # of int, so it is covered by the same check.
+                        if isinstance(raw_tag, (bool, int, float)):
+                            issues.append(Issue(
+                                f'{cont_location}.image',
+                                'warning',
+                                f'Image tag {raw_tag!r} is not a string — YAML reinterpreted an unquoted numeric/boolean tag',
+                                'Quote the tag (e.g. tag: "1.10") so YAML preserves it verbatim'
+                            ))
+                        elif str(raw_tag).lower() == 'latest':
+                            issues.append(Issue(
+                                f'{cont_location}.image',
+                                'warning',
+                                'Using :latest tag',
+                                'Use specific version tag for reproducibility'
+                            ))
 
             # Check resource requests/limits
             resources = container_config.get('resources', {})
@@ -467,7 +1111,8 @@ def validate_values(chart_path: Path) -> List[Issue]:
                                     f'{cont_location}.probes.{probe_type}',
                                     'info',
                                     'Probe type not specified',
-                                    'Add type: HTTP, TCP, or EXEC'
+                                    'Add type: TCP, HTTP, HTTPS, GRPC, or AUTO. '
+                                    'For exec/command probes set custom: true with a raw spec.exec instead of a type'
                                 ))
 
     # Check services
@@ -477,6 +1122,11 @@ def validate_values(chart_path: Path) -> List[Issue]:
             location = f'service.{svc_name}'
 
             if not svc_config:
+                continue
+
+            # A disabled service renders nothing — do not validate its inner
+            # fields (default is enabled, so only skip on an explicit False).
+            if svc_config.get('enabled') is False:
                 continue
 
             if 'controller' not in svc_config:
@@ -539,6 +1189,16 @@ def validate_values(chart_path: Path) -> List[Issue]:
                             'Add identifier: <service-identifier>'
                         ))
 
+    # Detect which common major(s) the chart targets. Reused to gate both the
+    # legacy rawResources shape and the 5.x-only ServiceAccount hint. Re-read
+    # Chart.yaml — validate_values runs independently of validate_chart_yaml.
+    common_majors = _common_major_set(chart_path)
+    # An empty set means the pin is unknown/unparseable; default to 5.x (the
+    # current track) so 5.x-only checks still fire on well-formed modern charts.
+    targets_v5 = (not common_majors) or (5 in common_majors)
+    # Purely-4.x means 4 is admitted and 5 is not — legacy shapes are valid then.
+    legacy_4x_only = bool(common_majors) and 4 in common_majors and 5 not in common_majors
+
     # Check rawResources for legacy 4.x shape
     raw_resources = values.get('rawResources') or {}
     for rr_name, rr_config in raw_resources.items():
@@ -551,31 +1211,26 @@ def validate_values(chart_path: Path) -> List[Issue]:
         # optionally under a 'spec:' key.
         legacy_keys = {'apiVersion', 'kind', 'spec', 'labels', 'annotations'}
         if legacy_keys & set(rr_config.keys()):
-            issues.append(Issue(
-                location,
-                'error',
-                'rawResources uses the legacy 4.x shape (no `manifest:` wrapper)',
-                'Wrap the K8s manifest under a `manifest:` key and move labels/annotations under `metadata:` — see references/migration-4-to-5.md'
-            ))
+            if legacy_4x_only:
+                # The skill advertises 4.x legacy support; on a 4.x pin the
+                # top-level shape is the correct one, so this is informational.
+                issues.append(Issue(
+                    location,
+                    'info',
+                    'rawResources uses the legacy 4.x top-level shape (valid for common 4.x)',
+                    'On 5.x this must be wrapped under a `manifest:` key — see references/migration-4-to-5.md'
+                ))
+            else:
+                issues.append(Issue(
+                    location,
+                    'error',
+                    'rawResources uses the legacy 4.x shape (no `manifest:` wrapper)',
+                    'Wrap the K8s manifest under a `manifest:` key and move labels/annotations under `metadata:` — see references/migration-4-to-5.md'
+                ))
 
     # ServiceAccount opt-out hint: a chart that wires an external SA
     # without disabling the 5.x default will end up with two SAs in the
-    # namespace. Only emit the hint when the common dep is 5.x. Re-read
-    # Chart.yaml — validate_values runs independently of validate_chart_yaml.
-    common_major = ''
-    chart_yaml_path = chart_path / "Chart.yaml"
-    if chart_yaml_path.exists():
-        try:
-            with open(chart_yaml_path) as cf:
-                chart_meta = yaml.safe_load(cf) or {}
-            for dep in (chart_meta.get('dependencies') or []):
-                if isinstance(dep, dict) and dep.get('name') == 'common':
-                    raw_v = str(dep.get('version', '')).lstrip('^~=v ')
-                    common_major = raw_v.split('.', 1)[0] if raw_v else ''
-                    break
-        except yaml.YAMLError:
-            pass
-
+    # namespace. Only emit the hint when the common dep is 5.x.
     def _references_external_sa(ctrls):
         for cfg in (ctrls or {}).values():
             if not isinstance(cfg, dict):
@@ -585,7 +1240,7 @@ def validate_values(chart_path: Path) -> List[Issue]:
                 return True
         return False
 
-    if common_major == '5':
+    if 5 in common_majors:
         global_section = values.get('global') or {}
         if (
             _references_external_sa(values.get('controllers'))
@@ -636,6 +1291,28 @@ def validate_values(chart_path: Path) -> List[Issue]:
                             'PVC has no accessMode specified',
                             'Defaults to ReadWriteOnce'
                         ))
+
+    # Cross-reference validation: resolve identifiers against declared objects.
+    # These catch the dominant real-world failure — a typo'd identifier that
+    # renders fine but wires to nothing. Every check is conservative: it only
+    # errors on an explicit reference it can prove is dangling, and stays silent
+    # on unfamiliar/optional shapes to avoid destroying trust with false alarms.
+    controllers_map = _collect_controllers(values)      # {ctrl_id: {containers}}
+    controller_ids = set(controllers_map)
+    services_map = _collect_services(values)            # {svc_id: {port names}}
+    issues.extend(_check_service_controller_refs(values, controller_ids))
+    issues.extend(_check_ingress_service_refs(values, services_map))
+    issues.extend(_check_persistence_mount_refs(values, controllers_map))
+    # networkpolicies references a controller via a bare-string `controller:`
+    # key. HPA and podMonitor use different shapes in v5 and are handled by
+    # their own dedicated checks below.
+    for block_key in ('networkpolicies',):
+        issues.extend(_check_controller_ref_block(values, block_key, controller_ids))
+    issues.extend(_check_top_level_hpa_key(values))
+    issues.extend(_check_controller_hpa_replicas_null(values))
+    issues.extend(_check_podmonitor_refs(values, controller_ids))
+    issues.extend(_check_servicemonitor_refs(values, services_map))
+    issues.extend(_check_env_valuefrom_identifier(values))
 
     return issues
 
