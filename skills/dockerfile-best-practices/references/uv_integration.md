@@ -10,7 +10,7 @@ Complete guide for using uv (the modern Python package manager) in Docker.
 # syntax=docker/dockerfile:1
 
 FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.9.10 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -27,32 +27,60 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
 
+# Create the runtime user, then hand it the tree uv wrote as root.
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app && \
+    chown -R app:app /app
+USER app
+
 # Activate virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
 
 CMD ["python", "-m", "myapp"]
 ```
 
+Two ordering rules carry this file, and both are easy to get wrong:
+
+1. **`uv sync` runs as root.** It needs to write both the venv (`/app/.venv`)
+   and its cache (`/root/.cache/uv`, the mount target above). Switch to a
+   non-root user before the sync and it dies on `Permission denied` at
+   whichever of the two it reaches first.
+1. **`USER` goes last**, after ownership of the workdir is settled.
+
+The `--mount=type=bind` flags above mount `uv.lock` and `pyproject.toml` into
+the build without copying them into a layer, so editing application code does
+not invalidate the dependency layer. See `best_practices.md` for how bind
+mounts differ from `COPY` and from cache mounts.
+
 ## Installation Methods
 
-### Method 1: Copy from distroless image (recommended)
+### Method 1: Copy from the uv image (recommended)
 
 ```dockerfile
 FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.9.10 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
 ```
 
-**Best practice:** Pin to specific version or SHA256
+This is Astral's own documented recommendation, and it is the cheapest correct
+option: no network fetch at build time, no shell, no checksum to manage.
 
-```dockerfile
-# Pin to version
-COPY --from=ghcr.io/astral-sh/uv:0.9.10 /uv /uvx /bin/
+#### Pinning the uv image
 
-# Pin to SHA256 (most reproducible)
-COPY --from=ghcr.io/astral-sh/uv@sha256:2381d6aa60c326b71fd40023f921a0a3b8f91b14d5db6b90402e65a635053709 /uv /uvx /bin/
-```
+Pin a readable version tag. `0.11.29` records exactly which uv you copied.
+`:latest` records nothing, and this skill's own rule rejects it (DL002).
 
-### Method 2: Use pre-installed images
+Be honest about what the tag buys you: it is documentation and a rough
+contract, not a reproducibility mechanism. Tags are mutable. Rebuilding in six
+months may resolve the same string to different bytes. What keeps uv current is
+rebuilding regularly, not the string you typed.
+
+If you need a hard guarantee, pinning the digest is the strongest one
+available, but only when it is backed by renewal automation (Renovate,
+Dependabot) or by recording the resolved digest in build metadata. Without that
+automation a digest rots silently and you ship a known-vulnerable uv while
+feeling safe. Most teams do not have the automation. See
+`supply_chain.md` before choosing it.
+
+### Method 2: Use a pre-installed uv image
 
 ```dockerfile
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
@@ -61,24 +89,42 @@ WORKDIR /app
 ```
 
 Available images:
+
 - `ghcr.io/astral-sh/uv:python3.12-alpine`
 - `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`
 - `ghcr.io/astral-sh/uv:python3.12-bookworm`
 
-### Method 3: Install via installer
+These tags name the OS (`bookworm`) as well as the Python version. That is a
+legitimate stability choice: it pins you to a Debian release so a distro
+upgrade cannot arrive unannounced in a rebuild. The tradeoff is that you move
+to the next Debian yourself, on your own schedule.
+
+### Method 3: Install via the installer script
+
+Use this only when you cannot copy from an external registry (an air-gapped or
+mirror-only build). Method 1 is better in every other case.
 
 ```dockerfile
+# Fragment: the checksum is a placeholder; supply the real digest for your version
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
-ADD https://astral.sh/uv/0.9.10/install.sh /uv-installer.sh
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+ADD --checksum=sha256:<digest-of-install.sh> \
+    https://astral.sh/uv/0.11.29/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 ENV PATH="/root/.local/bin/:$PATH"
 ```
 
+`--checksum` is what makes this method defensible: without it nothing verifies
+the script you are about to execute as root, and a compromised or
+man-in-the-middled endpoint owns your image. Fetch the real digest for the
+version you pin and paste it in; do not copy the placeholder above.
+
 ## Cache Optimization
 
-### Enable uv cache mount (essential!)
+### Enable uv cache mount (essential)
 
 ```dockerfile
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -101,7 +147,7 @@ ENV UV_CACHE_DIR=/opt/uv-cache/
 # syntax=docker/dockerfile:1
 
 FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -118,6 +164,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ```
 
 **Benefits:**
+
 - Dependencies layer cached separately from code
 - Only reinstalls deps when `uv.lock` or `pyproject.toml` change
 - Massive speedup on code changes
@@ -129,11 +176,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # --- Build stage ---
 FROM python:3.12-slim AS builder
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies (root: uv writes /app/.venv here)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
@@ -147,11 +194,17 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # --- Runtime stage ---
 FROM python:3.12-slim
 
+# Create the user BEFORE the --chown below: --chown resolves the name against
+# THIS stage's /etc/passwd, and a new stage does not inherit the builder's user
+# table. Get the order wrong and BuildKit does not stop you: it silently falls
+# back to 0:0, the venv ends up root-owned, and the failure only surfaces at
+# runtime when the app cannot write to it.
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app
+
 # Copy only the virtual environment (not source code)
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
-# Create non-root user
-RUN groupadd -r app && useradd -r -g app app
+# Nothing writes to /app after this point, so the switch is safe here.
 USER app
 
 # Activate venv
@@ -161,9 +214,14 @@ CMD ["/app/.venv/bin/myapp"]
 ```
 
 **Benefits:**
+
 - Source code not in final image
 - Smaller final image
 - Better security
+
+Note that no `uv sync` runs in the runtime stage: the venv arrives prebuilt, so
+switching to `app` immediately after the copy is safe. In a single-stage build
+the same switch has to wait until after the last sync.
 
 ## Using the Environment
 
@@ -184,7 +242,8 @@ CMD ["uv", "run", "myapp"]
 
 ```dockerfile
 ENV UV_PROJECT_ENVIRONMENT=/usr/local
-RUN uv sync --locked
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked
 CMD ["myapp"]
 ```
 
@@ -194,7 +253,8 @@ CMD ["myapp"]
 
 ```dockerfile
 ENV UV_SYSTEM_PYTHON=1
-RUN uv pip install --system ruff
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system ruff
 ```
 
 ### Use virtual environment (more isolated)
@@ -203,7 +263,8 @@ RUN uv pip install --system ruff
 RUN uv venv /opt/venv
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN uv pip install ruff
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install ruff
 ```
 
 ## Workspaces
@@ -231,7 +292,9 @@ RUN uv tool install cowsay
 RUN uv tool install ruff
 ```
 
-**Note:** Images `>= 0.8` set `UV_TOOL_BIN_DIR=/usr/local/bin` by default.
+**Note:** recent uv images set `UV_TOOL_BIN_DIR=/usr/local/bin` by default, so
+tools land on `PATH` without the `ENV` above. Check the tag you actually pin
+rather than assuming either behaviour.
 
 ## Complete Example (FastAPI app)
 
@@ -239,7 +302,7 @@ RUN uv tool install ruff
 # syntax=docker/dockerfile:1
 
 FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.9.10 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -252,12 +315,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy application
 COPY . .
 
-# Install project
+# Install project (still root: uv writes /app/.venv)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
-# Create non-root user
-RUN groupadd -r app && useradd -r -g app app && \
+# Create non-root user and hand over /app, then drop privileges
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app && \
     chown -R app:app /app
 USER app
 
@@ -287,30 +350,40 @@ The local venv is platform-specific and must be rebuilt in the container.
 ### uv vs pip
 
 **Use uv for:**
+
 - New projects
-- When you want speed (10-100x faster than pip)
+- When you want speed (Astral benchmarks uv at 10-100x faster than pip;
+  the gap depends heavily on the workload and on cache state)
 - Projects with `pyproject.toml` + `uv.lock`
 
 **Use pip for:**
+
 - Legacy projects with `requirements.txt`
 - When uv is not available in environment
 
 ### Temporary uv mount
 
-If uv not needed in final image:
+If uv is not needed in the final image, mount the binary for one `RUN` instead
+of copying it into a layer:
 
 ```dockerfile
-RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.29,source=/uv,target=/bin/uv \
+    --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
 ```
+
+Pin this reference exactly as you would a `COPY --from`: an untagged image here
+resolves to `:latest` and silently changes uv under you.
 
 ## Common Patterns by Use Case
 
 ### CLI Tool
 
 ```dockerfile
+# syntax=docker/dockerfile:1
+
 FROM python:3.12-alpine
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -319,6 +392,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
+
+# Alpine ships busybox adduser/addgroup, not the shadow groupadd/useradd.
+RUN addgroup -g 10001 -S app && adduser -u 10001 -S app -G app && \
+    chown -R app:app /app
+USER app
+
 ENV PATH="/app/.venv/bin:$PATH"
 ENTRYPOINT ["mytool"]
 ```
@@ -326,8 +405,10 @@ ENTRYPOINT ["mytool"]
 ### Web API
 
 ```dockerfile
+# syntax=docker/dockerfile:1
+
 FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -336,7 +417,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
-RUN groupadd -r app && useradd -r -g app app && chown -R app:app /app
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app && \
+    chown -R app:app /app
 USER app
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
@@ -346,8 +428,10 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]
 ### Data Processing / ML
 
 ```dockerfile
+# syntax=docker/dockerfile:1
+
 FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -356,6 +440,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
+RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app && \
+    chown -R app:app /app
+USER app
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["python", "-m", "myapp.process"]
 ```
