@@ -13,11 +13,11 @@ Comprehensive guide for creating optimized, secure, and fast Docker images using
 
 1. **Identify language/framework** → Pick a template from [Language Templates](#language-templates)
 2. **Apply essential rules** → Every Dockerfile must follow [Essential Rules](#essential-rules-always-apply)
-3. **Security hardening** → Non-root user, pinned tags, secret mounts
+3. **Security hardening** → Non-root user, secret mounts, provenance and SBOM attestations (see [references/supply_chain.md](references/supply_chain.md))
 4. **Optimize for cache** → Separate deps from code, use cache mounts
 5. **Multi-stage if needed** → Compiled languages or distroless runtime
 6. **Add metadata** → OCI labels, HEALTHCHECK, STOPSIGNAL (see [PID 1 and Signals](#pid-1-and-signals))
-7. **Review** → Run `scripts/analyze_dockerfile.py`, then `docker build --check` (see `references/build_checks.md`)
+7. **Review** → Run [scripts/analyze_dockerfile.py](scripts/analyze_dockerfile.py), then `docker build --check` (see [references/build_checks.md](references/build_checks.md))
 
 ## Essential Rules (Always Apply)
 
@@ -34,10 +34,10 @@ Comprehensive guide for creating optimized, secure, and fast Docker images using
 - **Pin a tag as specific as you are willing to maintain.** `python:3.12-slim` is fine. `python:3.12-slim-bookworm` is equally fine: pinning the OS is a legitimate stability choice, not a mistake.
 - **`:latest` and untagged images stay rejected.** Not because mutability is uniquely evil there, but because they carry zero information about what you are actually running.
 - **Every tag is mutable, and security updates come from rebuilding regularly.** Rebuild in six months and you may get different bytes. A tag is documentation and a rough contract, not a reproducibility mechanism. Name the process, not the string.
-- **Reproducibility comes from a process**: digest pinning backed by Renovate or Dependabot, or recording the resolved digest in build metadata, which is what provenance attestations already do (`references/supply_chain.md`).
+- **Reproducibility comes from a process**: digest pinning backed by Renovate or Dependabot, or recording the resolved digest in build metadata, which is what provenance attestations already do ([references/supply_chain.md](references/supply_chain.md)).
 - **Digests are an option, not the default.** Strongest guarantee available, but without renewal automation a digest is just a tag that rots silently while you ship known CVEs feeling safe. Most teams lack that automation. Adopt digests only with the tooling that renews them.
 
-Full argument and the digest tradeoff: `references/best_practices.md`.
+Full argument and the digest tradeoff: [references/best_practices.md](references/best_practices.md).
 
 ### 3. Cache mounts for all package managers
 
@@ -146,7 +146,7 @@ If the image genuinely cannot check itself (php-fpm speaks FastCGI and ships no 
 
 ### 11. Create .dockerignore
 
-Use the template in `assets/dockerignore-template`. Critical for build context size and security.
+Use the template in [assets/dockerignore-template](assets/dockerignore-template). Critical for build context size and security.
 
 ## PID 1 and Signals
 
@@ -164,13 +164,13 @@ Always use the **exec form** of `CMD`/`ENTRYPOINT`: shell form wraps the command
 STOPSIGNAL SIGQUIT
 ```
 
-Depth: `references/best_practices.md`.
+Depth: [references/best_practices.md](references/best_practices.md).
 
 ## Language Templates
 
 ### Python (with uv - Recommended)
 
-For detailed uv patterns, see `references/uv_integration.md`.
+For detailed uv patterns, see [references/uv_integration.md](references/uv_integration.md).
 
 ```dockerfile
 # syntax=docker/dockerfile:1
@@ -278,7 +278,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     cargo build --release
 
-# touch is load-bearing: COPY restores the context's older mtime, so without it cargo calls the dummy build fresh, skips the rebuild, and ships the "fn main() {}" stub.
+# touch is load-bearing: COPY restores the context's older mtime, so without it
+# cargo calls the dummy build fresh, skips the rebuild, and ships the
+# "fn main() {}" stub.
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
@@ -351,50 +353,42 @@ CMD ["./app"]
 
 ## Docker Compose Rules
 
-**Critical rules** (always enforce):
+1. **No `version:`**: a Compose V1 leftover, deprecated since V2.
+1. **`container_name:` only where you have a reason**: it blocks `--scale` on
+   that service. A single-instance service you address by name from scripts is
+   a legitimate reason; habit is not.
+1. **`depends_on` with `condition: service_healthy`**: bare `depends_on` waits
+   for the container to start, not for the service to become usable.
 
-1. **Never use `version:`** — Deprecated since Compose V2
-1. **Never use `container_name:`** — Prevents scaling and parallel environments
-1. **Never use `links:`** — Deprecated, use networks instead
-1. **Use specific image tags** — Never `:latest`
-1. **Use `depends_on` with `condition: service_healthy`** — Not bare `depends_on`
-
-For the complete Compose guide with examples, see `references/compose_best_practices.md`.
+Health checks, networks, volumes, secrets, runtime hardening, dev vs prod,
+scaling, and the full `container_name` tradeoff:
+[references/compose_best_practices.md](references/compose_best_practices.md).
 
 ## Commands Reference
 
 ```bash
-# Review before building: this skill's linter, then BuildKit's own checks
-python scripts/analyze_dockerfile.py ./Dockerfile
-python scripts/analyze_compose.py ./docker-compose.yml
-docker buildx build --check .          # see references/build_checks.md
+# Review before building: this skill's linter, then BuildKit's own checks.
+# uv run resolves each script's PEP 723 dependencies; plain python will not.
+uv run scripts/analyze_dockerfile.py ./Dockerfile
+uv run scripts/analyze_compose.py ./compose.yaml
+docker buildx build --check .
 
-# Basic build
-docker buildx build -t myapp:1.0.0 .
-
-# With remote cache (CI/CD)
-docker buildx build \
-  --cache-from=type=registry,ref=registry.com/myapp:cache \
-  --cache-to=type=registry,ref=registry.com/myapp:cache,mode=max \
-  -t myapp:1.0.0 .
-
-# With secrets
+# Build: with a secret mount (rule 5), and multi-platform
 docker buildx build --secret id=api_key,src=./key.txt -t myapp:1.0.0 .
-
-# Multi-platform
 docker buildx build --platform linux/amd64,linux/arm64 -t myapp:1.0.0 --push .
 ```
 
+Remote cache (`--cache-from` / `--cache-to`) and the rest of the buildx surface:
+[references/optimization_guide.md](references/optimization_guide.md).
+
 ## Reference Documentation
 
-For detailed information beyond what's covered here:
-
 | Reference | Content |
-|-----------|---------|
-| `references/optimization_guide.md` | BuildKit internals, caching strategies, multi-stage patterns, distroless, profiling |
-| `references/best_practices.md` | Complete checklist with impact levels, pinning doctrine and the digest tradeoff, UID/GID strategy, PID 1 and signal handling |
-| `references/build_checks.md` | `docker build --check`: the built-in rule set, wiring it into CI |
-| `references/supply_chain.md` | Provenance attestations, SBOMs, signing, digest renewal tooling |
-| `references/examples.md` | Real-world before/after optimization examples (15 scenarios) |
-| `references/uv_integration.md` | Python with uv: installation methods, workspaces, multi-stage, all patterns |
-| `references/compose_best_practices.md` | Complete Compose guide: networks, volumes, secrets, dev vs prod, scaling |
+| --------- | ------- |
+| [optimization_guide.md](references/optimization_guide.md) | BuildKit internals, caching strategies, multi-stage patterns, distroless, profiling |
+| [best_practices.md](references/best_practices.md) | Complete checklist with impact levels, pinning doctrine and the digest tradeoff, UID/GID strategy, PID 1 and signal handling |
+| [build_checks.md](references/build_checks.md) | `docker build --check`: the built-in rule set, wiring it into CI |
+| [supply_chain.md](references/supply_chain.md) | Provenance attestations, SBOMs, signing, digest renewal tooling |
+| [examples.md](references/examples.md) | Real-world before/after optimization examples (15 scenarios) |
+| [uv_integration.md](references/uv_integration.md) | Python with uv: installation methods, workspaces, multi-stage, all patterns |
+| [compose_best_practices.md](references/compose_best_practices.md) | Complete Compose guide: networks, volumes, secrets, dev vs prod, scaling |
