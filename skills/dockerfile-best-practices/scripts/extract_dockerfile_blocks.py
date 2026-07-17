@@ -21,8 +21,11 @@ revised after the first CI run against the real skill)
    ``FROM`` instruction AND a ``CMD`` or an ``ENTRYPOINT`` instruction.
 2. A block is skipped as a snippet if it lacks a ``FROM``, or has a ``FROM``
    but no ``CMD``/``ENTRYPOINT``. No marker needed for either case.
-3. A block is skipped regardless of shape if one of its comment lines starts
-   with ``# Fragment:`` or ``# Anti-pattern:``.
+3. A block is skipped regardless of shape if a LEADING comment line (before
+   the block's first real instruction) starts with ``# Fragment:`` or
+   ``# Anti-pattern:``. "Leading" is load-bearing: see `classify_block`'s
+   docstring for the false-negative this closes (a marker-lookalike line
+   inside a ``RUN`` heredoc body must not count).
 
 The original rule ("validate any block with a FROM") validated 62 of 113
 blocks and produced 50 failures, dominated by DL001 (no syntax directive) x32
@@ -213,8 +216,37 @@ def classify_block(block: FencedBlock) -> "tuple[str, Optional[str]]":
     count as a complete image, because DL001/DL030/DL031/DL032 are
     whole-image checks that are meaningless on a fragment (see the module
     docstring for why this replaced the original "any FROM" rule).
+
+    The marker is only honoured on a leading comment line, i.e. a line
+    before the block's first real instruction (blank lines in between don't
+    end the header). A marker is metadata *about* the block, so it belongs
+    in the header, not anywhere in the body. Scanning every line, as an
+    earlier version of this function did, let a ``RUN <<EOF ... EOF``
+    heredoc body smuggle a false marker past the classifier:
+
+        FROM python:3.12-slim
+        RUN cat <<'EOF2' > /etc/motd
+        # Fragment: this is app data
+        EOF2
+        COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+        CMD ["python", "app.py"]
+
+    That interior line is heredoc *content* being written to a file, not a
+    comment about the Dockerfile, but it matched the marker regex anyway and
+    caused the whole block (FROM + CMD, so it should validate) to be
+    misclassified as a non-buildable fragment and skipped -- silently
+    dropping the genuine ``COPY --from=composer:latest`` (DL037, unpinned)
+    finding. Every marker actually in this skill's markdown today (verified)
+    sits on the very first line of its block, so restricting the header to
+    "leading comment lines" costs nothing against real usage while closing
+    this false negative in the one check that gates CI.
     """
     for line in block.lines:
+        stripped = line.strip()
+        if not stripped:
+            continue  # blank lines inside the header don't end it
+        if not stripped.startswith("#"):
+            break  # first real instruction: the header region is over
         marker = _SKIP_MARKER_RE.match(line)
         if marker:
             kind = marker.group(1)
