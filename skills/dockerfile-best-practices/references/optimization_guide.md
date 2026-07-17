@@ -335,6 +335,90 @@ RUN --mount=type=cache,target=/tmp/cache \
 - No manual cleanup needed
 - Cache persists across builds
 
+For how cache mounts interact with in-layer cleanup such as
+`rm -rf /var/lib/apt/lists/*`, see `best_practices.md`, "Cleanup and cache
+mounts are alternatives, not a stack".
+
+### Cache Mount Persistence: a Confounder When Verifying a Build
+
+A cache mount is not part of the image and it is not part of the layer cache. It
+lives on the **builder**, it outlives the build, and it is shared by every build
+that uses that builder, including builds of other branches and other projects.
+
+That persistence is the entire point in normal use: it is what makes the second
+`pip install` fast. It becomes a problem only in one narrow situation, when you
+are checking that a build produces the **right** artifact rather than producing
+it quickly.
+
+#### The false green
+
+Most build tools decide what to redo by fingerprinting their own previous
+output, often by timestamp. Point a cache mount at that output directory and the
+tool can conclude there is nothing to do, leaving the previous build's artifact
+in place for a later step to copy out:
+
+```dockerfile
+RUN --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    cp /app/target/release/app /app/app
+```
+
+Change the source, rebuild on the same builder, and if the tool decides the
+compile is unnecessary you copy out the **previous** run's binary. The build is
+green, the image is stale, and nothing in the log says so. A/B testing a fix on
+one builder is exactly the shape that triggers this: variant B can pass on
+variant A's leftovers.
+
+#### Getting a clean run
+
+Verified on Docker 29.4.0 with BuildKit v0.31.2, and re-checked on v0.20.2 and
+v0.12.5.
+
+A fresh builder is the clean-room option, and the only one here that cannot
+affect anybody else's builds:
+
+```bash
+docker buildx create --name verify-tmp --driver docker-container --bootstrap
+docker buildx build --builder verify-tmp -t myapp .
+docker buildx rm verify-tmp
+```
+
+`--no-cache` gives the `RUN` an empty cache mount as well as a cold layer cache.
+It replaces the mount rather than leaving the old contents reachable:
+
+```bash
+docker buildx build --builder verify-tmp --no-cache -t myapp .
+```
+
+To clear cache mounts while **keeping** the layer cache, filter the prune. After
+this, an unchanged step is still reported `CACHED`, but its cache mount comes up
+empty:
+
+```bash
+docker buildx prune --builder verify-tmp --filter type=exec.cachemount -f
+```
+
+#### Know what you are deleting
+
+`docker buildx prune` acts on a whole builder, so on a machine where several
+projects share one builder it discards their cache too. The
+`type=exec.cachemount` filter narrows **what** is removed, not **who** is
+affected: it still empties the cache mounts of every project on that builder.
+Passing `--builder` explicitly keeps the blast radius somewhere you chose rather
+than on whichever builder happens to be selected. The throwaway builder above
+avoids the question entirely.
+
+#### The rule
+
+The rule is not "cache mounts are dangerous". They are correct, and this guide
+recommends them everywhere. The rule is narrower:
+
+- In normal development and in CI, the persistence is the feature. Leave it
+  alone.
+- When you are verifying **what** a build produced, and especially when you are
+  A/B testing a build fix, treat the cache mount as a confounder and start from
+  a builder that has never seen the other variant.
+
 ### Remote Cache Backends
 
 Share cache across machines/CI runners:
