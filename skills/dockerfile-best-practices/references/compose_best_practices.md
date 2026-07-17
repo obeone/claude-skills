@@ -4,21 +4,23 @@ Modern guide for creating efficient, scalable, and maintainable Docker Compose c
 
 ## Deprecated: version Field
 
-**DON'T use the `version:` field** in docker-compose.yml files.
+Do not use the `version:` field in Compose files. It is a leftover from Compose
+V1 that old tutorials still propagate, which is why it is worth naming.
 
 ```yaml
-# ❌ OUTDATED - Don't do this
+# Anti-pattern: the version field is obsolete and ignored
 version: '3.8'
 services:
   app:
-    image: myapp:latest
+    image: myapp:1.2.3
 ```
 
+Write this instead:
+
 ```yaml
-# ✅ MODERN - Do this instead
 services:
   app:
-    image: myapp:latest
+    image: myapp:1.2.3
 ```
 
 ### Why?
@@ -32,34 +34,32 @@ services:
 
 [Compose Specification](https://docs.docker.com/compose/compose-file/)
 
-## Never Use container_name
+## container_name: Know What It Costs
 
-**NEVER use `container_name:`** in service definitions.
-
-```yaml
-# ❌ BAD - Don't use container_name
-services:
-  app:
-    image: myapp:latest
-    container_name: my-app-container
-```
+Avoid `container_name:` unless you have a specific reason for it, and know the
+tradeoff you are accepting.
 
 ```yaml
-# ✅ GOOD - Let Compose generate names
 services:
   app:
-    image: myapp:latest
+    image: myapp:1.2.3
+    # No container_name: Compose derives the name from the project and service
 ```
 
-### Why?
+The cost is exact and singular: **Compose refuses to scale a service beyond one
+container when that service sets `container_name`, and `--scale` on it fails
+with an error.** Running the same file twice under two project names also
+collides, because the fixed name is global to the daemon rather than scoped to
+the project.
 
-- Prevents running multiple instances (`docker compose up --scale app=3`)
-- Breaks horizontal scaling
-- Creates naming conflicts in multi-environment setups
-- Prevents parallel testing environments
-- Compose generates predictable names: `{project}_{service}_{replica}`
+That cost is real, and it is also irrelevant to plenty of deployments. A
+single-instance service on a personal server, addressed by a stable name from
+scripts or from `docker exec`, is a legitimate use. `--scale` is not a goal for
+every service, and paying nothing for a capability you will never use is not a
+defect. Set it deliberately, not by habit.
 
-Use project names to differentiate environments instead:
+Where you do want scaling and parallel environments, leave the name to Compose
+and separate environments by project name instead:
 
 ```bash
 # Development
@@ -68,26 +68,43 @@ docker compose -p myapp-dev up
 # Testing
 docker compose -p myapp-test up
 
-# Each creates isolated containers with predictable names
+# Each project gets its own isolated set of containers
 ```
+
+Compose also labels every container it creates with
+`com.docker.compose.project` and `com.docker.compose.service`, so scripts can
+find a container by service rather than by a hardcoded name:
+
+```bash
+docker ps --filter label=com.docker.compose.project=myapp-dev \
+          --filter label=com.docker.compose.service=app
+```
+
+That covers most of what people actually reach for `container_name` to get.
 
 ## Additional Compose Best Practices
 
 ### Use Specific Image Tags
 
 ```yaml
-# ❌ BAD
-services:
-  app:
-    image: myapp:latest
-
-# ✅ GOOD
 services:
   app:
     image: myapp:1.2.3
 ```
 
-**Why:** `:latest` is unpredictable and changes without warning.
+Reject `:latest` and untagged images: they carry zero information about what you
+are actually running, so nobody reading the file (or debugging the container at
+3am) can tell what is deployed.
+
+Be honest about what a specific tag does and does not buy you. `myapp:1.2.3`
+documents intent and acts as a rough contract. It is **not** a reproducibility
+mechanism: tags are mutable, and the same tag can resolve to different bytes
+later. Compose makes this concrete via `pull_policy` (see below), which decides
+when Compose goes back to the registry and possibly picks up new bytes under the
+same tag. If you need true reproducibility, that comes from a process, not from
+the tag string: pin a digest and back it with renewal automation, or record the
+resolved digest in your deployment metadata. `image:` accepts the
+`name@sha256:<digest>` form for that purpose.
 
 ### Health Checks
 
@@ -107,6 +124,23 @@ services:
       database:
         condition: service_healthy
 ```
+
+Two things the syntax will not tell you:
+
+- **The binary must exist in the image.** The check runs inside the container,
+  not on the host. `curl` is absent from many slim images and from every
+  distroless one, and `wget` exists on Alpine (busybox) but not on Debian slim.
+  Use something the image actually ships, or add the probe to the image
+  deliberately. See `references/best_practices.md` for picking a probe per base
+  image.
+- **The check must fail on a bad response, not only on a refused connection.**
+  `curl -f` is correct here because `-f` makes curl exit non-zero on HTTP 4xx and
+  5xx. Naive checks that only prove the port is open report a wedged service as
+  healthy.
+
+Note that this is Compose's own health check and Compose's `depends_on` acts on
+it. It is unrelated to Kubernetes probes, which ignore container-level
+healthchecks entirely.
 
 ### Resource Limits
 
@@ -144,30 +178,33 @@ services:
 
 ### Environment Variables
 
+Keep config out of the file with `env_file`, so the same Compose file works
+across environments:
+
 ```yaml
-# ✅ BEST - Use .env file
 services:
   app:
     image: myapp:1.2.3
     env_file:
       - .env
+```
 
-# ✅ OK - Explicit env vars
+Setting values inline is fine when they are genuinely fixed for every
+deployment:
+
+```yaml
 services:
   app:
     image: myapp:1.2.3
     environment:
       - NODE_ENV=production
       - API_URL=https://api.example.com
-
-# ❌ BAD - Secrets in environment
-services:
-  app:
-    environment:
-      - DATABASE_PASSWORD=secret123  # Don't do this
 ```
 
-**Important:** Add `.env` to `.gitignore`!
+Neither route is acceptable for secrets. `DATABASE_PASSWORD=secret123` in either
+block is a leak; use the `secrets:` mechanism below instead.
+
+**Important:** add `.env` to `.gitignore`.
 
 ### Volumes
 
@@ -242,11 +279,86 @@ secrets:
     file: ./secrets/db_password.txt
 ```
 
-**Never:**
+The pattern above is worth spelling out: the non-secret settings stay in
+`environment:`, and the password arrives as a **file path** (`_FILE` suffix) that
+the image reads at startup. Most official images (postgres, mysql, redis) support
+this `_FILE` convention.
 
-- Commit secrets to git
-- Use environment variables for secrets
-- Hardcode passwords in compose files
+Avoid putting the secret value itself in `environment:`, because an environment
+variable is far more exposed than it looks:
+
+- It is visible to anyone who can run `docker inspect` on the container, and to
+  `docker compose config`
+- It is inherited by every child process, so it leaks into crash dumps, error
+  trackers, and debug endpoints that dump the environment
+- It ends up in your shell history and in CI job logs on the way in
+
+A file under `/run/secrets/` is readable only inside the container and does not
+propagate to child processes. Never commit the secret file itself: keep
+`./secrets/` out of git.
+
+## Runtime Hardening
+
+Compose can lock a container down considerably, and none of it is on by default.
+A service that only serves HTTP has no business being able to write to its own
+filesystem or to gain new privileges.
+
+```yaml
+services:
+  app:
+    image: registry.example.com/app:1.0.0
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "10001:10001"
+    init: true
+```
+
+Line by line, because each one has a failure mode worth understanding:
+
+- **`read_only: true`** mounts the container's root filesystem read-only. This is
+  the highest-value line here and the one most likely to break your app on the
+  first try: anything that writes to disk now fails. Common casualties are
+  temporary files, framework caches, PID files, and any library that writes to
+  the working directory. That breakage is the point (it tells you what the
+  service actually writes), but you have to give the legitimate writes somewhere
+  to go, which is the next line.
+- **`tmpfs: [/tmp]`** mounts an in-memory filesystem at `/tmp`, restoring
+  scratch space without giving up the read-only root. It is wiped on restart and
+  never persisted, which is what you want for scratch. Add one entry per path the
+  service genuinely needs to write (`/var/run`, a cache dir), and prefer a named
+  volume for anything that must survive a restart. If you find yourself adding
+  many, that is a signal about the app, not about the setting.
+- **`cap_drop: [ALL]`** drops every Linux capability, then you add back only what
+  the service actually needs via `cap_add`. Order matters conceptually: start at
+  zero, justify each addition. Most application containers need none. The classic
+  exception is binding to a port below 1024, which needs `NET_BIND_SERVICE`, and
+  the better fix is usually to listen on a high port and map it (`ports: -
+  "80:8080"`) rather than granting the capability.
+- **`security_opt: [no-new-privileges:true]`** sets the kernel's
+  `no_new_privs` bit, which prevents a process from **gaining** privileges it did
+  not start with. Concretely it neuters setuid and setgid binaries: an attacker
+  who lands code execution as your unprivileged user cannot execute a setuid-root
+  binary in the image to become root. It does not remove privileges you already
+  granted, so it complements `user:` and `cap_drop:` rather than replacing them.
+- **`user: "10001:10001"`** runs the container as an unprivileged UID/GID rather
+  than root. Numeric form is used here because it does not depend on a matching
+  entry in the image's `/etc/passwd`. Prefer setting `USER` in the Dockerfile so
+  the image is safe by default; use this when you need to override an image you
+  do not control. High IDs (above 10000) avoid colliding with host users.
+- **`init: true`** runs a small init process as PID 1 that forwards signals and
+  reaps processes. Use it when your entrypoint is not itself a well-behaved
+  PID 1 (the reasoning, and how to avoid needing it, is in
+  `references/best_practices.md` under PID 1 and signal handling). Not re-argued
+  here.
+
+Roll these out one at a time against a real workload. `read_only: true` in
+particular will surface writes you did not know about, and you want to see them
+one by one rather than as a single opaque crash loop.
 
 ## Complete Example: Modern Compose File
 
@@ -259,7 +371,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    # No container_name
     ports:
       - "3000:3000"
     environment:
@@ -287,11 +398,20 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    # No container_name - allows scaling
     expose:
       - "8000"
     env_file:
       - .env
+    # Runtime hardening: see the Runtime Hardening section for what each does
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "10001:10001"
+    init: true
     depends_on:
       database:
         condition: service_healthy
@@ -363,9 +483,9 @@ secrets:
 Before deploying your Compose file:
 
 - [ ] No `version:` field
-- [ ] No `container_name:` (never use it)
+- [ ] `container_name:` only where you meant it (it blocks `--scale`)
 - [ ] Specific image tags (not `:latest`)
-- [ ] Health checks defined for critical services
+- [ ] Health checks defined for critical services, using a binary the image ships
 - [ ] Resource limits set
 - [ ] Restart policies configured
 - [ ] Secrets via files/secrets, not env vars
@@ -373,6 +493,10 @@ Before deploying your Compose file:
 - [ ] Networks for service isolation
 - [ ] `.env` file in `.gitignore`
 - [ ] `depends_on` with `condition: service_healthy` for ordered startup
+- [ ] `read_only: true` plus `tmpfs` for scratch paths
+- [ ] `cap_drop: [ALL]`, adding back only what is needed
+- [ ] `no-new-privileges:true` set
+- [ ] Non-root `user:` (or `USER` in the Dockerfile)
 
 ## Common Patterns
 
@@ -422,9 +546,76 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up
 ```bash
 # Scale backend to 3 instances
 docker compose up --scale backend=3
-
-# Only works if no container_name is set!
 ```
+
+This errors out for any service that sets `container_name` (see above).
+
+### Controlling When Images Are Pulled
+
+`pull_policy` decides when Compose goes back to the registry, which is what
+actually determines whether you are running the bytes you think you are:
+
+```yaml
+services:
+  app:
+    image: registry.example.com/app:1.0.0
+    pull_policy: always
+```
+
+The values:
+
+- `missing`: pull only if the image is not in the local cache. This is the
+  default when you are not using the Compose Build Specification.
+  `if_not_present` is an alias kept for backward compatibility. Note that
+  `:latest` is always pulled even under `missing`.
+- `always`: always pull from the registry. The right choice for a deployment
+  target, where a stale local cache silently serving last month's image is a
+  real failure mode.
+- `never`: never pull, rely on the local cache, and fail if there is nothing
+  cached. Useful for air-gapped or offline runs.
+- `build`: build the image, rebuilding even if it is already present.
+- `daily` / `weekly` / `every_<duration>`: check the registry only if the last
+  pull is older than that window. `every_12h`, `every_30m`, and so on.
+
+The `daily`/`weekly` options exist because a tag is a moving target: they are a
+crude renewal schedule for a mutable tag. If you pin a digest instead, the pull
+policy stops mattering for correctness.
+
+### Profiles: Optional Services
+
+Profiles let one Compose file carry services that are not started by default,
+instead of maintaining a separate file for the debug tooling:
+
+```yaml
+services:
+  app:
+    image: myapp:1.2.3
+
+  # Only started when the "debug" profile is enabled
+  adminer:
+    image: adminer:4.8.1
+    profiles:
+      - debug
+    ports:
+      - "8080:8080"
+```
+
+A service with no `profiles:` key always starts. A service with one starts only
+when that profile is enabled:
+
+```bash
+docker compose --profile debug up
+COMPOSE_PROFILES=debug docker compose up
+
+# Several at once
+docker compose --profile debug --profile frontend up
+
+# Everything
+docker compose --profile "*" up
+```
+
+This is the cleanest way to keep seeders, admin UIs, and one-off tools in the
+same file without inflicting them on everyone who runs `docker compose up`.
 
 ### Override Files
 
@@ -433,7 +624,7 @@ docker compose up --scale backend=3
 ```yaml
 services:
   app:
-    image: myapp:latest
+    image: myapp:1.2.3
     ports:
       - "8000:8000"
 ```
@@ -448,6 +639,119 @@ services:
 ```
 
 Compose automatically merges `docker-compose.override.yml` if present.
+
+#### Removing a value in an override: !reset
+
+Merging is additive, which is a problem when the override needs to take
+something *away*. Setting the attribute to an empty value does not help, because
+sequences merge rather than replace. The `!reset` YAML tag clears an attribute
+that the base file set:
+
+```yaml
+# docker-compose.override.yml
+services:
+  app:
+    ports: !reset []
+    environment:
+      FOO: !reset null
+```
+
+Against the base above, the merged result has no `ports` and no `FOO`. A value
+must be present after the tag but it is ignored; write `!reset null` or
+`!reset []` so a reader can see the attribute is being cleared rather than set.
+
+The related `!override` tag replaces an attribute wholesale instead of merging
+into it, which is what you want when the base declares ports you must drop while
+declaring new ones:
+
+```yaml
+# docker-compose.override.yml
+services:
+  app:
+    ports: !override
+      - "8443:443"
+```
+
+`!override` requires Docker Compose 2.24.4 or later.
+
+### Live Reload in Development: develop.watch
+
+Bind-mounting source into a container is the traditional dev loop and it is a
+poor one: it only works when the container's layout happens to match the host's,
+and it silently does nothing for anything that needs a rebuild. The `develop`
+section is the supported mechanism. It is optional in the Compose Specification
+and available with Docker Compose 2.22.0 and later.
+
+```yaml
+services:
+  frontend:
+    image: myapp-frontend:1.2.3
+    build: ./frontend
+    develop:
+      watch:
+        # Copy changed static files into the running container
+        - path: ./frontend/src
+          action: sync
+          target: /app/src
+          ignore:
+            - node_modules/
+
+  backend:
+    image: myapp-backend:1.2.3
+    build: ./backend
+    develop:
+      watch:
+        # Dependency changes need a real rebuild
+        - path: ./backend/pyproject.toml
+          action: rebuild
+```
+
+Run it with `docker compose watch`. The available actions:
+
+- `sync`: copy changed files into the running container, no restart. For code
+  that a hot reloader picks up on its own.
+- `rebuild`: rebuild the image and recreate the service. For dependency
+  manifests and anything baked in at build time.
+- `sync+restart`: sync, then restart the container. For config a process only
+  reads at startup. Available with Compose 2.23.0 and later.
+- `restart`: restart the container without syncing. Available with Compose
+  2.32.0 and later.
+- `sync+exec`: sync, then run a command inside the container, e.g. a migration.
+  Available with Compose 2.32.0 and later.
+
+Set `ignore` on any `sync` rule that watches a directory containing installed
+dependencies; syncing `node_modules/` from host to container is both slow and
+usually wrong. The `initial_sync` attribute makes Compose reconcile files at the
+start of a watch session for already-existing containers, so a container that
+drifted while you were not watching does not start out stale.
+
+### Splitting a Large Compose File: include
+
+`include` composes a project out of other Compose files, each of which stays a
+valid standalone project. This is different from `-f` merging: an included file
+is parsed relative to its own directory, so a team can own their compose file
+and its relative paths without knowing who includes it.
+
+```yaml
+include:
+  - ../commons/compose.yaml
+  - path: ../another/compose.yaml
+    project_directory: ..
+    env_file: ../another/.env
+
+services:
+  app:
+    image: myapp:1.2.3
+    depends_on:
+      - database  # Defined in an included file
+```
+
+**Use Compose 2.40.2 or later if you use `include`.** Earlier versions carry
+CVE-2025-62725 (CVSS 8.9): a path traversal in Compose's handling of OCI
+artifact layer annotations lets a malicious remote Compose artifact write
+outside the cache directory, and it triggers on read-only commands like
+`docker compose config` and `docker compose ps`, so merely inspecting an
+untrusted project is enough. Fixed 2025-10-27.
 
 ## Troubleshooting
 
@@ -496,24 +800,30 @@ docker compose down -v
 - version: '3.8'
   services:
     app:
-      image: myapp:latest
+      image: myapp:1.2.3
 ```
 
-### Remove container_name (always)
+### Reconsider container_name
+
+Not a mechanical removal. Drop it where you want `--scale` or several
+environments side by side:
 
 ```diff
   services:
     app:
-      image: myapp:latest
+      image: myapp:1.2.3
 -     container_name: myapp-container
 ```
 
-Use project names instead for environment isolation:
+Then isolate environments by project name:
 
 ```bash
 docker compose -p myapp-dev up
 docker compose -p myapp-prod up
 ```
+
+If the service is single-instance and something outside Compose addresses it by
+that exact name, keep it and move on.
 
 ### Update image tags
 
@@ -539,20 +849,29 @@ docker compose -p myapp-prod up
 
 ## Best Practices Summary
 
-1. **No `version:` field** - Use Compose Specification
-2. **Never use `container_name:`** - Allow scaling and parallel environments
-3. **Specific tags** - Not `:latest`
-4. **Health checks** - For dependencies
-5. **Resource limits** - Prevent exhaustion
-6. **Secrets management** - Never in git
-7. **Networks** - Isolate services
-8. **Named volumes** - For persistence
-9. **Environment files** - Keep config separate
-10. **Restart policies** - Handle failures
+1. **No `version:` field**: use the Compose Specification
+1. **`container_name:` deliberately, not by habit**: it blocks `--scale`
+1. **Specific tags**: not `:latest`, and know that a tag is still mutable
+1. **Health checks**: for dependencies, using a binary the image ships
+1. **Resource limits**: prevent exhaustion
+1. **Runtime hardening**: `read_only`, `cap_drop: [ALL]`, `no-new-privileges`,
+   non-root `user`
+1. **Secrets management**: files, not env vars, and never in git
+1. **Networks**: isolate services
+1. **Named volumes**: for persistence
+1. **Environment files**: keep config separate
+1. **Restart policies**: handle failures
+1. **Profiles**: keep optional services out of the default `up`
 
 ## References
 
 - [Compose Specification](https://docs.docker.com/compose/compose-file/)
 - [Compose CLI Reference](https://docs.docker.com/compose/reference/)
+- [Services top-level element](https://docs.docker.com/reference/compose-file/services/)
+- [Merge Compose files](https://docs.docker.com/reference/compose-file/merge/)
+- [Compose Develop Specification](https://docs.docker.com/reference/compose-file/develop/)
+- [Use include to modularize Compose files](https://docs.docker.com/reference/compose-file/include/)
+- [Using profiles with Compose](https://docs.docker.com/compose/how-tos/profiles/)
 - [Docker Secrets](https://docs.docker.com/engine/swarm/secrets/)
 - [Health Checks](https://docs.docker.com/engine/reference/builder/#healthcheck)
+- [CVE-2025-62725 advisory](https://github.com/docker/compose/security/advisories/GHSA-gv8h-7v7w-r22q)
