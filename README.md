@@ -224,11 +224,11 @@ uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfi
 
 ### dockerfile-best-practices
 
-- **Language templates**: Python/uv, Node.js, Go, PHP, Debian
-- **Security patterns**: Non-root users (UID/GID >10000), secret mounts, version pinning
+- **Language templates**: Python/uv, Node.js, Go, Rust, PHP, Debian
+- **Security patterns**: Non-root users (UID/GID >10000), secret mounts, SBOM and provenance attestations
 - **Performance optimization**: Cache mounts, multi-stage builds, layer ordering
-- **Static analyzer**: Detects 15+ anti-patterns automatically
-- **Compose support**: Modern V2 practices (no `version:`, no `container_name:`)
+- **Static analyzer**: 30+ rules, including the defects a green build never reveals (a `--chown` silently discarded to root, a healthcheck calling a binary the image does not ship)
+- **Compose support**: Modern V2 practices (no `version:` field, runtime hardening, `container_name:` only where you will never `--scale`)
 
 ### helm-bjw-s-chart
 
