@@ -235,7 +235,7 @@ layer forever:
 
 ```dockerfile
 # Anti-pattern: the rm is in a later layer, so the lists stay in the image
-FROM debian:stable-slim
+FROM debian:13-slim
 RUN apt-get update && apt-get install -y --no-install-recommends curl
 RUN rm -rf /var/lib/apt/lists/*
 ```
@@ -296,7 +296,7 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -o /out/app ./cmd/app
 
-FROM debian:stable-slim
+FROM debian:13-slim
 RUN groupadd -r -g 10001 app && useradd -r -u 10001 -g app app
 COPY --from=builder --link /out/app /usr/local/bin/app
 USER app

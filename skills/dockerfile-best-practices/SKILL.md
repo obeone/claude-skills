@@ -278,10 +278,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     cargo build --release
 
+# touch is load-bearing: COPY restores the context's older mtime, so without it cargo calls the dummy build fresh, skips the rebuild, and ships the "fn main() {}" stub.
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-    cargo build --release && cp target/release/myapp /usr/local/bin/
+    touch src/main.rs && cargo build --release && cp target/release/myapp /usr/local/bin/
 
 # cc-debian13 rather than the deprecated unversioned cc repo; :nonroot for the
 # same reason as the Go template.
@@ -326,7 +327,7 @@ CMD ["php-fpm"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM debian:stable-slim
+FROM debian:13-slim
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
     echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
@@ -394,6 +395,6 @@ For detailed information beyond what's covered here:
 | `references/best_practices.md` | Complete checklist with impact levels, pinning doctrine and the digest tradeoff, UID/GID strategy, PID 1 and signal handling |
 | `references/build_checks.md` | `docker build --check`: the built-in rule set, wiring it into CI |
 | `references/supply_chain.md` | Provenance attestations, SBOMs, signing, digest renewal tooling |
-| `references/examples.md` | Real-world before/after optimization examples (13+ scenarios) |
+| `references/examples.md` | Real-world before/after optimization examples (15 scenarios) |
 | `references/uv_integration.md` | Python with uv: installation methods, workspaces, multi-stage, all patterns |
 | `references/compose_best_practices.md` | Complete Compose guide: networks, volumes, secrets, dev vs prod, scaling |
