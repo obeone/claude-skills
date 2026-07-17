@@ -30,6 +30,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v8
 
+      - name: Unit-test the extractor's D9 classifier
+        run: uv run skills/dockerfile-best-practices/scripts/tests/test_extract_dockerfile_blocks.py -v
+
       - name: Lint every dockerfile block in the skill's markdown
         run: uv run skills/dockerfile-best-practices/scripts/extract_dockerfile_blocks.py
 
