@@ -359,6 +359,18 @@ CMD ["./app"]
    a legitimate reason; habit is not.
 1. **`depends_on` with `condition: service_healthy`**: bare `depends_on` waits
    for the container to start, not for the service to become usable.
+1. **File name: follow the project, ask once, then remember.** Compose V2 looks
+   for `compose.yaml` first, then `compose.yml`, `docker-compose.yaml`,
+   `docker-compose.yml`. All four work, so this is a convention question, not a
+   correctness one. Resolve it in this order:
+   1. A Compose file already exists in the project: match it. Never rename an
+      existing file as a side effect of an unrelated edit.
+   1. A recorded preference exists (agent memory, `CLAUDE.md`, `AGENTS.md`):
+      use it, silently.
+   1. Neither: **ask the user which of the four they want**, then record the
+      answer where this agent persists preferences so it is asked once, not
+      every time. `compose.yaml` is the canonical form and the right default to
+      recommend, but recommend it, do not impose it.
 
 Health checks, networks, volumes, secrets, runtime hardening, dev vs prod,
 scaling, and the full `container_name` tradeoff:

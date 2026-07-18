@@ -502,7 +502,7 @@ Before deploying your Compose file:
 
 ### Development vs Production
 
-**Development (docker-compose.yml):**
+**Development (compose.yaml):**
 
 ```yaml
 services:
@@ -514,7 +514,7 @@ services:
       - DEBUG=true
 ```
 
-**Production (docker-compose.prod.yml):**
+**Production (compose.prod.yaml):**
 
 ```yaml
 services:
@@ -538,7 +538,7 @@ services:
 docker compose up
 
 # Production
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+docker compose -f compose.yaml -f compose.prod.yaml up
 ```
 
 ### Scaling Services
@@ -619,7 +619,13 @@ same file without inflicting them on everyone who runs `docker compose up`.
 
 ### Override Files
 
-**Base (docker-compose.yml):**
+`compose.yaml` is the canonical name: Compose V2 looks for it first, falling
+back to `compose.yml`, then `docker-compose.yaml`, then `docker-compose.yml`
+for backward compatibility. All four work, so which one to write is a project
+convention. The examples here use `compose.yaml`; see the file naming rule in
+`SKILL.md` for how to pick when a project has no precedent.
+
+**Base (compose.yaml):**
 
 ```yaml
 services:
@@ -629,7 +635,7 @@ services:
       - "8000:8000"
 ```
 
-**Override (docker-compose.override.yml):**
+**Override (compose.override.yaml):**
 
 ```yaml
 services:
@@ -638,7 +644,7 @@ services:
       - ./src:/app/src  # Development only
 ```
 
-Compose automatically merges `docker-compose.override.yml` if present.
+Compose automatically merges `compose.override.yaml` if present.
 
 #### Removing a value in an override: !reset
 
@@ -648,7 +654,7 @@ sequences merge rather than replace. The `!reset` YAML tag clears an attribute
 that the base file set:
 
 ```yaml
-# docker-compose.override.yml
+# compose.override.yaml
 services:
   app:
     ports: !reset []
@@ -665,7 +671,7 @@ into it, which is what you want when the base declares ports you must drop while
 declaring new ones:
 
 ```yaml
-# docker-compose.override.yml
+# compose.override.yaml
 services:
   app:
     ports: !override
