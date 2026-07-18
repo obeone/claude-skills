@@ -4,6 +4,43 @@ All notable changes to the `dockerfile-best-practices` skill are recorded here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The skill is versioned with [Semantic Versioning](https://semver.org/spec/v2.0.0.html), tracking `metadata.version` in `SKILL.md`.
 
+## [3.1.0] - 2026-07-18
+
+The Compose reference covered writing a Compose file but not linting one. It
+now documents DCLint, the established third-party Compose linter, states
+honestly which of its 15 rules overlap with this skill's own
+`analyze_compose.py` (two do), and which are ordering/formatting opinions
+safe to turn off (eight are). `docker compose config --quiet` is documented as
+the zero-install schema/interpolation check that should run before either
+linter.
+
+### Added
+
+- **`## Linting` section in `references/compose_best_practices.md`.** Install
+  and run lines for DCLint via `npx` and the `zavoloklom/dclint` Docker image,
+  its `--fix` mode, and an overlap table against this skill's own analyzer
+  rules (DC002, DC012, DC013). Also documents `docker compose config --quiet`
+  as the pre-linter validation step.
+- **`SKILL.md`'s Commands Reference** now lists `docker compose config
+  --quiet`, a `dclint` invocation, and a hadolint invocation (`docker run
+  --rm -i hadolint/hadolint < Dockerfile`) alongside the existing analyzer and
+  `docker buildx build --check` commands.
+- **A Compose file naming rule in `SKILL.md`.** All four names Compose V2
+  accepts work, so the skill no longer picks silently: match an existing file
+  first, then a recorded preference, and otherwise ask the user once and
+  record the answer. `compose.yaml` is recommended as the canonical form, not
+  imposed.
+
+### Changed
+
+- **Canonical Compose file name is now `compose.yaml`, not
+  `docker-compose.yml`.** Every place in `references/compose_best_practices.md`
+  that names the file you are writing (`Development vs Production`, `Override
+  Files`, the `!reset`/`!override` examples) now uses `compose.yaml` /
+  `compose.override.yaml`. A short note states the actual Compose V2 lookup
+  order (`compose.yaml`, `compose.yml`, `docker-compose.yaml`,
+  `docker-compose.yml`) for readers coming from an older project.
+
 ## [3.0.0] - 2026-07-17
 
 v2.0.0 had two problems: its doctrine was wrong, and its own examples did not follow it.

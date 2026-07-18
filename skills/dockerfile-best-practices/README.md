@@ -200,7 +200,7 @@ skills/dockerfile-best-practices/
 
 ## Status
 
-`metadata.version: 3.0.0`.
+`metadata.version: 3.1.0`.
 
 v3.0.0 is a breaking release: it reverses the old "pin the runtime, never
 the OS" doctrine, retires the two analyzer rules that enforced it, and
