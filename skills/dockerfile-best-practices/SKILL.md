@@ -2,7 +2,7 @@
 name: dockerfile-best-practices
 description: "Create and optimize Dockerfiles with BuildKit, multi-stage builds, advanced caching, and security. Use this skill whenever you need to create, modify, or optimize a Dockerfile or a Docker Compose file. Also trigger when the user discusses container images, build performance, or Docker security — even if they don't explicitly mention 'Dockerfile'."
 metadata:
-  version: "3.0.0"
+  version: "3.1.0"
 ---
 
 # Dockerfile Best Practices
