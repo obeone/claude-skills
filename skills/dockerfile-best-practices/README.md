@@ -116,6 +116,12 @@ The analyzer is not a substitute for BuildKit's own linter. Run both:
 don't duplicate, and `references/build_checks.md` explains where the two
 overlap.
 
+The Compose analyzer has an equivalent third-party counterpart,
+[DCLint](https://github.com/zavoloklom/docker-compose-linter). Run
+`docker compose config --quiet` first for schema validation, then both
+linters; `references/compose_best_practices.md#linting` lays out which
+rules the two share and which are disjoint.
+
 ## What it gives you
 
 - **Eleven essential rules.** BuildKit syntax directive, a pinned

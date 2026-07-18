@@ -863,6 +863,84 @@ that exact name, keep it and move on.
 1. **Restart policies**: handle failures
 1. **Profiles**: keep optional services out of the default `up`
 
+## Linting
+
+### Before any linter: docker compose config --quiet
+
+`docker compose config --quiet` is the zero-install step and should run before
+either linter below. It resolves the file (merging any override, expanding
+`include`, substituting environment variables) and validates the result against
+the Compose Specification schema. It reports on interpolation and schema
+errors, not on the style or security rules the linters below cover, but a file
+that fails it is not valid YAML-plus-Compose in the first place, so there is no
+point running anything else against it yet.
+
+### DCLint
+
+[DCLint](https://github.com/zavoloklom/docker-compose-linter) is the
+established third-party linter for Compose files. It ships as an npm package
+(`dclint`, TypeScript) and as a Docker image, so it runs with or without
+Node.js on the machine:
+
+```bash
+# npx, no install
+npx dclint .
+npx dclint compose.yaml
+
+# Docker image, no Node.js required
+docker pull zavoloklom/dclint
+docker run -t --rm -v ${PWD}:/app zavoloklom/dclint .
+```
+
+It ships a `--fix` mode that auto-corrects most of its own findings; YAML
+anchors are the one documented exception it will not touch.
+
+### Overlap with this skill's analyzer
+
+DCLint ships 15 rules. Two genuinely overlap with `scripts/analyze_compose.py`:
+
+| DCLint rule | This skill's rule | Relationship |
+| :--- | :--- | :--- |
+| `no-version-field` | DC002 | Same check: the deprecated top-level `version:` field. |
+| `service-image-require-explicit-tag` | DC012, DC013 | Same intent. DCLint covers both cases in one rule; the analyzer splits `:latest` (DC012) from a bare untagged image (DC013). |
+
+The rest is disjoint. A meaningful chunk of DCLint's rule set is ordering and
+formatting opinion rather than correctness, and can be turned off in its
+config if it does not match your conventions:
+
+- `no-quotes-in-volumes`, `require-quotes-in-ports`: quoting style.
+- `service-container-name-regex`: enforces a naming convention, not a defect.
+- `service-dependencies-alphabetical-order`, `service-keys-order`,
+  `service-ports-alphabetical-order`, `services-alphabetical-order`,
+  `top-level-properties-order`: pure ordering.
+
+That leaves a real, disjoint set this skill's analyzer does not check at all:
+
+- `no-build-and-image`: a service declaring both `build:` and `image:`.
+- `no-duplicate-container-names`: two services (or a service and an unrelated
+  container) sharing the same `container_name`. Different from this skill's
+  DC010, which flags any use of `container_name:` regardless of collision.
+- `no-duplicate-exported-ports`: the same host port published twice.
+- `no-unbound-port-interfaces`: a port published with no explicit bind
+  interface, which exposes the container on every host interface rather than
+  just `127.0.0.1`.
+- `require-project-name-field`: a missing top-level `name:` field.
+
+Run both, in this order:
+
+```bash
+docker compose config --quiet
+npx dclint compose.yaml
+uv run scripts/analyze_compose.py compose.yaml
+```
+
+DCLint runs against a daemon-free parse of the file, same as this skill's
+analyzer; neither needs Docker running. The skill's own analyzer still earns
+its place: it is the only one of the two that flags secrets hardcoded into
+`environment:`, missing health checks and restart policies, resource limits,
+privileged mode, `network_mode: host`, and unused top-level `volumes:` or
+`networks:` definitions, none of which DCLint's rule set touches.
+
 ## References
 
 - [Compose Specification](https://docs.docker.com/compose/compose-file/)
@@ -873,5 +951,6 @@ that exact name, keep it and move on.
 - [Use include to modularize Compose files](https://docs.docker.com/reference/compose-file/include/)
 - [Using profiles with Compose](https://docs.docker.com/compose/how-tos/profiles/)
 - [Docker Secrets](https://docs.docker.com/engine/swarm/secrets/)
+- [DCLint (Docker Compose Linter)](https://github.com/zavoloklom/docker-compose-linter)
 - [Health Checks](https://docs.docker.com/engine/reference/builder/#healthcheck)
 - [CVE-2025-62725 advisory](https://github.com/docker/compose/security/advisories/GHSA-gv8h-7v7w-r22q)
