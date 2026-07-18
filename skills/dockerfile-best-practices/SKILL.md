@@ -373,6 +373,15 @@ uv run scripts/analyze_dockerfile.py ./Dockerfile
 uv run scripts/analyze_compose.py ./compose.yaml
 docker buildx build --check .
 
+# Compose: schema/interpolation validation, no linter needed for this step
+docker compose config --quiet
+
+# Compose: third-party linter (references/compose_best_practices.md#linting)
+npx dclint compose.yaml
+
+# hadolint: the one tool that lints shell inside RUN (embeds ShellCheck)
+docker run --rm -i hadolint/hadolint < Dockerfile
+
 # Build: with a secret mount (rule 5), and multi-platform
 docker buildx build --secret id=api_key,src=./key.txt -t myapp:1.0.0 .
 docker buildx build --platform linux/amd64,linux/arm64 -t myapp:1.0.0 --push .
