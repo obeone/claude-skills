@@ -229,6 +229,8 @@ uv run skills/dockerfile-best-practices/scripts/analyze_dockerfile.py ./Dockerfi
 - **Performance optimization**: Cache mounts, multi-stage builds, layer ordering
 - **Static analyzer**: 30+ rules, including the defects a green build never reveals (a `--chown` silently discarded to root, a healthcheck calling a binary the image does not ship)
 - **Compose support**: Modern V2 practices (no `version:` field, runtime hardening, `container_name:` only where you will never `--scale`)
+- **Linting, ours and everyone else's**: where `docker build --check`, hadolint, [DCLint](https://github.com/zavoloklom/docker-compose-linter) and this repo's own analyzers overlap, and where each one is the only tool that catches a given defect
+- **Compose file naming**: all four names Compose V2 accepts are valid, so the skill matches whatever the project already uses, asks once when there is no precedent, and remembers the answer
 
 ### helm-bjw-s-chart
 
