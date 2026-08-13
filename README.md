@@ -149,6 +149,19 @@ uv run skills/automode-config/scripts/inspect_automode.py
 uv run skills/automode-config/scripts/scan_project.py
 ```
 
+The skill also ships a natural-language slash command:
+
+```text
+/automode-edit add a hard_deny rule that forbids pushing to main
+/automode-edit allow deploys to the staging namespace
+/automode-edit drop the soft_deny entry about npm install
+```
+
+The agent interprets `<query>`, builds a full four-section proposal,
+shows a diff, and commits through `apply_automode.py` (critique gate +
+hash gate + atomic flock-protected write). See
+[`skills/automode-config/commands/automode-edit.md`](./skills/automode-config/commands/automode-edit.md).
+
 ## 🎯 Available Skills
 
 | Skill | Description | Key Features |
