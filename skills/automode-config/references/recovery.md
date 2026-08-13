@@ -3,6 +3,23 @@
 Backups, stranded state, `--repair`. The skill leaves enough breadcrumbs
 that a re-run can always reach a consistent state, even after a kill.
 
+## The atomic write itself
+
+Every write goes through `_canonical.canonical(obj) -> bytes` followed
+by an exclusive-create temp file in the target's own directory:
+
+```python
+fd = os.open(target + ".tmp." + str(pid), O_WRONLY | O_CREAT | O_EXCL, 0600)
+os.write(fd, canonical(obj))
+os.fsync(fd)
+os.close(fd)
+os.replace(target + ".tmp." + str(pid), target)
+```
+
+The flock is held across the whole sequence, and the backup is taken
+before the `os.replace`. A reader therefore sees either the old file or
+the new one, never a partial write.
+
 ## Backup retention
 
 Per-file pool: 5 most recent backups, pruned on each successful
