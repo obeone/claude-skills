@@ -96,7 +96,7 @@ cp -R claude-skills/skills/automode-config ~/.claude/skills/
 
 ```bash
 head -5 ~/.claude/skills/automode-config/SKILL.md
-# expect: name: automode-config / metadata.version: 0.5.0 (or higher)
+# expect: name: automode-config / metadata.version: 0.7.0 (or higher)
 ```
 
 ## Usage
@@ -151,6 +151,21 @@ The agent-driven workflow is documented in `SKILL.md` (the calling agent
 reads `CLAUDE.md` / `AGENTS.md`, applies judgment, then emits the
 proposal JSON that flows through the same pipeline).
 
+For one-shot edits in natural language, use the slash command:
+
+```text
+/automode-edit add a hard_deny rule that forbids pushing to main
+/automode-edit allow deploys to the staging namespace
+/automode-edit drop the soft_deny entry about npm install
+```
+
+The agent interprets `<query>`, builds a full four-section proposal,
+runs `apply_automode.py --dry-run` to compute the canonical hash, shows
+a diff for confirmation, and commits with the hash gate. The same
+deterministic guards apply (schema validation, mistaken-pattern
+detection, critique gate, flock, atomic write). See
+`commands/automode-edit.md` for the full contract.
+
 ## What it gives you
 
 - **Four-section schema enforcement.** Only `environment`, `allow`,
@@ -163,8 +178,12 @@ proposal JSON that flows through the same pipeline).
   `O_EXCL` → `os.replace`. Five rolling backups per file. Rollback line
   printed at end of Phase 3.
 - **Critique as the validation gate.** `claude auto-mode critique` is
-  invoked once per commit; exit code 0 is the contract. The raw output
-  is archived to `.claude/.automode-history/critique-<UTC>.md` for audit.
+  invoked once per commit. A zero exit is necessary but not sufficient:
+  the binary sometimes exits 0 after printing "No critique was
+  generated", which would promote an unreviewed proposal past the hash
+  gate, so an empty or degenerate critique fails the commit too. The raw
+  output is archived to `.claude/.automode-history/critique-<UTC>.md`
+  for audit, including on failure.
 - **Capability auto-detection.** When the CLI lacks `--settings`, the
   skill swaps `~/.claude/settings.json` transiently with signal-handler
   restore — no opt-in flag, no surprise prompt.
@@ -175,8 +194,10 @@ proposal JSON that flows through the same pipeline).
 
 ```
 skills/automode-config/
-├── SKILL.md            # Agent-facing entry point (4-section model, six phases)
+├── SKILL.md            # Agent-facing entry point (kept small: it is always in context)
 ├── README.md           # This file (user-facing intro)
+├── commands/
+│   └── automode-edit.md      # /automode-edit <query> — natural-language editor
 ├── scripts/
 │   ├── apply_automode.py     # Commit pipeline (Phase 0-4)
 │   ├── inspect_automode.py   # Three-file inspection + drift gate
@@ -186,12 +207,25 @@ skills/automode-config/
 └── tests/              # 200+ pytest cases — full pipeline + canonicalization
 ```
 
+## Out of scope
+
+- Multi-project orchestration. The skill operates on the cwd's project
+  only.
+- Auto-`chmod` of a pre-existing `~/.claude/settings.json` at mode 0644.
+  Warn-only; you fix it yourself if you agree.
+- A `--lint` mode for the non-`autoMode` sections of
+  `.claude/settings.json`. This skill is autoMode-only.
+- Retry-on-network-failure. You re-run.
+
 ## Deeper documentation
 
-- `references/automode_doc_bible.md` — **start here.** Distilled from
-  the official Claude Code docs; the source of truth this skill aligns
-  with.
-- `SKILL.md` — agent-facing entry point with the full decision tree.
+`SKILL.md` is deliberately short: it stays in the agent's context for
+the whole session, so it carries the procedure and the invariants and
+nothing else. Everything below is loaded on demand.
+
+- `references/automode_doc_bible.md` — distilled from the official
+  Claude Code docs; the source of truth this skill aligns with.
+- `references/cli.md` — flag tables, exit codes, critique gate layers.
 - `references/mental_model.md` — three files, four sections, six phases.
 - `references/three_files.md` — per-file gotchas.
 - `references/canonicalization.md` — byte contract and idempotency.
@@ -203,7 +237,7 @@ skills/automode-config/
 
 ## Status
 
-`metadata.version: 0.5.0` (pre-1.0; see `SKILL.md` for the v1.0
+`metadata.version: 0.7.0` (pre-1.0; see `SKILL.md` for the v1.0
 roadmap).
 
 ## License
