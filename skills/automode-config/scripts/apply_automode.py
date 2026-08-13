@@ -101,6 +101,24 @@ DROPPED_PATTERN_LITERALS = (
 
 REQUIRED_CRITIQUE_SECTIONS = frozenset({"## Major issues", "## Smaller issues"})
 
+# Section-header validation is opt-in because the binary's headers drift
+# across versions. Substantiveness validation is NOT opt-in: the binary
+# can exit 0 while producing nothing at all (observed:
+# "Analyzing your auto mode rules…\n\nNo critique was generated. Please
+# try again."). Exit code alone would open the gate on an unreviewed
+# proposal, which is exactly what the gate exists to prevent.
+#
+# Phrases that mean "the binary declined to produce a critique". Matched
+# case-insensitively against the whole output.
+DEGENERATE_CRITIQUE_PATTERNS = (
+    re.compile(r"\bno\s+critique\s+(?:was\s+)?(?:generated|produced)\b", re.I),
+    re.compile(r"\bunable\s+to\s+(?:generate|produce)\s+a?\s*critique\b", re.I),
+)
+# Below this many non-whitespace characters the output cannot carry a
+# review of anything. The stub fixtures and every real critique observed
+# clear it by a wide margin.
+MIN_CRITIQUE_CHARS = 24
+
 BACKUP_RETENTION = 5
 
 # The four (and only four) official autoMode array fields. The
@@ -454,6 +472,49 @@ def _critique_supports_settings_flag() -> bool:
         return False
     blob = (proc.stdout or "") + (proc.stderr or "")
     return "--settings" in blob
+
+
+def _check_critique_substantive(text: str) -> None:
+    """Raise ``CritiqueContractError`` when the critique says nothing.
+
+    The binary exits 0 even when it produces no critique, so the exit
+    code is not a sufficient gate. This check is version-agnostic: it
+    never asserts a section layout, only that *some* review text came
+    back. Bypass with ``--allow-empty-critique`` when a legitimately
+    terse critique trips it.
+
+    Parameters
+    ----------
+    text
+        Combined stdout+stderr of the critique invocation.
+
+    Raises
+    ------
+    CritiqueContractError
+        The output is empty, too short to be a review, or explicitly
+        announces that no critique was generated.
+    """
+
+    body = text.strip()
+    if not body:
+        raise CritiqueContractError(
+            "critique output is empty; the binary exited 0 without "
+            "reviewing the proposal (rerun, or pass "
+            "--allow-empty-critique to accept it)"
+        )
+    for pattern in DEGENERATE_CRITIQUE_PATTERNS:
+        if pattern.search(body):
+            raise CritiqueContractError(
+                "critique output reports that no critique was generated; "
+                "the proposal was not reviewed (rerun, or pass "
+                "--allow-empty-critique to accept it)"
+            )
+    if len("".join(body.split())) < MIN_CRITIQUE_CHARS:
+        raise CritiqueContractError(
+            f"critique output is too short to be a review "
+            f"({len(body)} chars); the proposal was likely not reviewed "
+            f"(rerun, or pass --allow-empty-critique to accept it)"
+        )
 
 
 def _check_critique_sections(text: str, *, allow_unknown: bool) -> None:
@@ -1150,6 +1211,13 @@ def _run(args: argparse.Namespace) -> int:
         if rc != 0:
             _eprint(f"critique exited {rc}")
             return EXIT_CRITIQUE_FAILED
+        if not args.allow_empty_critique:
+            try:
+                _check_critique_substantive(output)
+            except CritiqueContractError as exc:
+                _eprint(str(exc))
+                _eprint(f"archived output: {files.project_dir}/.automode-history")
+                return EXIT_CRITIQUE_FAILED
         if args.strict_critique_sections:
             try:
                 _check_critique_sections(
@@ -1404,12 +1472,21 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-empty-critique",
+        action="store_true",
+        help=(
+            "Accept a critique that says nothing. By default an empty, "
+            "near-empty, or 'no critique was generated' output fails the "
+            "gate with exit 3 even though the binary exited 0."
+        ),
+    )
+    parser.add_argument(
         "--strict-critique-sections",
         action="store_true",
         help=(
             "Validate critique output sections against the hardcoded contract "
             "(off by default — the binary's section names drift across versions; "
-            "exit_code == 0 is the real gate)."
+            "substantiveness, not layout, is the mandatory gate)."
         ),
     )
     parser.add_argument(

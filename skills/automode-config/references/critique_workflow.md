@@ -108,6 +108,38 @@ The walker counts feed nothing else. They are not used in the gate
 predicate; they are not persisted; they do not change exit codes.
 The bytes are the contract.
 
+## Substantiveness gate
+
+Exit code 0 does not mean the proposal was reviewed. The binary has
+been observed exiting 0 after printing only:
+
+```text
+Analyzing your auto mode rules…
+
+No critique was generated. Please try again.
+```
+
+Gating on the exit code alone lets that through, which silently
+promotes an unreviewed proposal past the hash gate. `apply_automode.py`
+therefore also requires the output to be substantive: non-empty, at
+least `MIN_CRITIQUE_CHARS` of non-whitespace text, and free of the
+`DEGENERATE_CRITIQUE_PATTERNS` phrases. Failure is
+`EXIT_CRITIQUE_FAILED`, raised **after** the archive is written so the
+evidence survives. `--allow-empty-critique` bypasses the check.
+
+This check asserts nothing about layout, so it does not break when the
+binary renames its sections. Layout assertions live behind
+`--strict-critique-sections` (see "Contract drift" above).
+
+## Critique history
+
+Every invocation, success or failure, writes its raw output to
+`.claude/.automode-history/critique-<UTC>.md`, with a header carrying
+the proposal hash, the binary's `--version`, and the exit code. The
+directory is created at mode 0700 if missing; each archive file is
+mode 0600. This is the audit trail for what the binary actually said
+during a run, which matters most on `EXIT_CRITIQUE_FAILED`.
+
 ## Help-snapshot fixture
 
 `assets/critique_help_snapshot.txt` captures the live binary's
