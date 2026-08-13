@@ -18,7 +18,7 @@ agent needs to do one job well, with no dependency on the others.
 | Skill | Version | What it does | Highlights |
 |---|---|---|---|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | 3.1.0 | Create and optimize Dockerfiles and Compose files | BuildKit syntax, cache mounts, non-root users, 30+ analyzer rules, DCLint interop |
-| [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.1.1 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
+| [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.2.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
 | [**automode-config**](./skills/automode-config/) | 0.7.0 | Author, validate, and migrate project-level `autoMode` blocks | Four official sections, critique gate, sha256 hash gate, atomic flock writes |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | 1.0.0 | Generate importable Apple Shortcuts for macOS and iOS | Native and third-party action catalogs, validator, inspector, App Intents discovery |
 
