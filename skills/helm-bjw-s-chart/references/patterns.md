@@ -708,6 +708,30 @@ persistence:
       - path: /scratch
 ```
 
+## Container and Pod resizePolicy **(5.x only)**
+
+In-place vertical scaling: change CPU or memory on a running pod without
+recreating it. Container-level `resizePolicy` needs Kubernetes >= 1.35,
+pod-level needs >= 1.36. On older clusters the keys are ignored, so the
+resize falls back to a restart.
+
+```yaml
+controllers:
+  main:
+    pod:
+      resizePolicy: PreferNoRestart   # k8s >= 1.36
+    containers:
+      main:
+        resizePolicy:                 # k8s >= 1.35
+          - resourceName: cpu
+            restartPolicy: NotRequired
+          - resourceName: memory
+            restartPolicy: RestartContainer
+```
+
+`NotRequired` applies the new value live; `RestartContainer` restarts the
+container to apply it. Memory usually needs the restart, CPU rarely does.
+
 ## rawResources with the 5.x manifest wrapper **(5.x only)**
 
 Use `rawResources` to ship an arbitrary Kubernetes manifest alongside
@@ -750,7 +774,8 @@ indirection) is **not accepted** in 5.x. See
 ## NetworkPolicy with single-controller auto-detection **(5.x only)**
 
 When the chart only defines one controller, the policy is auto-targeted —
-no need to repeat `controller:` or `podSelector:`:
+no need to repeat `controller:` or `podSelector:`. Those two keys are
+mutually exclusive in 5.x: set one or neither, never both.
 
 ```yaml
 controllers:
