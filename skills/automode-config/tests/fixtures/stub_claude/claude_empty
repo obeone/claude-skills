@@ -1,0 +1,54 @@
+#!/bin/sh
+# Stub claude CLI: well-formed --settings, but the critique declines to
+# produce anything and still exits 0. Reproduces the observed real-binary
+# behaviour that used to open the hash gate on an unreviewed proposal.
+
+case "$1" in
+    --version)
+        echo "claude 1.42.0"
+        exit 0
+        ;;
+    --help)
+        cat <<'EOF'
+Usage: claude [options]
+
+Options:
+  --version                Show version
+  --help                   Show this help
+  --settings <path>        Path to settings file
+EOF
+        exit 0
+        ;;
+    auto-mode)
+        shift
+        case "$1" in
+            critique)
+                shift
+                for arg in "$@"; do
+                    if [ "$arg" = "--help" ]; then
+                        cat <<'EOF'
+Usage: claude auto-mode critique [options]
+
+Options:
+  --settings <path>        Settings file to critique
+  --defaults <path>        Defaults file
+  --config <path>          Config file
+  --model <name>           Model to use
+  --help                   Show this help
+EOF
+                        exit 0
+                    fi
+                done
+                # Degenerate output, exit 0.
+                cat <<'EOF'
+Analyzing your auto mode rules…
+
+No critique was generated. Please try again.
+EOF
+                exit 0
+                ;;
+        esac
+        ;;
+esac
+
+exit 0

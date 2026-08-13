@@ -1838,6 +1838,90 @@ def test_acc24_critique_section_validation_off_by_default(
     )
 
 
+# ---------------------------------------------------------------------------
+# v0.7.0 — a critique that says nothing is not a critique
+# ---------------------------------------------------------------------------
+
+
+def test_acc25_empty_critique_fails_the_gate(
+    tmp_path: Path,
+    scripts_dir: Path,
+    stub_claude_dir: Path,
+    fixtures_dir: Path,
+):
+    """Exit 0 with no critique text must not open the hash gate.
+
+    ``claude_empty`` reproduces the real binary emitting "No critique was
+    generated. Please try again." while exiting 0. The proposal is then
+    unreviewed, so the commit must fail (EXIT_CRITIQUE_FAILED) and leave
+    ``.claude/settings.local.json`` absent. ``--allow-empty-critique``
+    is the documented escape hatch and must let the same run through.
+    """
+
+    apply = _apply_cli(scripts_dir)
+    _require(apply)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    bin_dir = _make_stub_path(tmp_path, stub_claude_dir / "claude_empty")
+    env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
+    proposal = fixtures_dir / "proposal_minimal.json"
+    local = project / ".claude" / "settings.local.json"
+
+    dry = subprocess.run(
+        [
+            "uv", "run", str(apply),
+            "--project-root", str(project),
+            "--mode", "fresh",
+            "--proposal", str(proposal),
+            "--dry-run",
+        ],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert dry.returncode == EXIT_OK, dry.stderr.decode("utf-8", "replace")
+    h = _hash_from_dryrun_stderr(dry.stderr)
+    assert h, "could not extract canonical hash from dry-run"
+
+    commit_args = [
+        "uv", "run", str(apply),
+        "--project-root", str(project),
+        "--mode", "fresh",
+        "--proposal", str(proposal),
+        "--approved-canonical-hash", h,
+    ]
+
+    # Default: the degenerate critique closes the gate.
+    blocked = subprocess.run(
+        commit_args, env=env, capture_output=True, timeout=60
+    )
+    assert blocked.returncode == EXIT_CRITIQUE_FAILED, (
+        f"expected EXIT_CRITIQUE_FAILED on an empty critique; "
+        f"got {blocked.returncode}; "
+        f"stderr={blocked.stderr.decode('utf-8', 'replace')!r}"
+    )
+    assert not local.exists(), (
+        "settings.local.json was written despite an unreviewed proposal"
+    )
+    # The archive still records what the binary actually said.
+    history = sorted((project / ".claude" / ".automode-history").glob("critique-*.md"))
+    assert history, "expected the degenerate critique to be archived"
+
+    # Escape hatch: same run, explicitly accepted.
+    allowed = subprocess.run(
+        commit_args + ["--allow-empty-critique"],
+        env=env, capture_output=True, timeout=60,
+    )
+    assert allowed.returncode == EXIT_OK, (
+        f"expected EXIT_OK with --allow-empty-critique; "
+        f"got {allowed.returncode}; "
+        f"stderr={allowed.stderr.decode('utf-8', 'replace')!r}"
+    )
+    assert local.exists(), "expected the local settings file after the override"
+
+
 def test_acc24_critique_archived_on_success(
     tmp_path: Path,
     scripts_dir: Path,
