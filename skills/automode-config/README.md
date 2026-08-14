@@ -1,6 +1,6 @@
 ![Claude Code](https://img.shields.io/badge/Claude_Code-2.1.83+-5A67D8?logo=anthropic&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-uv_+_PEP_723-3776AB?logo=python&logoColor=white)
-![Skill](https://img.shields.io/badge/skill-0.7.0-blue)
+![Skill](https://img.shields.io/badge/skill-0.7.1-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # automode-config
@@ -91,7 +91,7 @@ from a source checkout are covered in the repository
 
 ```bash
 head -5 ~/.claude/skills/automode-config/SKILL.md
-# expect: name: automode-config, then metadata.version: 0.7.0 (or higher)
+# expect: name: automode-config, then metadata.version: 0.7.1 (or higher)
 ```
 
 ### Requirements
@@ -263,7 +263,7 @@ flowchart TB
 
 ## 📝 Status
 
-`metadata.version: 0.7.0`, pre-1.0. The pipeline and the CLI surface are
+`metadata.version: 0.7.1`, pre-1.0. The pipeline and the CLI surface are
 stable; what keeps it below 1.0 is the critique binary itself, whose output
 contract still shifts between Claude Code releases.
 
