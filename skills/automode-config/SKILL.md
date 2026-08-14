@@ -1,8 +1,8 @@
 ---
 name: automode-config
-description: "Author, validate, and migrate Claude Code autoMode blocks (environment, allow, soft_deny, hard_deny) at project level. Writes .claude/settings.local.json behind a `claude auto-mode critique` gate, a sha256 hash gate, and an atomic locked write; reads the user and shared settings files for adoption candidates. Requires Claude Code 2.1.83+."
+description: "Author, validate, and migrate Claude Code autoMode permission blocks (environment, allow, soft_deny, hard_deny) at project level. Writes .claude/settings.local.json behind a critique and sha256 gate; scans the user and shared settings for adoption candidates. Requires Claude Code 2.1.83+."
 metadata:
-  version: "0.7.0"
+  version: "0.7.1"
 tools:
   - Read
   - Write
@@ -11,12 +11,10 @@ tools:
 
 # automode-config
 
-Authors, validates, and migrates `autoMode` blocks for **project-level**
-Claude Code permissions. Default write target is
-`.claude/settings.local.json`. The user file (`~/.claude/settings.json`)
-and the shared file (`.claude/settings.json`) are read for adoption
-candidates and never written without an explicit opt-in flag plus a
-re-confirmation.
+Write target is `.claude/settings.local.json`. The user file
+(`~/.claude/settings.json`) and the shared file (`.claude/settings.json`)
+are read for adoption candidates, never written without an explicit
+opt-in flag plus a re-confirmation.
 
 ## Three files
 
