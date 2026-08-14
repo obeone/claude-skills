@@ -76,25 +76,16 @@ npx skills add obeone/claude-skills --skill automode-config -y
 Update with `npx skills update automode-config`, remove with
 `npx skills remove automode-config`.
 
-### From a release bundle
+### Other routes
 
-```bash
-mkdir -p ~/.claude/skills
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/automode-config.skill \
-  -o /tmp/automode.skill
-rm -rf ~/.claude/skills/automode-config
-unzip -q /tmp/automode.skill -d ~/.claude/skills/
-rm /tmp/automode.skill
-```
+Uploading in claude.ai, unpacking a release bundle by hand, or installing
+from a source checkout are covered in the repository
+[Installation](../../README.md#-installation) section.
 
-Swap `~/.claude/skills/` for `.claude/skills/` to install project-scoped.
-
-### From source
-
-```bash
-git clone https://github.com/obeone/claude-skills.git
-cp -R claude-skills/skills/automode-config ~/.claude/skills/
-```
+> **Provenance:** every `.skill` bundle is built in CI by
+> [Skill Pack](https://github.com/NimbleBrainInc/skill-pack) from a signed
+> release tag, then uploaded by the workflow itself. No asset is ever
+> hand-built or hand-uploaded.
 
 ### Verify
 
