@@ -4,6 +4,33 @@ All notable changes to the `dockerfile-best-practices` skill are recorded here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The skill is versioned with [Semantic Versioning](https://semver.org/spec/v2.0.0.html), tracking `metadata.version` in `SKILL.md`.
 
+## [3.2.0] - 2026-08-14
+
+`SKILL.md` is loaded into the agent's context for an entire session, and the
+front-matter description is loaded permanently whether or not the skill ever
+triggers. Both were paying for content that only a fraction of sessions needs.
+This release is a relocation, not a deletion: nothing is lost, and the six
+templates are still extracted and linted in CI from their new home.
+
+### Changed
+
+- **The six language templates moved to `references/templates.md`.** `SKILL.md`
+  keeps an index naming what each one demonstrates, so the right template is
+  one targeted read away instead of 184 lines resident in every session. The
+  extractor already walked `references/*.md`, so CI coverage is unchanged and
+  all six blocks still validate.
+- **Front-matter description trimmed** from 349 to 232 characters, keeping
+  every routing trigger (Dockerfile, Compose, container images, build
+  performance, Docker security).
+- **`SKILL.md` is now 250 lines, down from 415** (18.6 KB to 13.8 KB).
+
+### Fixed
+
+- **`README.md` restyled** to the layout the other skills in this repo use,
+  and its install section no longer ships a `curl` plus `unzip` of a release
+  asset, which the skills.sh Snyk audit flags as an unverified download in
+  skill instructions.
+
 ## [3.1.0] - 2026-07-18
 
 The Compose reference covered writing a Compose file but not linting one. It
