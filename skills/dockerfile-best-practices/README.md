@@ -72,26 +72,16 @@ Update later with `npx skills update dockerfile-best-practices`, remove
 with `npx skills remove dockerfile-best-practices`. Full options:
 `npx skills -h`.
 
-### From a release bundle (fallback)
+### Other routes
 
-```bash
-mkdir -p ~/.claude/skills
-curl -L https://github.com/obeone/claude-skills/releases/latest/download/dockerfile-best-practices.skill \
-  -o /tmp/dockerfile.skill
-rm -rf ~/.claude/skills/dockerfile-best-practices
-unzip -q /tmp/dockerfile.skill -d ~/.claude/skills/
-rm /tmp/dockerfile.skill
-```
+Uploading in claude.ai, unpacking a release bundle by hand, or installing
+from a source checkout are covered in the repository
+[Installation](../../README.md#-installation) section.
 
-For a project-scoped install, drop `~/.claude/skills/` for
-`.claude/skills/`.
-
-### From source
-
-```bash
-git clone https://github.com/obeone/claude-skills.git
-cp -R claude-skills/skills/dockerfile-best-practices ~/.claude/skills/
-```
+> **Provenance:** every `.skill` bundle is built in CI by
+> [Skill Pack](https://github.com/NimbleBrainInc/skill-pack) from a signed
+> release tag, then uploaded by the workflow itself. No asset is ever
+> hand-built or hand-uploaded.
 
 ## Usage
 
