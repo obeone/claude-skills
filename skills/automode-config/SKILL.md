@@ -2,7 +2,7 @@
 name: automode-config
 description: "Author, validate, and migrate Claude Code autoMode permission blocks (environment, allow, soft_deny, hard_deny) at project level. Writes .claude/settings.local.json behind a critique and sha256 gate; scans the user and shared settings for adoption candidates. Requires Claude Code 2.1.83+."
 metadata:
-  version: "0.7.1"
+  version: "0.8.0"
 tools:
   - Read
   - Write
@@ -69,6 +69,14 @@ Before the dry-run, read `CLAUDE.md`, `AGENTS.md`, and
 `.claude/CLAUDE.md` (skip any that are absent) and translate what they
 say into prose rules. Emit one JSON file covering all four sections:
 
+> **Trap:** `allow` overrides `soft_deny` unconditionally for the same
+> target, so any `soft_deny` condition on a target an `allow` rule
+> already opens is never enforced. Example: `"allow": ["Deploying to
+> release/* is allowed"]` next to `"soft_deny": ["Never deploy to
+> release/* without a passing test suite"]`: the test-suite condition
+> never fires. Move the condition to `hard_deny`, or narrow the `allow`
+> rule so it does not cover that case.
+
 ```json
 {
   "autoMode": {
@@ -80,9 +88,12 @@ say into prose rules. Emit one JSON file covering all four sections:
 }
 ```
 
-The deterministic guards apply regardless of what the agent proposes:
-schema validation, mistaken-pattern detection, version-band probe,
-critique gate, hash gate, atomic write under flock.
+The deterministic guards apply regardless of what the agent proposes,
+and regardless of whether the vendor critique is reachable: schema
+validation, a semantic lint over rule content (misses a bare-noun
+`allow`/`soft_deny` overlap; see `references/cli.md` for
+`--lint-strict` / `--no-lint` and its other known limits), version-band
+probe, critique gate, hash gate, atomic write under flock.
 
 ## Invariants
 
@@ -91,6 +102,10 @@ critique gate, hash gate, atomic write under flock.
   warning reprinted at write time.
 - Never expand `"$defaults"`; preserve it verbatim at its position.
 - Never treat a zero exit from the critique as approval on its own.
+- Never let a proposal carry any top-level key besides `autoMode`;
+  `hooks`, `env`, `permissions`, and everything else fail validation,
+  since a proposal is agent-authored and a pass-through key would
+  install itself straight into your settings.
 
 ## Slash command
 
