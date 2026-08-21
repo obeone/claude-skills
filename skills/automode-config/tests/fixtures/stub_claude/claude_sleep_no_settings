@@ -1,0 +1,55 @@
+#!/bin/sh
+# Stub claude CLI: --help omits --settings (forces the swap path), and
+# the critique blocks for a long time so a test can kill the skill
+# mid-swap and inspect what it left behind.
+
+case "$1" in
+    --version)
+        echo "claude 1.42.0"
+        exit 0
+        ;;
+    --help)
+        cat <<'EOF'
+Usage: claude [options]
+
+Options:
+  --version                Show version
+  --help                   Show this help
+EOF
+        exit 0
+        ;;
+    auto-mode)
+        shift
+        case "$1" in
+            critique)
+                shift
+                for arg in "$@"; do
+                    if [ "$arg" = "--help" ]; then
+                        cat <<'EOF'
+Usage: claude auto-mode critique [options]
+
+Options:
+  --defaults <path>        Defaults file
+  --config <path>          Config file
+  --model <name>           Model to use
+  --help                   Show this help
+EOF
+                        exit 0
+                    fi
+                done
+                sleep 120
+                cat <<'EOF'
+# Critique of Custom Rules
+
+## Major issues
+
+## Smaller issues
+
+EOF
+                exit 0
+                ;;
+        esac
+        ;;
+esac
+
+exit 0
