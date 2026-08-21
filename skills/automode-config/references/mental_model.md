@@ -117,10 +117,12 @@ already contain an `autoMode` block?**
   sections. The deterministic guards (schema validation,
   mistaken-pattern detection, critique gate, hash gate, atomic write)
   still apply; the agent cannot bypass them.
-- **Phase 2 — scan-project.** Walks `assets/heuristics.yaml`
-  signals against the project root. For each match not already in
-  the proposal, asks the same four-key prompt. Skipped silently if
-  no signals match.
+- **Phase 2 — scan-project.** Computes `scan_project` signals against
+  the project root and discards the result; nothing merges into the
+  proposal and there is no prompt (see `references/migration.md` for
+  the current state). Only 4 of the 20 `signal_*` entries in
+  `assets/heuristics.yaml` resolve to a working probe today; the rest
+  are inert descriptions.
 - **Phase 3 — commit local.** Always runs. Probes
   `claude auto-mode critique --help` for `--settings`. Runs the
   critique. Verifies the gate predicate
