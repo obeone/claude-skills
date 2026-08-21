@@ -9,6 +9,13 @@ computes signals and discards them, see below. `--migrate-strategy`
 non-interactive modes (`keep-all`, `drop-all`, `fail`) suppress Phase
 1a's prompt.
 
+Phase 1a exists because the classifier silently ignores `autoMode` in
+the shared file: `_phase4_write_shared` prints exactly that warning
+when writing there ("the Claude Code permission classifier IGNORES
+autoMode in this file; this serves as a team manifest of intent
+only"). Adopting a rule out of the shared file and into the local file
+is how it starts being enforced at all.
+
 ## Phase 1a — adopt-from-shared
 
 Triggered whenever `.claude/settings.json` contains an `autoMode`
@@ -24,6 +31,10 @@ interviews each entry in turn:
 [shared.environment] 'Source control: github.com/acme-corp and all repos under it'
   [k]eep  [e]dit  [d]rop  [q]uit  >
 ```
+
+The section header (`[Phase 1a] adopt-from-shared :: <section>`) goes
+to stderr via `_eprint`; the prompt itself goes to stdout. They only
+appear as separate streams under redirection.
 
 The prompt only appears when `--migrate-strategy interactive` (the
 default) is in effect **and** stdin is a TTY; otherwise every entry is
@@ -42,12 +53,18 @@ happens to an `ask` entry.
 - `[k]eep` (or a blank line) adds the rule verbatim to the proposal.
 - `[e]dit` accepts a replacement inline rather than opening an editor;
   see "What `[e]dit` accepts" below for the full mechanics.
-- `[d]rop` discards the rule for this run only. Nothing remembers
-  which rules were dropped; there is no diff of them shown later, in
-  Phase 4 or anywhere else.
+- `[d]rop` discards the rule for this run. The decision is echoed once,
+  in-phase (`  - <entry>: drop`), but nothing carries it further: there
+  is no diff of dropped rules shown later, in Phase 4 or anywhere else.
 - `[q]uit` ends the interview for the *current section only* and the
   walk continues with the next section. It does not exit Phase 1a as
-  a whole, and no "quit at entry K of N" message is printed.
+  a whole, and no "quit at entry K of N" message is printed. Whatever
+  in that section had not yet been reviewed is silently dropped:
+  `_interview` returns only the `kept` list it built before quitting,
+  so the unreviewed remainder never reaches the proposal. An EOF on
+  stdin has the identical effect, since `_interview` catches
+  `(EOFError, KeyboardInterrupt)` at the same point and treats it as
+  `[q]uit` (see "`[q]uit` and Ctrl-C semantics" below).
 
 ## Phase 1b — agent-driven adoption from project docs
 
@@ -75,8 +92,8 @@ hash, then reruns with `--approved-canonical-hash`. There is no
 per-entry interview of this proposal: `_interview` is Phase 1a's
 shared-file mechanism only and is never called on `--proposal`'s
 content. What actually gates a Phase 1b proposal is the deterministic
-guard chain described in `SKILL.md`: schema validation, the semantic
-lint, the critique gate, the hash gate.
+guard chain described in `SKILL.md`, run in this order: the semantic
+lint, schema validation, the hash gate, the critique gate.
 
 ## Phase 2: scan-project signals (computed, not currently acted on)
 
@@ -99,7 +116,12 @@ only 4 (`signal_dockerfile`, `signal_compose`, `signal_pyproject`,
 `signal_uv_lock`) currently match a probe with real detection logic in
 `scan_project.py`. The rest are text descriptions that
 `_load_heuristics` routes into `heuristics_meta` and never probes.
-Wiring the remaining signals up is out of scope for this branch.
+`scan_project.py` still probes 7 signals in total, not 4:
+`signal_pkg_json`, `signal_gitignore`, and `signal_node_modules` have
+working probes with no matching entry in the YAML at all, and are
+appended unconditionally (`_load_heuristics`, `scan_project.py:154-158`).
+Wiring the remaining unmatched YAML signals up is out of scope for
+this branch.
 
 ## `--migrate-strategy` modes
 
@@ -114,8 +136,14 @@ treated by `_migrate_strategy`. The two are not symmetric: only Phase
   `interactive` branch returns it unchanged, the same effective
   outcome as `keep-all`, with no prompt of its own.
 - `keep-all`. Every existing rule is folded in unchanged, in both
-  contexts. The proposal bytes are byte-equal to the merged input. No
-  prompt.
+  contexts: `_migrate_strategy` returns the local block as-is, and
+  Phase 1a's `_interview` is a pass-through, so no shared-file entry
+  is dropped or edited. That is not byte-for-byte equality with the
+  original file: `_merge_proposal` still injects
+  `environment: ["$defaults"]` when the block has no `environment` key,
+  `_strip_example_only` still unwraps example-only entries,
+  `_filter_dropped` still removes any `DROPPED_PATTERN_LITERALS`
+  match, and `canonicalize` still reformats the result. No prompt.
 - `drop-all`. Every existing rule is dropped. `autoMode.environment`
   is reset to `["$defaults"]` (the curated baseline preserved); the
   `allow`, `soft_deny`, and `hard_deny` lists become empty arrays. No
@@ -180,18 +208,43 @@ it. The effective drop list is `DROPPED_PATTERN_LITERALS` in
 `apply_automode.py`; edit that tuple, not the YAML file, to add or
 change a dropped literal.
 
-## `[q]uit` semantics
+## `[q]uit` and Ctrl-C semantics
 
 `[q]uit` only exists inside Phase 1a's interview, and it is
 per-section, not per-phase or whole-pipeline:
 
 - Quitting one section's interview (e.g. `environment`) still walks
-  the next section; it does not skip the rest of Phase 1a.
-- Phase 2 has no interview to quit (see above). Phase 3 (commit) and
-  the optional Phase 4 (`--write-shared`) always run afterward,
-  regardless of what happened in Phase 1a.
-- The user gets the rollback line at the end either way.
+  the next section; it does not skip the rest of Phase 1a, regardless
+  of what happened in the section that was quit.
+- Phase 2 has no interview to quit (see above). Reaching Phase 3 does
+  not depend on what happened in Phase 1a, but Phase 3 has its own
+  earlier exits that have nothing to do with Phase 1a: `--dry-run`
+  returns before the commit; a blocking semantic-lint finding, a
+  schema failure, and a missing or mismatched
+  `--approved-canonical-hash` all return before the critique even
+  runs; a failed or non-substantive critique returns before the
+  commit. The optional Phase 4 (`--write-shared`) only runs after a
+  *successful* Phase 3 commit.
+- The rollback line prints only after a successful local commit
+  (`_print_rollback`, right after `_atomic_write`); none of the
+  earlier exits above reach it.
 
-To abort the whole run, `Ctrl-C` raises a `KeyboardInterrupt` that
-propagates up; the signal handlers in Phase 3's swap-file fallback
-restore any orig file before re-raising. No write is performed.
+`Ctrl-C` at a Phase 1a prompt does **not** abort the whole run:
+`_interview` catches `(EOFError, KeyboardInterrupt)` at the point
+where it reads the answer and treats it exactly like `[q]uit` for that
+section. `_phase1_adopt` then continues with the next section as
+usual, and the run proceeds through the lint, the hash gate, the
+critique, and the commit.
+
+`Ctrl-C` during the critique subprocess, on the swap-file fallback
+path (when the CLI lacks `--settings`), does not restore the swapped
+file from inside the signal handler either: `install_signal_release`
+(`_locks.py:208-233`) installs handlers for `SIGTERM` and `SIGINT`
+that release the flock and chain to the process's prior disposition
+(or exit); it does not touch the swapped file. The restore is the
+`finally` wrapped around the critique invocation
+(`_run_critique_swap`), which runs as that signal unwinds through it,
+not something the handler does directly. No write to the *local*
+settings file has happened by that point either way: Phase 3's
+`_atomic_write` for `.claude/settings.local.json` only runs after the
+critique returns and passes every check above.
