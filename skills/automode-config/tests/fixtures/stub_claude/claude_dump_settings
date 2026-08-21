@@ -1,0 +1,68 @@
+#!/bin/sh
+# Stub claude CLI: --help omits --settings (forces the swap-file path),
+# and the critique invocation DUMPS the user settings file it actually
+# sees so tests can assert what the swap wrote.
+
+case "$1" in
+    --version)
+        echo "claude 1.42.0"
+        exit 0
+        ;;
+    --help)
+        cat <<'EOF'
+Usage: claude [options]
+
+Options:
+  --version                Show version
+  --help                   Show this help
+EOF
+        exit 0
+        ;;
+    auto-mode)
+        shift
+        case "$1" in
+            critique)
+                shift
+                for arg in "$@"; do
+                    if [ "$arg" = "--help" ]; then
+                        cat <<'EOF'
+Usage: claude auto-mode critique [options]
+
+Options:
+  --defaults <path>        Defaults file
+  --config <path>          Config file
+  --model <name>           Model to use
+  --help                   Show this help
+EOF
+                        exit 0
+                    fi
+                done
+                # Enough prose to clear the substantiveness gate, then the
+                # verbatim settings document the CLI was handed.
+                cat <<'EOF'
+# Critique of Custom Rules
+
+## Major issues
+
+The proposal was reviewed against the settings document below.
+
+## Smaller issues
+
+None worth reporting.
+
+<<<SETTINGS_SEEN>>>
+EOF
+                if [ -f "$HOME/.claude/settings.json" ]; then
+                    cat "$HOME/.claude/settings.json"
+                else
+                    echo "ABSENT"
+                fi
+                echo
+                echo "<<<END_SETTINGS_SEEN>>>"
+                exit 0
+                ;;
+        esac
+        ;;
+esac
+
+exit 0
