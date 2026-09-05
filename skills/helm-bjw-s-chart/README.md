@@ -1,7 +1,7 @@
 ![Helm](https://img.shields.io/badge/Helm-3.18+-0F1689?logo=helm&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-1.31+-326CE5?logo=kubernetes&logoColor=white)
 ![bjw-s common](https://img.shields.io/badge/bjw--s_common-5.1.0-6E56CF)
-![Skill](https://img.shields.io/badge/skill-5.3.0-blue)
+![Skill](https://img.shields.io/badge/skill-5.4.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # helm-bjw-s-chart
@@ -30,7 +30,8 @@ StatefulSets, HPAs, NetworkPolicies, and the full 4 to 5 migration.
 | 📐 **Opinionated `values.yaml`** | One ordering everywhere: `defaultPodOptions`, `controllers`, `service`, `ingress`, `persistence`, `configMaps/secrets`. |
 | 🧩 **Pattern library** | Single container, sidecars, init containers, multi-controller, StatefulSets, HPA, PodMonitor, ephemeral volumes, NetworkPolicies with single-controller auto-targeting. The last four are 5.x only. |
 | 🔄 **4 to 5 migration** | Five behavioral changes (`automountServiceAccountToken`, default ServiceAccount, `rawResources` shape, `jobLabel`, version bumps) plus the upgrade procedure. |
-| ✅ **Static validator** | Flags missing dependencies, a missing `Chart.lock`, unvendored `charts/` tarballs, 4.x migration debt, invalid or inert `strategy` / `rollingUpdate` keys, and the usual structural mistakes. |
+| ✅ **Static validator** | Flags missing dependencies, a missing `Chart.lock`, unvendored `charts/` tarballs, 4.x migration debt, invalid or inert `strategy` / `rollingUpdate` keys, dangling controller/service references, schema-invalid shapes that render as silent no-ops, and the usual structural mistakes. |
+| 🐳 **Compose mapping** | A key-by-key table from a `compose.yaml` service to the equivalent bjw-s values, for conversions. |
 | 🆕 **5.1.0 additions** | DaemonSet `updateStrategy`, `automountServiceAccountToken` on the ServiceAccount itself, cross-namespace Routes with an auto-generated `ReferenceGrant`, and the `maxSurge` / `maxUnavailable` spellings that replace `surge` / `unavailable`. |
 
 ## 🤔 Why
@@ -163,7 +164,7 @@ flowchart TB
 
 ## 📝 Status
 
-`metadata.version: 5.3.0`. Default library `common 5.1.0`, released
+`metadata.version: 5.4.0`. Default library `common 5.1.0`, released
 2026-08-16. The 4.x track is maintained, not developed: it gets migration
 guidance and validator warnings, not new patterns.
 

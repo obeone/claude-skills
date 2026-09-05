@@ -2,7 +2,7 @@
 name: helm-bjw-s-chart
 description: "Generate production-ready Helm charts on the bjw-s-labs common library (app-template v5, v4 legacy). Use for new charts, Compose-to-Helm conversion, sidecars, init containers, services, ingress, persistence, StatefulSets, HPAs, Service/PodMonitors, and NetworkPolicies."
 metadata:
-  version: "5.3.0"
+  version: "5.4.0"
 ---
 
 # Helm bjw-s Chart Generator
@@ -200,7 +200,7 @@ See [`references/patterns.md`](references/patterns.md) for worked examples:
 - Private registries with `imagePullSecrets`
 - StatefulSets with headless service
 
-Plus one section per 5.x-only key listed below.
+Plus one section per version-gated key listed below.
 
 ## Version-gated features
 
@@ -248,10 +248,10 @@ After generating a chart:
 cd /path/to/chart
 helm dependency update
 
-# 2. Validate structure (uv reads the script's PEP 723 header)
-uv run scripts/validate_chart.py /path/to/chart
+# 2. Validate structure
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py /path/to/chart
 # Or with JSON output for CI:
-uv run scripts/validate_chart.py --json /path/to/chart
+uv run skills/helm-bjw-s-chart/scripts/validate_chart.py --json /path/to/chart
 
 # 3. Helm validation
 helm lint .
@@ -309,7 +309,8 @@ Full rationale and the two strategies:
 ## References
 
 - [`references/migration-4-to-5.md`](references/migration-4-to-5.md) - Full 4 → 5 upgrade procedure
-- [`references/patterns.md`](references/patterns.md) - Common deployment patterns
+- [`references/patterns.md`](references/patterns.md) - Common deployment patterns, including Gateway API HTTPRoute
 - [`references/best-practices.md`](references/best-practices.md) - Kubernetes/Helm best practices
 - [`references/values-schema.md`](references/values-schema.md) - Complete values.yaml reference
+- [`references/compose-mapping.md`](references/compose-mapping.md) - Docker Compose → bjw-s values.yaml mapping
 - [`assets/templates/`](assets/templates/) - Base templates for quick start

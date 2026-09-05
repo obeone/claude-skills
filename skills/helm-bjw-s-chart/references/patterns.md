@@ -52,6 +52,43 @@ persistence:
       - path: /data
 ```
 
+## Gateway API HTTPRoute **(5.x only)**
+
+The modern alternative to Ingress. Instead of an `Ingress`, attach an
+`HTTPRoute` to an existing `Gateway` via `parentRefs`, then send matched
+requests to a declared service identifier. Same app as the Single
+Container example above:
+
+```yaml
+service:
+  app:
+    controller: app
+    ports:
+      http:
+        port: 80
+
+route:
+  app:
+    enabled: true
+    kind: HTTPRoute
+    parentRefs:
+      - group: gateway.networking.k8s.io
+        kind: Gateway
+        name: external
+        namespace: gateway-system
+        sectionName: https
+    hostnames:
+      - myapp.example.com
+    rules:
+      - matches:
+          - path:
+              type: PathPrefix
+              value: /
+        backendRefs:
+          - identifier: app      # References service.app (use `name:` for external services)
+            port: http
+```
+
 ## App with Sidecar (Code-Server)
 
 Application with development sidecar for editing configs:
@@ -70,7 +107,7 @@ controllers:
         image:
           repository: homeassistant/home-assistant
           tag: "2024.1"
-      
+
       code:
         dependsOn: app
         image:
@@ -88,7 +125,7 @@ service:
     ports:
       http:
         port: 8123
-  
+
   code:
     controller: main
     ports:
@@ -186,7 +223,7 @@ controllers:
         image:
           repository: myapp/frontend
           tag: "1.0.0"
-  
+
   backend:
     containers:
       app:
@@ -200,7 +237,7 @@ service:
     ports:
       http:
         port: 3000
-  
+
   backend:
     controller: backend
     ports:
@@ -234,6 +271,12 @@ controllers:
 
     statefulset:
       podManagementPolicy: OrderedReady  # Ordered startup for clustered DBs
+      volumeClaimTemplates:
+        - name: data
+          accessMode: ReadWriteOnce
+          size: 20Gi
+          globalMounts:
+            - path: /var/lib/postgresql/data
 
     initContainers:
       init-permissions:
@@ -262,22 +305,15 @@ controllers:
         probes:
           liveness:
             enabled: true
-            type: EXEC
+            custom: true
             spec:
-              command:
-                - pg_isready
-                - -U
-                - myuser
+              exec:
+                command:
+                  - pg_isready
+                  - -U
+                  - myuser
               initialDelaySeconds: 30
               periodSeconds: 10
-
-    statefulset:
-      volumeClaimTemplates:
-        - name: data
-          accessMode: ReadWriteOnce
-          size: 20Gi
-          globalMounts:
-            - path: /var/lib/postgresql/data
 
 # Regular service for client connections
 service:
@@ -306,7 +342,7 @@ Periodic backup job:
 controllers:
   backup:
     type: cronjob
-    
+
     cronjob:
       schedule: "0 2 * * *"  # 2 AM daily
       successfulJobsHistory: 3
@@ -361,21 +397,21 @@ controllers:
         env:
           # Direct env vars
           APP_NAME: MyApp
-          
+
           # From ConfigMap (individual)
           APP_MODE:
             valueFrom:
               configMapKeyRef:
                 name: app-config
                 key: APP_MODE
-          
+
           # From Secret (individual)
           API_KEY:
             valueFrom:
               secretKeyRef:
-                identifier: app-secrets
+                name: app-secrets
                 key: API_KEY
-        
+
         envFrom:
           # Load all ConfigMap keys
           - configMapRef:
@@ -456,13 +492,13 @@ ingress:
             service:
               identifier: app
               port: http
-          
+
           # WebSocket negotiate (still HTTP)
           - path: /ws/negotiate
             service:
               identifier: app
               port: http
-          
+
           # WebSocket connection
           - path: /ws
             service:
@@ -497,14 +533,14 @@ controllers:
         image:
           repository: myapp
           tag: "1.0.0"
-        
+
         resources:
           requests:
             cpu: 100m
             memory: 128Mi
           limits:
             memory: 512Mi
-        
+
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -521,7 +557,7 @@ controllers:
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 3
-          
+
           readiness:
             enabled: true
             type: HTTP
@@ -530,7 +566,7 @@ controllers:
               periodSeconds: 5
               timeoutSeconds: 3
               failureThreshold: 3
-          
+
           startup:
             enabled: true
             type: HTTP
@@ -599,15 +635,15 @@ persistence:
         app:
           - path: /app/data
             subPath: app-data
-        
+
         sidecar:
           - path: /sidecar/data
             subPath: sidecar-data
-        
+
         backup:
           - path: /backup/source
             readOnly: true
-  
+
   config:
     type: configMap
     identifier: app-config
@@ -622,13 +658,36 @@ persistence:
 
 ## HorizontalPodAutoscaler **(5.x only)**
 
-Autoscale a stateless workload on CPU + memory pressure. Leave
-`replicas: null` on the controller so the HPA owns the replica count.
+Autoscale a stateless workload on CPU + memory pressure. HPA config nests
+under the target controller — there is no top-level
+`horizontalPodAutoscaler:` key, and no `controller:` field inside it (the
+parent controller is implicitly the target). Leave `replicas: null` on
+the controller so the HPA owns the replica count.
 
 ```yaml
 controllers:
   web:
-    replicas: null                   # Let the HPA decide
+    replicas: null                   # Let the HPA own the replica count
+    horizontalPodAutoscaler:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 20
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
+        - type: Resource
+          resource:
+            name: memory
+            target:
+              type: Utilization
+              averageUtilization: 80
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
     containers:
       app:
         image:
@@ -640,29 +699,6 @@ controllers:
             memory: 256Mi
           limits:
             memory: 512Mi
-
-horizontalPodAutoscaler:
-  web:
-    enabled: true
-    controller: web
-    minReplicas: 2
-    maxReplicas: 20
-    metrics:
-      - type: Resource
-        resource:
-          name: cpu
-          target:
-            type: Utilization
-            averageUtilization: 70
-      - type: Resource
-        resource:
-          name: memory
-          target:
-            type: Utilization
-            averageUtilization: 80
-    behavior:
-      scaleDown:
-        stabilizationWindowSeconds: 300
 ```
 
 ## PodMonitor (Prometheus, no Service required) **(5.x only)**
@@ -680,12 +716,16 @@ controllers:
           tag: "1.4.0"
         # Container port name picked up by the PodMonitor
         # (declared inside the container spec, not the service)
+        ports:
+          - name: metrics
+            containerPort: 9090
 
 podMonitor:
   worker:
     enabled: true
-    controller: worker
-    endpoints:
+    controller:
+      identifier: worker   # object form; a bare string fails schema validation
+    podMetricsEndpoints:    # not `endpoints:` — that key is rejected by the schema
       - port: metrics
         path: /metrics
         interval: 30s

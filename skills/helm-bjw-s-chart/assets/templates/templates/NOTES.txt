@@ -1,22 +1,58 @@
 1. Get the application URL by running these commands:
-{{- if .Values.ingress.main.enabled }}
-{{- range $host := .Values.ingress.main.hosts }}
-  {{- range .paths }}
-  http{{ if $.Values.ingress.main.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
-  {{- end }}
+{{- $anyIngress := false }}
+{{- range $name, $ing := .Values.ingress }}
+{{- if ne $ing.enabled false }}
+{{- $anyIngress = true }}
 {{- end }}
-{{- else if contains "NodePort" .Values.service.main.type }}
-  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "bjw-s.common.lib.chart.names.fullname" . }})
-  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+{{- end }}
+{{- $enabledServices := dict }}
+{{- range $name, $svc := .Values.service }}
+{{- if ne $svc.enabled false }}
+{{- $_ := set $enabledServices $name $svc }}
+{{- end }}
+{{- end }}
+{{- $svcCount := len $enabledServices }}
+{{- if $anyIngress }}
+{{- range $name, $ing := .Values.ingress }}
+{{- if ne $ing.enabled false }}
+{{- range $host := $ing.hosts }}
+{{- range $host.paths }}
+  http{{ if $ing.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- else if eq $svcCount 0 }}
+  No service or ingress is enabled for this release. Enable one under
+  `service.<id>` or `ingress.<id>` in values.yaml to get access
+  instructions here.
+{{- else if eq $svcCount 1 }}
+{{- range $name, $svc := $enabledServices }}
+{{- $svcType := default "ClusterIP" $svc.type }}
+{{- if contains "NodePort" $svcType }}
+  export NODE_PORT=$(kubectl get --namespace {{ $.Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "bjw-s.common.lib.chart.names.fullname" $ }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ $.Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
   echo http://$NODE_IP:$NODE_PORT
-{{- else if contains "LoadBalancer" .Values.service.main.type }}
+{{- else if contains "LoadBalancer" $svcType }}
      NOTE: It may take a few minutes for the LoadBalancer IP to be available.
-           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "bjw-s.common.lib.chart.names.fullname" . }}'
-  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "bjw-s.common.lib.chart.names.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
-  echo http://$SERVICE_IP:{{ .Values.service.main.ports.http.port }}
-{{- else if contains "ClusterIP" .Values.service.main.type }}
-  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "bjw-s.common.lib.chart.names.fullname" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
-  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+           You can watch the status by running 'kubectl get --namespace {{ $.Release.Namespace }} svc -w {{ include "bjw-s.common.lib.chart.names.fullname" $ }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ $.Release.Namespace }} {{ include "bjw-s.common.lib.chart.names.fullname" $ }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+{{- $port := "" }}
+{{- range $portName, $portSpec := $svc.ports }}
+{{- if and (not $port) $portSpec.port }}
+{{- $port = $portSpec.port }}
+{{- end }}
+{{- end }}
+  echo http://$SERVICE_IP:{{ $port }}
+{{- else }}
+  export POD_NAME=$(kubectl get pods --namespace {{ $.Release.Namespace }} -l "app.kubernetes.io/name={{ include "bjw-s.common.lib.chart.names.fullname" $ }},app.kubernetes.io/instance={{ $.Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ $.Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
   echo "Visit http://127.0.0.1:8080 to use your application"
-  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+  kubectl --namespace {{ $.Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+{{- end }}
+{{- else }}
+  Multiple services are enabled ({{ range $name, $svc := $enabledServices }}{{ $name }} {{ end }}) and no ingress
+  is configured. List them and pick the one to reach:
+    kubectl get svc --namespace {{ .Release.Namespace }}
 {{- end }}
