@@ -487,11 +487,10 @@ controllers:
   app:
     replicas: 2
     
-    strategy:
-      type: RollingUpdate
-      rollingUpdate:
-        maxSurge: 1
-        maxUnavailable: 0
+    strategy: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
 
     containers:
       app:
@@ -804,4 +803,121 @@ networkpolicies:
           ports:
             - protocol: UDP
               port: 53
+```
+
+## DaemonSet updateStrategy **(5.1+)**
+
+`strategy` and `rollingUpdate` were accepted but dropped on DaemonSets
+before 5.1.0 — the rendered manifest carried no `updateStrategy` at all.
+Valid values here are `RollingUpdate` and `OnDelete`; leave `strategy`
+unset to inherit the Kubernetes default.
+
+```yaml
+controllers:
+  node-agent:
+    type: daemonset
+    strategy: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+    containers:
+      agent:
+        image:
+          repository: myagent
+          tag: "1.4.0"
+```
+
+`maxSurge` needs a spare slot per node during the roll, so it only helps
+when the workload tolerates two copies briefly. `maxUnavailable: 1` with
+`maxSurge: 0` is the conservative pairing for a node agent that owns a
+host resource.
+
+## ServiceAccount-level automountServiceAccountToken **(5.1+)**
+
+Before 5.1.0 the field could only be set on the pod. 5.1.0 adds it on the
+ServiceAccount object — which is **not** a shortcut for the pod-level key.
+Kubernetes lets the pod spec override the ServiceAccount, and this library
+always writes `automountServiceAccountToken` into the pod spec, defaulting
+to `false`. Leave the pod side alone and the token stays unmounted no
+matter what the ServiceAccount says. Set both:
+
+```yaml
+serviceAccount:
+  api-reader:
+    enabled: true
+    # Declares the policy on the SA, for anything binding to it outside
+    # this chart. Does not reach this chart's own pods.
+    automountServiceAccountToken: true
+
+controllers:
+  main:
+    pod:
+      # This is the one that decides for the pods rendered here.
+      automountServiceAccountToken: true
+    serviceAccount:
+      identifier: api-reader
+    containers:
+      app:
+        image:
+          repository: myapp
+          tag: "1.0.0"
+
+global:
+  # The workload brings its own SA, so skip the auto-created default.
+  createDefaultServiceAccount: false
+```
+
+Grant the RBAC the workload actually needs; mounting the token is only
+half of it.
+
+## Cross-namespace Route with an auto-generated ReferenceGrant **(5.1+)**
+
+`namespaceOverride` puts the Route in another namespace, and the library
+emits the `ReferenceGrant` that authorizes it to reach back to the
+Services in the release namespace. Only `backendRefs` resolving to a
+Service in the release namespace are covered — a `backendRefs` entry with
+its own explicit `namespace:` is left to you.
+
+```yaml
+service:
+  main:
+    controller: main
+    ports:
+      http:
+        port: 80
+
+route:
+  main:
+    enabled: true
+    kind: HTTPRoute
+    # Route lives here; the Service stays in the release namespace.
+    namespaceOverride: gateway-system
+    parentRefs:
+      - group: gateway.networking.k8s.io
+        kind: Gateway
+        name: external
+        namespace: gateway-system
+    hostnames:
+      - app.example.com
+    rules:
+      - matches:
+          - path:
+              type: PathPrefix
+              value: /
+        backendRefs:
+          # Resolve by identifier so the grant picks the Service up.
+          - identifier: main
+            port: 80
+```
+
+The generated grant is named after the Route and lives in the release
+namespace. Suppress it when a cluster-wide grant is already managed
+elsewhere:
+
+```yaml
+route:
+  main:
+    namespaceOverride: gateway-system
+    referenceGrant:
+      enabled: false
 ```

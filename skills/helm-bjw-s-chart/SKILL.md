@@ -2,7 +2,7 @@
 name: helm-bjw-s-chart
 description: "Generate production-ready Helm charts on the bjw-s-labs common library (app-template v5, v4 legacy). Use for new charts, Compose-to-Helm conversion, sidecars, init containers, services, ingress, persistence, StatefulSets, HPAs, Service/PodMonitors, and NetworkPolicies."
 metadata:
-  version: "5.2.0"
+  version: "5.3.0"
 ---
 
 # Helm bjw-s Chart Generator
@@ -14,7 +14,7 @@ metadata:
 
 | common  | Kubernetes | Helm      | Status                                              |
 | :------ | :--------- | :-------- | :-------------------------------------------------- |
-| `5.0.1` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
+| `5.1.0` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
 | `4.6.2` | `>= 1.25`  | `>= 3.14` | Legacy — pin when the cluster can't meet 5.x reqs   |
 
 Everything documented here works on **common 5.x** by default. When a
@@ -22,6 +22,35 @@ pattern is **not available on 4.x** it's tagged **`(5.x only)`** so
 agents pinned to the legacy track can skip it. See
 [`references/migration-4-to-5.md`](references/migration-4-to-5.md) for
 the full 4 → 5 upgrade procedure.
+
+## New in common 5.1.0
+
+Drop-in over 5.0.x — no values change is required to upgrade. Four
+additions, each with a worked example in
+[`references/patterns.md`](references/patterns.md):
+
+1. **DaemonSets accept `strategy` / `rollingUpdate`** and render a real
+   `updateStrategy`. On 5.0.x both keys were silently ignored for this
+   controller type.
+2. **`serviceAccount.<id>.automountServiceAccountToken`** sets the field
+   on the ServiceAccount object itself. It does not replace the pod-level
+   key: the library always writes `automountServiceAccountToken` into the
+   pod spec (default `false`), and the pod spec wins. Set both.
+3. **`route.<id>.namespaceOverride`** deploys a Route into another
+   namespace, and the library then emits the matching `ReferenceGrant`
+   automatically. Turn that off with
+   `route.<id>.referenceGrant.enabled: false`.
+4. **`rollingUpdate` takes the upstream key names** — `maxSurge` and
+   `maxUnavailable`. The old `surge` / `unavailable` shorthands still
+   work but are deprecated and disappear in 6.0. StatefulSets gained
+   `rollingUpdate.maxUnavailable`, which the cluster only honours with the
+   `MaxUnavailableStatefulSet` feature gate — alpha and off by default up
+   to Kubernetes 1.34, beta from 1.35 with the default varying by patch
+   release.
+
+One behavioral change: an invalid `strategy` is now rejected by the values
+schema instead of a template `fail`, so `helm lint` reports it earlier and
+the message names the valid values per controller type.
 
 ## Migration 4.x → 5.x at a glance
 
@@ -81,7 +110,7 @@ appVersion: "<app version>"
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 5.0.1  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
+    version: 5.1.0  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
 ```
 
 ## values.yaml Structure
@@ -173,18 +202,23 @@ See [`references/patterns.md`](references/patterns.md) for worked examples:
 
 Plus one section per 5.x-only key listed below.
 
-## 5.x-only features
+## Version-gated features
 
-These require `common >= 5.0.0` and are ignored or rejected on 4.x. Each
-has a worked example in [`references/patterns.md`](references/patterns.md):
+These are ignored or rejected below the version in the `Since` column.
+Each has a worked example in
+[`references/patterns.md`](references/patterns.md):
 
-| Key | What it buys you |
-| :-------------------------- | :---------------------------------------------------- |
-| `horizontalPodAutoscaler`   | Autoscaling bound to a controller identifier           |
-| `podMonitor`                | Prometheus scraping without a Service                  |
-| `persistence.*.type: ephemeral` | Per-pod PVC, deleted with the pod                  |
-| `resizePolicy` (pod + container) | In-place CPU/memory resize, no pod recreation     |
-| `networkpolicies`           | Auto-targets the only controller when it is unambiguous |
+| Key | Since | What it buys you |
+| :-------------------------- | :------ | :--------------------------------------- |
+| `horizontalPodAutoscaler`   | `5.0.0` | Autoscaling bound to a controller identifier |
+| `podMonitor`                | `5.0.0` | Prometheus scraping without a Service     |
+| `persistence.*.type: ephemeral` | `5.0.0` | Per-pod PVC, deleted with the pod     |
+| `resizePolicy` (pod + container) | `5.0.0` | In-place CPU/memory resize, no pod recreation |
+| `networkpolicies`           | `5.0.0` | Auto-targets the only controller when it is unambiguous |
+| `strategy` on a DaemonSet   | `5.1.0` | Real `updateStrategy` instead of a silently dropped key |
+| `serviceAccount.*.automountServiceAccountToken` | `5.1.0` | Declares the token policy on the SA itself, for consumers outside the chart |
+| `route.*.namespaceOverride` | `5.1.0` | Cross-namespace Route with an auto-generated `ReferenceGrant` |
+| `rollingUpdate.maxSurge` / `.maxUnavailable` | `5.1.0` | Upstream key names; `surge` / `unavailable` are deprecated |
 
 ## Best Practices
 
@@ -269,6 +303,8 @@ Full rationale and the two strategies:
 **Controller not starting**: Check `dependsOn` order for init/sidecar containers
 **Unexpected ServiceAccount appears (5.x)**: Set `global.createDefaultServiceAccount: false` or define your own SA
 **Pod can't talk to the K8s API (5.x)**: Set `automountServiceAccountToken: true` on the pod AND grant RBAC
+**`strategy` rejected by `helm lint` (5.1+)**: It is a string, never a map, and the valid values depend on the controller type
+**Cross-namespace Route can't reach the Service**: The `ReferenceGrant` is only emitted from `namespaceOverride`, not from a hand-written `backendRefs.namespace`
 
 ## References
 

@@ -10,4 +10,4 @@ dependencies:
     # Default 5.x track (requires K8s >= 1.31 / Helm >= 3.18).
     # Legacy: pin to 4.6.2 for clusters that can't meet the 5.x prereqs.
     # See references/migration-4-to-5.md before bumping an existing chart.
-    version: 5.0.1
+    version: 5.1.0
