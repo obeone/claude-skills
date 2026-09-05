@@ -16,7 +16,21 @@ controllers:
     annotations: {}                  # Annotations on controller resource
     labels: {}                       # Labels on controller resource
     replicas: 1                      # Number of replicas (null for HPA)
-    strategy: RollingUpdate          # Update strategy
+    # Update strategy. A string, never a map. Valid values depend on
+    # `type`: deployment → Recreate (default) | RollingUpdate;
+    # statefulset → RollingUpdate (default) | OnDelete;
+    # daemonset → RollingUpdate | OnDelete (5.1+; ignored before).
+    # Rejected by the values schema from 5.1.0 on, by a template
+    # failure before that.
+    strategy: RollingUpdate
+    # Only read when strategy is RollingUpdate.
+    rollingUpdate:
+      maxUnavailable: 0              # deployment, daemonset, statefulset (5.1+)
+      maxSurge: 1                    # deployment, daemonset
+      partition: 0                   # statefulset only
+      # `unavailable` / `surge` are the pre-5.1 spellings: still
+      # accepted, deprecated, removed in 6.0. maxUnavailable / maxSurge
+      # win when both are set.
     revisionHistoryLimit: 3          # History to keep
     
     # Pod-level options
@@ -292,6 +306,11 @@ serviceAccount:
     annotations: {}
     labels: {}
     staticToken: false               # Create long-lived token
+    # (5.1+) Set on the ServiceAccount object itself. The pod spec always
+    # carries its own automountServiceAccountToken (default false) and
+    # wins, so this does not govern this chart's pods — set
+    # `controllers.<id>.pod.automountServiceAccountToken` for those.
+    automountServiceAccountToken: false
 
 # Reference in controller
 controllers:
@@ -426,7 +445,15 @@ route:
   <identifier>:
     enabled: true
     kind: HTTPRoute                  # HTTPRoute, TCPRoute, TLSRoute, UDPRoute, GRPCRoute
-    
+
+    # (5.1+) Deploy the Route somewhere other than the release namespace.
+    namespaceOverride: ""
+    # (5.1+) Only consulted when namespaceOverride differs from the
+    # release namespace: a ReferenceGrant covering the backend Services
+    # is generated unless disabled here.
+    referenceGrant:
+      enabled: true
+
     parentRefs:
       - group: gateway.networking.k8s.io
         kind: Gateway
