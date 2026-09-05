@@ -18,7 +18,7 @@ agent needs to do one job well, with no dependency on the others.
 | Skill | Version | What it does | Highlights |
 |---|---|---|---|
 | [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | 3.2.0 | Create and optimize Dockerfiles and Compose files | BuildKit syntax, cache mounts, non-root users, 30+ analyzer rules, DCLint interop |
-| [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.2.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
+| [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.3.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
 | [**automode-config**](./skills/automode-config/) | 0.7.1 | Author, validate, and migrate project-level `autoMode` blocks | Four official sections, critique gate, sha256 hash gate, atomic flock writes |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | 1.0.0 | Generate importable Apple Shortcuts for macOS and iOS | Native and third-party action catalogs, validator, inspector, App Intents discovery |
 
@@ -175,6 +175,7 @@ Every skill follows the same layout, so an agent that knows one knows them all:
 - **Complete chart structure**: Chart.yaml, values.yaml, common loader, NOTES.txt
 - **Deployment patterns**: single container, sidecars, init containers, multi-controller, StatefulSets
 - **Beyond the basics**: HorizontalPodAutoscaler, ServiceMonitor/PodMonitor, NetworkPolicy
+- **common 5.1.0**: DaemonSet `updateStrategy`, `automountServiceAccountToken` on the ServiceAccount, cross-namespace Routes with an auto-generated `ReferenceGrant`, `maxSurge` / `maxUnavailable` replacing the deprecated `surge` / `unavailable`
 - **Chart validator**: verifies structure and bjw-s compatibility
 
 ### automode-config
