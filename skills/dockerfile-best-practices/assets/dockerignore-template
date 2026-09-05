@@ -1,6 +1,28 @@
 # Common .dockerignore patterns
+#
+# Two approaches below. Pick ONE per project, don't mix them.
+#
+# 1. BLOCKLIST (active by default) - list what to exclude, everything else
+#    ships into the build context. Simple, but always incomplete: anything
+#    you forget to add (a stray secret, a local .env dump, a CI credentials
+#    file) goes into the context by default.
+# 2. ALLOWLIST (commented out, bottom of this file) - exclude everything,
+#    then list what the build actually needs. Prefer this when build
+#    context leakage matters more than convenience: you can't enumerate
+#    every sensitive file that might land in the repo, secrets or CI config
+#    are a real risk, or a leak would be an incident, not just wasted build
+#    time. Costs more upkeep: add a new source dir, remember to add its `!`
+#    line.
+
+# ============================================================
+# 1. BLOCKLIST
+# ============================================================
 
 # Version control
+# Trap: excluding .git breaks `git describe`/`git rev-parse` version
+# stamping during the build (common in Go and Python projects that embed a
+# version string). Drop this line, or COPY only what you need (e.g. the
+# resolved version via a build arg) before the rest of .git is excluded.
 .git
 .gitignore
 .gitattributes
@@ -70,6 +92,33 @@ LICENSE
 Jenkinsfile
 
 # Docker (avoid recursive inclusion)
+# Trap: this excludes every Dockerfile*, including ones a stage COPYs by
+# name (multi-Dockerfile setups, e.g. `COPY Dockerfile.base .`). If any
+# stage does that, re-include the specific file: `!Dockerfile.base`
 Dockerfile*
 docker-compose*.yml
 .dockerignore
+
+# ============================================================
+# 2. ALLOWLIST - uncomment this section and comment out section 1 to use.
+# ============================================================
+#
+# `*` excludes everything, including nested paths (it's checked against
+# every directory level while the build context is walked, not just the
+# top level). Re-including a whole directory (`!src/`) brings back
+# everything under it. Cherry-picking a single file inside an otherwise-
+# excluded directory (`!src/keep.txt` without `!src/`) is the classic
+# allowlist trap: the builder prunes the excluded directory before it
+# gets to check nested `!` rules against it, so the file stays excluded.
+# Re-include the whole directory, then narrow back down with plain
+# exclude patterns if you need to drop something from inside it.
+#
+# *
+#
+# !src/
+# !pyproject.toml
+# !uv.lock
+#
+# # Narrowing an already-included directory is safe (this excludes test
+# # files that got pulled in by `!src/` above):
+# src/**/*.test.py

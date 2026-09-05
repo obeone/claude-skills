@@ -1,0 +1,123 @@
+name: Dockerfile Skill Examples
+
+# Regression harness for skills/dockerfile-best-practices: every fenced
+# ```dockerfile block in the skill's own markdown must obey the doctrine it
+# teaches. See skills/dockerfile-best-practices/scripts/extract_dockerfile_blocks.py
+# for the extraction/selection logic (D9 in .omc/handoffs/team-plan.md).
+
+on:
+  pull_request:
+    paths:
+      - 'skills/dockerfile-best-practices/**'
+      - '.github/workflows/dockerfile-skill-examples.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/dockerfile-best-practices/**'
+      - '.github/workflows/dockerfile-skill-examples.yml'
+
+jobs:
+  # T-15: static lint of every extracted block. No Docker daemon needed, runs
+  # in seconds, and is the must-have signal: it is what would have caught the
+  # skill's own examples violating its own linter (F-03/F-04).
+  lint-examples:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.3.2
+
+      - name: Unit-test the extractor's D9 classifier
+        run: uv run skills/dockerfile-best-practices/scripts/tests/test_extract_dockerfile_blocks.py -v
+
+      - name: Lint every dockerfile block in the skill's markdown
+        run: uv run skills/dockerfile-best-practices/scripts/extract_dockerfile_blocks.py
+
+  # T-16: build every validated block with BuildKit's --check.
+  #
+  # OBSERVED, not just reasoned about (tested locally against a real Docker
+  # daemon, 29.4.0/OrbStack, against all validated blocks extracted from this
+  # skill, plus one synthetic case):
+  #
+  # - A COPY/bind-mount source absent from the build context does NOT make
+  #   --check fail. `--check` is a lint-only pass; it does not execute COPY.
+  #   This was the original justification for continue-on-error and it does
+  #   not hold — confirmed clean against a block bind-mounting uv.lock and
+  #   pyproject.toml, neither present at this repo's root.
+  # - It does need the network: resolving a base image not already cached
+  #   locally does an auth + manifest fetch against the registry (observed
+  #   for docker.io and ghcr.io images). It does NOT do a full layer pull for
+  #   a --check-only run (confirmed: the image never appeared in `docker
+  #   images` afterward). Against 30 validated blocks with several base
+  #   images already warm in the local cache, the whole batch ran in ~35s.
+  #   A cold GitHub Actions cache would do more of these manifest fetches and
+  #   be slower, but this is lighter than "pulls every image".
+  # - It CAN hard-fail (exit 1, not just a warning) for reasons that have
+  #   nothing to do with the Dockerfile's own content: one block failed here
+  #   with "no match for platform in manifest: not found" because
+  #   maven:3.9-eclipse-temurin-17-alpine ships no linux/arm64 manifest and
+  #   this test host is Apple Silicon. GitHub's ubuntu-latest runners are
+  #   amd64, so this exact failure is unlikely to reproduce there — but it
+  #   demonstrates that base-image resolution failures are a real, distinct
+  #   failure category from lint findings, and the amd64-equivalent (a
+  #   registry hiccup, an anonymous-pull rate limit on a shared CI IP) was
+  #   NOT tested from here and remains a genuine, unverified risk.
+  # - On this skill's current (already-fixed) blocks, --check surfaced zero
+  #   findings beyond what analyze_dockerfile.py already reports: 30/30 clean
+  #   except the platform-resolution failure above. A separate synthetic
+  #   two-stage Dockerfile with a duplicate stage name DID get flagged
+  #   (DuplicateStageName), proving the mechanism has real complementary
+  #   value — the current example set just doesn't happen to exercise a
+  #   BuildKit-only rule right now.
+  #
+  # Net call: more solid than first assumed, but the one thing that would
+  # justify a hard gate (CI-network rate-limit/registry-flake behaviour) was
+  # never tested from actual CI infrastructure. continue-on-error stays;
+  # lint-examples (T-15) remains the real gate.
+  build-check-examples:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.3.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract validated blocks to disk
+        run: |
+          uv run skills/dockerfile-best-practices/scripts/extract_dockerfile_blocks.py \
+            --emit-dir "${{ runner.temp }}/dockerfile-blocks" || true
+
+      - name: docker build --check each extracted block
+        run: |
+          blocks_dir="${{ runner.temp }}/dockerfile-blocks"
+          failures=0
+          checked=0
+
+          for dockerfile in "$blocks_dir"/*.dockerfile; do
+            [ -e "$dockerfile" ] || continue
+            checked=$((checked + 1))
+            echo "::group::docker build --check $(basename "$dockerfile")"
+            # Build context is the repo root. Confirmed locally (see the
+            # job-level note above): --check does not execute COPY/ADD, so a
+            # source missing from this context is not a failure mode here. A
+            # failure is either a genuine BuildKit lint finding or a base
+            # image that failed to resolve (registry/network/platform) —
+            # either way, this job is non-blocking.
+            if ! docker build --check -f "$dockerfile" .; then
+              failures=$((failures + 1))
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "Checked ${checked} extracted blocks, ${failures} failed --check"
+          if [ "$failures" -gt 0 ]; then
+            exit 1
+          fi

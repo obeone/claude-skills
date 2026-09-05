@@ -2,12 +2,18 @@
 
 Acceptance predicates, restated as testable items with a measurement
 command per item. Pytest names follow the convention `test_acc01_…`
-through `test_acc24_…`.
+through `test_acc25_…`.
 
 1. **Round-trip byte-equal across 50 canonical fixtures.**
    Measure: `uv run --with pytest -m pytest skills/automode-config/tests/test_canonical.py -k roundtrip -q`.
-2. **`SKILL.md` <= 25 600 bytes.**
-   Measure: `wc -c skills/automode-config/SKILL.md` -> first column <= 25600.
+2. **`SKILL.md` <= 8 192 bytes.**
+   `SKILL.md` sits in the agent's context for the whole session and is
+   re-read as cache on every API call, so its size is a recurring cost,
+   not a one-off. Detail belongs in `references/`, which is loaded on
+   demand. The same applies to the front-matter `description`: it is
+   injected at session start for every installed skill, so keep it
+   under 400 characters.
+   Measure: `wc -c skills/automode-config/SKILL.md` -> first column <= 8192.
 3. **`apply_automode.py --dry-run` runs in < 30 s on a developer laptop.**
    Measure: `time uv run skills/automode-config/scripts/apply_automode.py --dry-run --proposal skills/automode-config/tests/fixtures/proposal_minimal.json` -> wall < 30 s.
 4. **`--dry-run` makes no non-localhost network calls.**
@@ -53,6 +59,9 @@ through `test_acc24_…`.
 
 24. **`hard_deny` round-trip and drop-all reset.**
     Measure: seed local file with non-empty `autoMode.hard_deny`; run `inspect_automode.py --json` and verify the `hard_deny` array is present in output. Run `apply_automode.py --mode migrate --migrate-strategy drop-all`; verify the resulting `autoMode.hard_deny == []`.
+
+25. **A critique that says nothing closes the gate.**
+    Measure: put `tests/fixtures/stub_claude/claude_empty` on PATH (exits 0, prints "No critique was generated"); run a commit with a valid `--approved-canonical-hash`; expect exit 3, no `.claude/settings.local.json`, and an archived critique under `.claude/.automode-history/`. Rerun with `--allow-empty-critique`; expect exit 0 and the file written.
 
 ## Cross-checks
 

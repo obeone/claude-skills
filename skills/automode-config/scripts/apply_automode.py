@@ -24,8 +24,9 @@ and mirror the handoff contract.
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as _dt
-import glob
+import fnmatch
 import hashlib
 import json
 import os
@@ -35,6 +36,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +50,11 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from _canonical import canonicalize, load_json, parse_flat_yaml  # noqa: E402
+from _lint_rules import (  # noqa: E402
+    SEVERITY_ERROR,
+    format_findings,
+    lint_proposal,
+)
 from _locks import (  # noqa: E402
     LockHeldError,
     acquire as lock_acquire,
@@ -58,6 +65,7 @@ from _locks import (  # noqa: E402
 from _paths import (  # noqa: E402
     EXPECTED_PARENT_MODE,
     EXPECTED_SECRET_MODE,
+    PROJECT_DIR,
     ProjectFiles,
     ensure_project_dir,
     ensure_user_dir,
@@ -92,6 +100,8 @@ EXIT_OUT_OF_BAND = 10
 # are NOT autoMode rules — autoMode rules are prose. If any of these
 # literals appear inside an autoMode section, the user has likely
 # pasted a permissions pattern by mistake; the skill warns and drops.
+# The exact literals the classifier itself drops. Complementary to the
+# semantic lint's AM004, which flags the broader `Tool(specifier)` shape.
 DROPPED_PATTERN_LITERALS = (
     "Bash(*)",
     "PowerShell(*)",
@@ -100,6 +110,24 @@ DROPPED_PATTERN_LITERALS = (
 )
 
 REQUIRED_CRITIQUE_SECTIONS = frozenset({"## Major issues", "## Smaller issues"})
+
+# Section-header validation is opt-in because the binary's headers drift
+# across versions. Substantiveness validation is NOT opt-in: the binary
+# can exit 0 while producing nothing at all (observed:
+# "Analyzing your auto mode rules…\n\nNo critique was generated. Please
+# try again."). Exit code alone would open the gate on an unreviewed
+# proposal, which is exactly what the gate exists to prevent.
+#
+# Phrases that mean "the binary declined to produce a critique". Matched
+# case-insensitively against the whole output.
+DEGENERATE_CRITIQUE_PATTERNS = (
+    re.compile(r"\bno\s+critique\s+(?:was\s+)?(?:generated|produced)\b", re.I),
+    re.compile(r"\bunable\s+to\s+(?:generate|produce)\s+a?\s*critique\b", re.I),
+)
+# Below this many non-whitespace characters the output cannot carry a
+# review of anything. The stub fixtures and every real critique observed
+# clear it by a wide margin.
+MIN_CRITIQUE_CHARS = 24
 
 BACKUP_RETENTION = 5
 
@@ -243,6 +271,12 @@ def _atomic_write(target: Path, payload: bytes, *, mode: int = EXPECTED_SECRET_M
     """Atomically write ``payload`` to ``target`` with ``mode`` permissions.
 
     ``open(tmp, ...)`` -> ``os.write`` -> ``os.fsync`` -> ``os.replace``.
+
+    The temp is unlinked on every failure path. It can hold the user's
+    real settings (the critique swap writes their whole file through
+    here), so a leftover would be both a disclosure and a piece of
+    stranded state; ``_stranded_files`` only sees the ones a SIGKILL
+    leaves behind, which is exactly what ``--repair`` is for.
     """
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -250,15 +284,207 @@ def _atomic_write(target: Path, payload: bytes, *, mode: int = EXPECTED_SECRET_M
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
     fd = os.open(tmp, flags, mode)
     try:
-        os.write(fd, payload)
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-    os.replace(tmp, target)
+        try:
+            os.write(fd, payload)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, target)
+    except BaseException:
+        # ENOSPC, EIO, a KeyboardInterrupt mid-write: never leave the
+        # payload lying around under a name nothing reclaims.
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     try:
         os.chmod(target, mode)
     except PermissionError:
         pass
+
+
+def _merge_for_critique(proposal: dict[str, Any], base: Any) -> dict[str, Any]:
+    """Overlay ``proposal`` onto a copy of the user's real settings.
+
+    The swap-file critique path replaces ``~/.claude/settings.json`` for
+    the duration of the subprocess. Handing the CLI the proposal *alone*
+    strips the user's ``env``, ``hooks``, ``statusLine``,
+    ``enabledPlugins``, ``permissions`` and everything else, which makes
+    the binary run amputated and return "No critique was generated". The
+    document handed to the critique must therefore be the real settings
+    with the proposal's ``autoMode`` block layered on top.
+
+    ``autoMode`` is the ONLY key overlaid, and it is replaced wholesale
+    rather than deep-merged. Overlaying only that key means the swap can
+    never substitute the user's ``hooks``, ``env`` or ``permissions``
+    with anything a proposal carries; replacing it wholesale means no
+    residue of the previous block corrupts the review of the block that
+    actually *is* under review. ``_validate_proposal`` already rejects a
+    proposal carrying any other top-level key, so this is the second line
+    of defence on the one path that writes into the user's own file.
+
+    Parameters
+    ----------
+    proposal
+        The validated proposal document. Only its ``autoMode`` key is
+        read; anything else is ignored by construction.
+    base
+        Whatever ``~/.claude/settings.json`` decoded to. Anything that is
+        not a JSON object (missing file, unreadable, or a scalar/array at
+        the top level) means there is nothing to merge onto.
+
+    Returns
+    -------
+    dict
+        A fresh document. Neither argument is mutated.
+    """
+
+    automode = copy.deepcopy(proposal.get("autoMode", {}))
+
+    # Degraded fallback: no usable base, so the critique sees the
+    # proposal alone (the pre-fix behaviour, kept for this one case).
+    if not isinstance(base, dict):
+        return {"autoMode": automode}
+
+    merged = copy.deepcopy(base)
+    merged["autoMode"] = automode
+    return merged
+
+
+def _local_commit_document(
+    local_settings: Path, proposal: dict[str, Any]
+) -> dict[str, Any]:
+    """Return the document to commit to ``.claude/settings.local.json``.
+
+    A proposal is autoMode-only, but the file it lands in is a real
+    settings file that may hold ``permissions``, ``enabledMcpjsonServers``
+    and so on. Writing the proposal verbatim would delete those, so the
+    existing document is read back and only its ``autoMode`` block is
+    replaced. Nothing outside ``autoMode`` is ever introduced by this
+    function: every other key comes from what the user already had.
+
+    Parameters
+    ----------
+    local_settings
+        Path to ``.claude/settings.local.json``.
+    proposal
+        The approved, validated proposal.
+
+    Returns
+    -------
+    dict
+        A fresh document ready for ``canonicalize``.
+    """
+
+    existing: Any = None
+    if local_settings.is_file():
+        try:
+            existing = load_json(local_settings)
+        except Exception:  # noqa: BLE001
+            # Unparseable: the caller already reported it upstream, and
+            # there is nothing safe to preserve out of it.
+            existing = None
+
+    automode = copy.deepcopy(proposal.get("autoMode", {}))
+    if not isinstance(existing, dict):
+        return {"autoMode": automode}
+    out = copy.deepcopy(existing)
+    out["autoMode"] = automode
+    return out
+
+
+def _warn_history_not_ignored(files: ProjectFiles) -> None:
+    """Warn when ``.claude/.automode-history/`` is not gitignored.
+
+    The archive holds the critique's combined stdout+stderr, and the
+    critique runs against a document built from the user's real settings,
+    so the output can quote values from their ``env``. The files are 0600
+    but that does not stop ``git add``.
+
+    Parameters
+    ----------
+    files
+        Resolved project paths.
+    """
+
+    history_dir = files.project_dir / ".automode-history"
+    try:
+        rel = history_dir.relative_to(files.project_root).as_posix()
+    except ValueError:
+        return
+    if _path_is_gitignored(files.project_root, rel):
+        return
+    _eprint(
+        f"warning: {rel}/ is not covered by any .gitignore rule. "
+        f"Critique archives can quote values from your settings; add "
+        f"this line to .gitignore:\n"
+        f"  {rel}/"
+    )
+
+
+def _path_is_gitignored(root: Path, rel: str) -> bool:
+    """Return whether ``rel`` is covered by a ``.gitignore`` rule.
+
+    Deliberately reads only ``<root>/.gitignore`` and
+    ``<root>/.claude/.gitignore``: those are the only two files that can
+    plausibly cover ``.claude/.automode-history/``, and walking the tree
+    for every ``.gitignore`` (which is what ``scan_project`` does) would
+    descend into ``node_modules``, ``.venv`` and vendored trees on every
+    commit run, unbounded on a monorepo. A rule buried in some deeper
+    ``.gitignore`` is a known miss; it costs one spurious warning, never
+    a wrong write.
+
+    A rule covers the path when it names the path itself or any ancestor
+    of it, with or without git's trailing slash, or when it fnmatches the
+    path. ``scan_project._is_gitignored`` handles neither the trailing
+    slash nor the ancestor case, which is why this is not delegated.
+
+    Parameters
+    ----------
+    root
+        Project root.
+    rel
+        Path relative to ``root``, POSIX-style.
+
+    Returns
+    -------
+    bool
+        ``True`` when some rule covers the path. Best effort: any failure
+        reads as "covered" so a hygiene warning never becomes noise.
+    """
+
+    for gitignore, base in (
+        (root / ".gitignore", ""),
+        (root / PROJECT_DIR / ".gitignore", f"{PROJECT_DIR}/"),
+    ):
+        try:
+            if not gitignore.is_file():
+                continue
+            lines = gitignore.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            return True
+        # Rules are relative to the directory holding the .gitignore, so
+        # `.automode-history/` inside .claude/.gitignore names the same
+        # directory as `.claude/.automode-history/` at the root.
+        if base and not rel.startswith(base):
+            continue
+        local_rel = rel[len(base):]
+        # Every ancestor down to the path itself, so a `.claude/` rule
+        # (or a `.automode-history` one) covers what sits under it.
+        parts = local_rel.split("/")
+        prefixes = {"/".join(parts[:i]) for i in range(1, len(parts) + 1)}
+        for line in lines:
+            entry = line.strip()
+            if not entry or entry.startswith("#"):
+                continue
+            normalized = entry.strip("/")
+            if any(
+                prefix == normalized or fnmatch.fnmatch(prefix, normalized)
+                for prefix in prefixes
+            ):
+                return True
+    return False
 
 
 def _read_json_or_empty(path: Path) -> Any:
@@ -372,8 +598,17 @@ def _validate_proposal(proposal: Any) -> None:
     - Any key in ``AUTOMODE_ARRAY_KEYS`` that is present must be an array.
     - Every element of such an array must be a string or a structural
       ``__example_only`` wrapper ``{"__example_only": true, "value": X}``.
-    - Extra top-level keys beyond ``autoMode`` are allowed (pass-through
-      for keys like ``permissions``, ``env``, etc.).
+    - ``autoMode`` is the ONLY permitted top-level key. Any other one is
+      rejected with a message naming it.
+
+    That last clause is a security boundary, not tidiness. The committed
+    document is written straight into ``.claude/settings.local.json`` and
+    the swap path writes it into ``~/.claude/settings.json`` while the
+    ``claude`` binary is invoked against it. Proposals are authored by an
+    agent reading ``CLAUDE.md`` / ``AGENTS.md``, so their author is not
+    necessarily the user: a pass-through ``hooks`` key would let a
+    proposal install a command that runs on the user's next tool call,
+    and it would survive the commit permanently.
     """
 
     if not isinstance(proposal, dict):
@@ -383,6 +618,16 @@ def _validate_proposal(proposal: Any) -> None:
 
     if "autoMode" not in proposal:
         raise ProposalValidationError("proposal: required key 'autoMode' is missing")
+
+    unknown_top = set(proposal.keys()) - {"autoMode"}
+    if unknown_top:
+        key = sorted(unknown_top)[0]
+        raise ProposalValidationError(
+            f"proposal: unknown top-level key {key!r}; 'autoMode' is the "
+            f"only permitted key. A proposal must never carry 'hooks', "
+            f"'env', 'permissions' or anything else: those are written "
+            f"straight into your settings files"
+        )
 
     auto = proposal["autoMode"]
     if not isinstance(auto, dict):
@@ -454,6 +699,49 @@ def _critique_supports_settings_flag() -> bool:
         return False
     blob = (proc.stdout or "") + (proc.stderr or "")
     return "--settings" in blob
+
+
+def _check_critique_substantive(text: str) -> None:
+    """Raise ``CritiqueContractError`` when the critique says nothing.
+
+    The binary exits 0 even when it produces no critique, so the exit
+    code is not a sufficient gate. This check is version-agnostic: it
+    never asserts a section layout, only that *some* review text came
+    back. Bypass with ``--allow-empty-critique`` when a legitimately
+    terse critique trips it.
+
+    Parameters
+    ----------
+    text
+        Combined stdout+stderr of the critique invocation.
+
+    Raises
+    ------
+    CritiqueContractError
+        The output is empty, too short to be a review, or explicitly
+        announces that no critique was generated.
+    """
+
+    body = text.strip()
+    if not body:
+        raise CritiqueContractError(
+            "critique output is empty; the binary exited 0 without "
+            "reviewing the proposal (rerun, or pass "
+            "--allow-empty-critique to accept it)"
+        )
+    for pattern in DEGENERATE_CRITIQUE_PATTERNS:
+        if pattern.search(body):
+            raise CritiqueContractError(
+                "critique output reports that no critique was generated; "
+                "the proposal was not reviewed (rerun, or pass "
+                "--allow-empty-critique to accept it)"
+            )
+    if len("".join(body.split())) < MIN_CRITIQUE_CHARS:
+        raise CritiqueContractError(
+            f"critique output is too short to be a review "
+            f"({len(body)} chars); the proposal was likely not reviewed "
+            f"(rerun, or pass --allow-empty-critique to accept it)"
+        )
 
 
 def _check_critique_sections(text: str, *, allow_unknown: bool) -> None:
@@ -537,55 +825,143 @@ def _heuristics_meta() -> dict[str, str]:
 def run_critique(
     proposal: dict[str, Any],
     *,
-    settings_path: Path | None,
     model: str | None,
     user_settings_path: Path,
+    supports_settings_flag: bool,
 ) -> tuple[int, str]:
     """Invoke ``claude auto-mode critique`` and return ``(exit_code, output)``.
 
-    When the CLI accepts ``--settings``, the proposal is fed via that
-    flag. Otherwise the skill swaps ``~/.claude/settings.json`` for the
-    duration of the critique invocation (the classifier reads from the
-    user-level file). The swap is atomic with signal-handler restore;
-    SIGKILL leaves a sentinel that ``--repair`` reclaims.
+    Both paths review the PROPOSAL, never whatever happens to sit on disk
+    at the time. When the CLI accepts ``--settings`` the proposal's
+    canonical bytes go into a private temp file named by that flag; the
+    project's ``settings.local.json`` must not be used for this, because
+    the proposal is not written there until after the critique has passed
+    the gate, so pointing at it would review the previous content (or, in
+    ``fresh`` mode, a path that does not exist).
+
+    Otherwise the skill swaps ``~/.claude/settings.json`` for the
+    duration of the invocation (the classifier reads from the user-level
+    file). The swapped-in document is the user's real settings with the
+    proposal's ``autoMode`` *merged* into it, never the proposal alone:
+    the CLI needs the rest of the user's configuration to function, and a
+    substituted file makes it return no critique at all. The swap is
+    atomic with signal-handler restore; SIGKILL leaves a sentinel that
+    ``--repair`` reclaims.
+
+    Parameters
+    ----------
+    proposal
+        The document under review.
+    model
+        Optional ``--model`` value.
+    user_settings_path
+        Path to ``~/.claude/settings.json``, used by the swap path only.
+    supports_settings_flag
+        Result of :func:`_critique_supports_settings_flag`, computed once
+        by the caller. Probing again here would spawn a second
+        ``claude auto-mode critique --help`` with its own 10 s timeout.
     """
 
     cli = _claude_cli()
-    canonical = canonicalize(proposal)
     cmd = [cli, "auto-mode", "critique"]
     if model:
         cmd.extend(["--model", model])
 
-    use_settings_flag = _critique_supports_settings_flag()
-    if use_settings_flag and settings_path is not None:
-        cmd.extend(["--settings", str(settings_path)])
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+    if supports_settings_flag:
+        return _run_critique_settings_flag(cmd, proposal=proposal)
 
     _eprint(
         "claude auto-mode critique does not accept --settings on this CLI; "
         "swapping ~/.claude/settings.json transiently for the duration of "
-        "the critique invocation (atomic restore; --repair reclaims after "
-        "SIGKILL)."
+        "the critique invocation (the proposal is merged into a copy of "
+        "your real user settings, not substituted for them; atomic "
+        "restore; --repair reclaims after SIGKILL)."
     )
     return _run_critique_swap(
         cmd,
-        canonical=canonical,
+        proposal=proposal,
         user_settings_path=user_settings_path,
     )
+
+
+def _run_critique_settings_flag(
+    cmd: list[str],
+    *,
+    proposal: dict[str, Any],
+) -> tuple[int, str]:
+    """Run the critique against the proposal via ``--settings``.
+
+    Parameters
+    ----------
+    cmd
+        ``claude auto-mode critique`` argv without ``--settings``.
+    proposal
+        The document under review. Its canonical bytes are what the CLI
+        reads, so the critique reviews exactly what the hash gate covers.
+
+    Returns
+    -------
+    tuple[int, str]
+        ``(exit_code, combined stdout+stderr)``.
+    """
+
+    # The temp lives in a private 0700 mkdtemp rather than beside the
+    # project's .claude/: anything left in that directory looks like real
+    # skill state to --repair, shows up in `git status`, and is one
+    # careless `git add .` away from being committed. A private temp dir
+    # is outside every tracked tree and goes away wholesale below.
+    tmp_dir = Path(tempfile.mkdtemp(prefix="automode-critique-"))
+    settings_path = tmp_dir / "settings.json"
+    try:
+        # Mode at creation, never chmod after: the file holds the
+        # proposal for as long as the subprocess runs.
+        fd = os.open(
+            settings_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            EXPECTED_SECRET_MODE,
+        )
+        try:
+            os.write(fd, canonicalize(proposal))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        proc = subprocess.run(
+            cmd + ["--settings", str(settings_path)],
+            capture_output=True, text=True, check=False,
+        )
+        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+    finally:
+        # Unconditional: the temp must not outlive the call on any path.
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def _run_critique_swap(
     cmd: list[str],
     *,
-    canonical: bytes,
+    proposal: dict[str, Any],
     user_settings_path: Path,
 ) -> tuple[int, str]:
     """Swap ``~/.claude/settings.json`` for the duration of the critique.
 
-    Writes the proposal canonical bytes into the user settings path,
-    keeps the original at a stranded sentinel, restores it (or leaves a
-    sentinel for ``--repair``) on any exit path.
+    Writes the user's real settings with the proposal merged into them
+    (see :func:`_merge_for_critique`) into the user settings path, keeps
+    the original at a stranded sentinel, restores it (or leaves a
+    sentinel for ``--repair``) on any exit path. Merging rather than
+    substituting matters because the CLI reads the whole user-level file
+    to run: stripped of ``env``, ``hooks``, ``statusLine`` and the rest,
+    it produces no critique at all.
+
+    Parameters
+    ----------
+    cmd
+        Fully built ``claude auto-mode critique`` argv.
+    proposal
+        The proposal document to overlay. It is read, never mutated, and
+        never hashed here: the ``--approved-canonical-hash`` gate is
+        computed by the caller over the proposal alone, so the merged
+        document is purely transient.
+    user_settings_path
+        Path to ``~/.claude/settings.json``.
     """
 
     user_settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -596,18 +972,68 @@ def _run_critique_swap(
     handle = lock_acquire(swap_lock)
     install_signal_release(handle)
 
-    if user_settings_path.is_file():
-        shutil.copy2(user_settings_path, sentinel)
+    # Mode of the original, remembered so the restore reinstates it
+    # rather than guessing. None means there was no original.
+    original_mode: int | None = None
+    # Only true once the transient document is actually on disk. Without
+    # it a failure before the write would make the restore branch below
+    # delete a user file the swap never touched.
+    swapped = False
+
     try:
-        _atomic_write(user_settings_path, canonical, mode=EXPECTED_SECRET_MODE)
+        # Sentinel first: it must hold the ORIGINAL bytes, captured
+        # before anything overwrites the file. Inside the try so that a
+        # failure here still releases the lock (a raise before it would
+        # skip the finally entirely and strand the flock).
+        if user_settings_path.is_file():
+            original_mode = stat.S_IMODE(user_settings_path.stat().st_mode)
+            # Written through _atomic_write at 0600, never shutil.copy2:
+            # copy2 creates the destination at 0o666 & ~umask and only
+            # then applies the source mode, so a sentinel holding the
+            # user's secrets would exist world-readable in between.
+            _atomic_write(
+                sentinel,
+                user_settings_path.read_bytes(),
+                mode=EXPECTED_SECRET_MODE,
+            )
+
+        # Read the base only now, under the lock, so the whole
+        # read-modify-write is serialised against concurrent swaps.
+        base: Any = None
+        if user_settings_path.is_file():
+            try:
+                base = load_json(user_settings_path)
+            except Exception as exc:  # noqa: BLE001
+                _eprint(
+                    f"WARNING: could not read {user_settings_path} "
+                    f"({exc}); the critique will run against the proposal "
+                    f"alone and may therefore be degraded (the CLI usually "
+                    f"needs your full user settings to produce a review). "
+                    f"Your file is restored byte-for-byte afterwards."
+                )
+        merged = _merge_for_critique(proposal, base)
+        _atomic_write(
+            user_settings_path,
+            canonicalize(merged),
+            mode=EXPECTED_SECRET_MODE,
+        )
+        swapped = True
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
         return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
     finally:
         try:
             if sentinel.is_file():
-                shutil.copy2(sentinel, user_settings_path)
+                # Restore atomically, mirroring the write it undoes: a
+                # kill mid-shutil.copy2 would leave the user's real
+                # settings truncated, which is worse than not restoring.
+                _atomic_write(
+                    user_settings_path,
+                    sentinel.read_bytes(),
+                    mode=original_mode or EXPECTED_SECRET_MODE,
+                )
                 sentinel.unlink(missing_ok=True)
-            else:
+            elif swapped:
+                # No original existed, so remove what the swap created.
                 user_settings_path.unlink(missing_ok=True)
         finally:
             lock_release(handle)
@@ -644,19 +1070,78 @@ def _update_approved_cache(
 # ---------------------------------------------------------------------------
 
 
+# Sentinel copies of an original settings file, left behind when a swap
+# died before its restore. --repair copies these BACK over the target.
+STRANDED_SENTINEL_GLOB = ".automode-config.preview-orig.*"
+# Half-written _atomic_write temps. They hold the NEW content, so
+# --repair deletes them; restoring one would install a document nobody
+# approved. They are caught here because a SIGKILL between os.open and
+# os.replace leaves one holding real bytes. The glob is deliberately
+# wide: _atomic_write names its temp `<target>.tmp.<pid>` for EVERY
+# target it writes, so a narrower `settings*` pattern would miss
+# `.auto_mode_approved.json.tmp.<pid>` (approved-cache bytes) and
+# `.automode-config.preview-orig.<pid>.tmp.<pid>` (user-settings bytes).
+STRANDED_TEMP_GLOB = "*.tmp.*"
+
+
 def _stranded_files(files: ProjectFiles) -> list[Path]:
+    # iterdir + fnmatch, not glob.glob: glob refuses to let a leading `*`
+    # match a dotfile, so `*.tmp.*` would silently skip
+    # `.auto_mode_approved.json.tmp.<pid>` and every other temp whose
+    # target is itself a dotfile.
     out: list[Path] = []
     for base in (files.user_dir, files.project_dir):
         if not base.is_dir():
             continue
-        out.extend(
-            Path(p) for p in glob.glob(str(base / ".automode-config.preview-orig.*"))
-        )
-    return sorted(out)
+        try:
+            entries = list(base.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if not entry.is_file():
+                continue
+            if any(
+                fnmatch.fnmatch(entry.name, pattern)
+                for pattern in (STRANDED_SENTINEL_GLOB, STRANDED_TEMP_GLOB)
+            ):
+                out.append(entry)
+    return sorted(set(out))
+
+
+def _is_stranded_sentinel(path: Path) -> bool:
+    """Return whether ``path`` is an original-file sentinel, not a temp.
+
+    Parameters
+    ----------
+    path
+        One entry from :func:`_stranded_files`.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``.automode-config.preview-orig.<pid>``, which holds
+        the user's complete original bytes and must be restored;
+        ``False`` for an ``_atomic_write`` temp, which must be deleted.
+    """
+
+    # The temp test comes first on purpose:
+    # `.automode-config.preview-orig.<pid>.tmp.<pid>` carries the
+    # sentinel prefix but is a half-written file, so it must be
+    # discarded rather than installed over the user's settings.
+    if fnmatch.fnmatch(path.name, STRANDED_TEMP_GLOB):
+        return False
+    return path.name.startswith(".automode-config.preview-orig.")
 
 
 def detect_stranded(files: ProjectFiles) -> list[Path]:
-    """Return any ``.preview-orig.<pid>`` files in user or project dirs."""
+    """Return stranded swap sentinels and write temps in user/project dirs.
+
+    Note for the next reader: a concurrent run can catch the microsecond
+    window in which a live ``_atomic_write`` temp exists and report
+    ``EXIT_STRANDED_STATE`` where ``EXIT_LOCK_HELD`` would read better.
+    That is cosmetic (both refuse to proceed, and the flock is what
+    actually serialises the writers), and not worth a lock dance here.
+    """
 
     return _stranded_files(files)
 
@@ -684,14 +1169,25 @@ def _repair(files: ProjectFiles) -> int:
         return EXIT_OK
 
     for orphan in stranded:
+        if not _is_stranded_sentinel(orphan):
+            # A half-written _atomic_write temp holds content nobody
+            # approved, so it is discarded rather than installed.
+            try:
+                orphan.unlink()
+                _eprint(f"discarded stranded write temp: {orphan}")
+            except OSError as exc:
+                _eprint(f"failed to remove {orphan}: {exc}")
+                return EXIT_PERMISSION
+            continue
         # Orphan is the original-file copy; the live target sits at the
         # parent dir's settings.json.
         target = orphan.parent / "settings.json"
         if target.is_file():
             _backup_file(target, suffix="repair")
         try:
-            shutil.copy2(orphan, target)
-            os.chmod(target, EXPECTED_SECRET_MODE)
+            _atomic_write(
+                target, orphan.read_bytes(), mode=EXPECTED_SECRET_MODE
+            )
             orphan.unlink()
             _eprint(f"restored {target} from {orphan}")
         except OSError as exc:
@@ -887,11 +1383,18 @@ def _merge_proposal(
     adopted: dict[str, list[Any]],
     proposal_override: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Combine ``base`` + ``adopted`` + ``proposal_override`` into one block."""
+    """Combine ``base`` + ``adopted`` + ``proposal_override`` into one block.
+
+    The result carries ``autoMode`` and nothing else. ``base`` is the
+    project's existing ``settings.local.json``, whose other keys are
+    deliberately NOT copied in: a proposal is autoMode-only by contract
+    (see :func:`_validate_proposal`), and those keys are preserved at
+    commit time by :func:`_local_commit_document` instead of round-
+    tripping through a document the hash gate covers.
+    """
 
     out: dict[str, Any] = {"autoMode": {}}
     if isinstance(base, dict):
-        out.update({k: v for k, v in base.items() if k != "autoMode"})
         if isinstance(base.get("autoMode"), dict):
             out["autoMode"] = dict(base["autoMode"])
     for section, items in adopted.items():
@@ -903,9 +1406,9 @@ def _merge_proposal(
     if proposal_override:
         if isinstance(proposal_override.get("autoMode"), dict):
             out["autoMode"].update(proposal_override["autoMode"])
-        for k, v in proposal_override.items():
-            if k != "autoMode":
-                out[k] = v
+        # Other top-level keys of the override are NOT merged. The caller
+        # rejects them outright before reaching here; silently carrying
+        # them would put attacker-authored `hooks` into the commit.
     if "environment" not in out["autoMode"]:
         out["autoMode"]["environment"] = ["$defaults"]
     return out
@@ -960,6 +1463,76 @@ def _print_rollback(target: Path, backup: Path | None) -> None:
         _eprint(f"rollback: rm {target}  # no prior version existed")
     else:
         _eprint(f"rollback: cp {backup} {target}")
+
+
+# ---------------------------------------------------------------------------
+# Semantic lint gate
+# ---------------------------------------------------------------------------
+
+
+def _run_semantic_lint(
+    proposal: dict[str, Any],
+    *,
+    project_root: Path,
+    no_lint: bool,
+    lint_strict: bool,
+) -> int | None:
+    """Lint the rule content and decide whether the run may continue.
+
+    Findings are always printed when there are any, whatever their
+    severity and whatever the flags. Errors block by default; warnings
+    only block under ``lint_strict``. ``no_lint`` skips the lint outright
+    and prints nothing, which is the escape hatch for a false positive.
+
+    Parameters
+    ----------
+    proposal : dict
+        The proposal about to be hashed.
+    project_root : Path
+        Project root handed to AM003 so it scans the project's own files
+        rather than whatever directory the process happens to run in.
+    no_lint : bool
+        Skip the lint entirely. Wins over ``lint_strict``.
+    lint_strict : bool
+        Let warnings block as well as errors.
+
+    Returns
+    -------
+    int or None
+        ``EXIT_VALIDATION`` when the run must stop, ``None`` when it may
+        continue. A blocking return happens before any caller prints the
+        canonical hash, so an unfixed proposal is never approvable.
+    """
+
+    if no_lint:
+        # Both flags together is nonsense rather than an argparse error,
+        # so say which one won instead of silently picking.
+        if lint_strict:
+            _eprint(
+                "--no-lint and --lint-strict contradict each other; "
+                "--no-lint wins, so the semantic lint is skipped entirely."
+            )
+        return None
+
+    findings = lint_proposal(proposal, project_root=project_root)
+    report = format_findings(findings)
+    if report:
+        # format_findings already terminates with a newline; _eprint adds
+        # its own, so strip one to avoid a stray blank line.
+        _eprint(report.rstrip("\n"))
+
+    blocking = [
+        f for f in findings
+        if lint_strict or f.severity == SEVERITY_ERROR
+    ]
+    if not blocking:
+        return None
+
+    _eprint(
+        f"semantic lint: {len(blocking)} finding(s) blocked this proposal; "
+        f"fix the rules above, or pass --no-lint to bypass the lint."
+    )
+    return EXIT_VALIDATION
 
 
 # ---------------------------------------------------------------------------
@@ -1062,6 +1635,23 @@ def _run(args: argparse.Namespace) -> int:
             _eprint(f"could not parse proposal: {exc}")
             return EXIT_VALIDATION
 
+        # Reject a proposal carrying anything but autoMode HERE, on the
+        # raw file, before a single byte is written anywhere. _merge_
+        # proposal drops such keys and _validate_proposal rejects them
+        # again downstream, but neither would name the file the user
+        # actually handed us.
+        if isinstance(proposal_override, dict):
+            extra = sorted(set(proposal_override) - {"autoMode"})
+            if extra:
+                _eprint(
+                    f"proposal {args.proposal}: unknown top-level key "
+                    f"{extra[0]!r}; 'autoMode' is the only permitted key. "
+                    f"A proposal must never carry 'hooks', 'env', "
+                    f"'permissions' or anything else: those are written "
+                    f"straight into your settings files."
+                )
+                return EXIT_VALIDATION
+
     proposal = _merge_proposal(
         base=base_local if isinstance(base_local, dict) else None,
         adopted=adopted,
@@ -1076,6 +1666,24 @@ def _run(args: argparse.Namespace) -> int:
             for entry, reason in dropped:
                 _eprint(f"dropped {section}[{entry!r}]: {reason}")
             proposal["autoMode"][section] = kept
+
+    # Semantic lint of what the rules actually SAY. It runs AFTER
+    # _filter_dropped, so the four DROPPED_PATTERN_LITERALS keep
+    # auto-repairing with a message instead of tripping AM004's
+    # `Tool(specifier)` shape check and turning a self-healing case into
+    # a hard exit 2. It still runs before the canonical hash and before
+    # the dry-run branch prints it: the agent driving this skill has to
+    # see the findings while the proposal is editable, never after the
+    # user approved a hash for it. A blocking finding therefore exits
+    # without ever printing the sha256.
+    lint_rc = _run_semantic_lint(
+        proposal,
+        project_root=files.project_root,
+        no_lint=args.no_lint,
+        lint_strict=args.lint_strict,
+    )
+    if lint_rc is not None:
+        return lint_rc
 
     try:
         _validate_proposal(proposal)
@@ -1128,9 +1736,9 @@ def _run(args: argparse.Namespace) -> int:
         try:
             rc, output = run_critique(
                 proposal,
-                settings_path=files.local_settings if settings_flag_supported else None,
                 model=args.model,
                 user_settings_path=files.user_settings,
+                supports_settings_flag=settings_flag_supported,
             )
         except ClaudeCLIMissingError as exc:
             _eprint(str(exc))
@@ -1138,6 +1746,12 @@ def _run(args: argparse.Namespace) -> int:
         except CritiqueContractError as exc:
             _eprint(str(exc))
             return EXIT_CRITIQUE_FAILED
+        except OSError as exc:
+            # A failed swap (unwritable ~/.claude, ENOSPC, EPERM on the
+            # sentinel) must surface as an exit code, not a traceback.
+            # The swap's own finally has already restored and unlocked.
+            _eprint(f"critique setup failed: {exc}")
+            return EXIT_PERMISSION
 
         sys.stdout.write(output)
         sys.stdout.write("\n")
@@ -1147,9 +1761,17 @@ def _run(args: argparse.Namespace) -> int:
             exit_code=rc,
             output=output,
         )
+        _warn_history_not_ignored(files)
         if rc != 0:
             _eprint(f"critique exited {rc}")
             return EXIT_CRITIQUE_FAILED
+        if not args.allow_empty_critique:
+            try:
+                _check_critique_substantive(output)
+            except CritiqueContractError as exc:
+                _eprint(str(exc))
+                _eprint(f"archived output: {files.project_dir}/.automode-history")
+                return EXIT_CRITIQUE_FAILED
         if args.strict_critique_sections:
             try:
                 _check_critique_sections(
@@ -1161,8 +1783,15 @@ def _run(args: argparse.Namespace) -> int:
                 return EXIT_CRITIQUE_FAILED
 
         backup = _backup_file(files.local_settings)
+        # The proposal is autoMode-only, but the file it lands in is a
+        # real settings file: write the existing document back with only
+        # its autoMode block replaced, so the user's own permissions and
+        # MCP keys survive the commit.
+        commit_bytes = canonicalize(
+            _local_commit_document(files.local_settings, proposal)
+        )
         try:
-            _atomic_write(files.local_settings, canonical, mode=EXPECTED_SECRET_MODE)
+            _atomic_write(files.local_settings, commit_bytes, mode=EXPECTED_SECRET_MODE)
         except PermissionError as exc:
             _eprint(f"permission denied writing {files.local_settings}: {exc}")
             return EXIT_PERMISSION
@@ -1404,12 +2033,21 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-empty-critique",
+        action="store_true",
+        help=(
+            "Accept a critique that says nothing. By default an empty, "
+            "near-empty, or 'no critique was generated' output fails the "
+            "gate with exit 3 even though the binary exited 0."
+        ),
+    )
+    parser.add_argument(
         "--strict-critique-sections",
         action="store_true",
         help=(
             "Validate critique output sections against the hardcoded contract "
             "(off by default — the binary's section names drift across versions; "
-            "exit_code == 0 is the real gate)."
+            "substantiveness, not layout, is the mandatory gate)."
         ),
     )
     parser.add_argument(
@@ -1418,6 +2056,23 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Forward-compat alias for --strict-critique-sections=loose. "
             "Off by default (validation is now opt-in via --strict-critique-sections)."
+        ),
+    )
+    parser.add_argument(
+        "--lint-strict",
+        action="store_true",
+        help=(
+            "Let semantic-lint warnings block too (exit 2). By default only "
+            "errors stop the run and warnings are printed for you to judge."
+        ),
+    )
+    parser.add_argument(
+        "--no-lint",
+        action="store_true",
+        help=(
+            "Skip the semantic lint of rule content entirely and print "
+            "nothing. The escape hatch for a false positive; wins over "
+            "--lint-strict."
         ),
     )
     parser.add_argument(

@@ -368,15 +368,29 @@ ingress:
 ```yaml
 controllers:
   main:
-    strategy: RollingUpdate
+    strategy: RollingUpdate  # A string. The library default is Recreate.
     rollingUpdate:
       maxUnavailable: 0      # Always keep at least 1 running
       maxSurge: 1            # Max 1 extra pod during update
 ```
 
 **Strategies:**
-- `RollingUpdate`: Zero-downtime updates (default)
-- `Recreate`: Terminate old before creating new (for RWO volumes)
+- `RollingUpdate`: Zero-downtime updates. Ask for it explicitly.
+- `Recreate`: Terminate old before creating new (for RWO volumes). This
+  is what a Deployment gets when `strategy` is left unset, which is the
+  safe default but not the one most charts want.
+
+StatefulSets default to `RollingUpdate` and take `OnDelete` instead;
+their `rollingUpdate` accepts `partition` and, from common 5.1.0,
+`maxUnavailable`. That last one rides on the `MaxUnavailableStatefulSet`
+feature gate: alpha and off by default up to Kubernetes 1.34, beta from
+1.35 with the default varying by patch release. Check the cluster before
+relying on it. DaemonSets only honour `strategy` from 5.1.0 on.
+
+Use `maxSurge` / `maxUnavailable`, the upstream Kubernetes spellings. The
+`surge` / `unavailable` shorthands still work but are deprecated as of
+common 5.1.0 and are removed in 6.0; when both spellings are set, the
+upstream one wins.
 
 ### Replicas and Scaling
 

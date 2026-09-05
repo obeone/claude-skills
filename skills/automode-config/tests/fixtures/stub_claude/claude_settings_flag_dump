@@ -1,0 +1,78 @@
+#!/bin/sh
+# Stub claude CLI: ADVERTISES --settings, and the critique dumps the
+# verbatim document it was handed through that flag. This is what pins
+# down which document the critique actually reviews.
+
+case "$1" in
+    --version)
+        echo "claude 1.42.0"
+        exit 0
+        ;;
+    --help)
+        cat <<'EOF'
+Usage: claude [options]
+
+Options:
+  --version                Show version
+  --help                   Show this help
+  --settings <path>        Path to settings file
+EOF
+        exit 0
+        ;;
+    auto-mode)
+        shift
+        case "$1" in
+            critique)
+                shift
+                for arg in "$@"; do
+                    if [ "$arg" = "--help" ]; then
+                        cat <<'EOF'
+Usage: claude auto-mode critique [options]
+
+Options:
+  --settings <path>        Settings file to critique
+  --defaults <path>        Defaults file
+  --config <path>          Config file
+  --model <name>           Model to use
+  --help                   Show this help
+EOF
+                        exit 0
+                    fi
+                done
+                # Capture the value of --settings.
+                settings=""
+                while [ $# -gt 0 ]; do
+                    if [ "$1" = "--settings" ]; then
+                        settings="$2"
+                        break
+                    fi
+                    shift
+                done
+                cat <<'EOF'
+# Critique of Custom Rules
+
+## Major issues
+
+The proposal was reviewed against the settings document below.
+
+## Smaller issues
+
+None worth reporting.
+
+EOF
+                echo "<<<SETTINGS_PATH>>>$settings<<<END_SETTINGS_PATH>>>"
+                echo "<<<SETTINGS_SEEN>>>"
+                if [ -n "$settings" ] && [ -f "$settings" ]; then
+                    cat "$settings"
+                else
+                    echo "ABSENT"
+                fi
+                echo
+                echo "<<<END_SETTINGS_SEEN>>>"
+                exit 0
+                ;;
+        esac
+        ;;
+esac
+
+exit 0

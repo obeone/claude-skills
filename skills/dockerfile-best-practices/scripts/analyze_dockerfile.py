@@ -5,13 +5,157 @@ Dockerfile analyzer - Detects common anti-patterns and suggests improvements.
 Usage:
     python analyze_dockerfile.py <path_to_Dockerfile>
     python analyze_dockerfile.py <path_to_Dockerfile> --json
+
+Rule IDs are stable: a retired ID is never reused, so a rule reference in an
+old report always means the same thing.
+
+Retired rules
+-------------
+
+=======  ==========  ==================  ====================================
+Rule     Retired in  What it flagged     Why it was retired
+=======  ==========  ==================  ====================================
+DL004    3.0.0       Base image tags     It enforced the reversed doctrine
+                     that pin an OS      "pin the runtime, never the OS" and
+                     release             pushed users toward a floating tag
+                     (``-bookworm``,     (``debian:stable-slim``) as if
+                     ``-bullseye``, ...) mutability were a reproducibility
+                                         feature. That directly contradicted
+                                         DL002, which rejects ``:latest`` as
+                                         an error precisely because it is
+                                         mutable. OS-pinned tags are a
+                                         legitimate stability choice and are
+                                         no longer flagged.
+DL005    3.0.0       Alpine tags that    Same defect as DL004: it suggested
+                     pin a minor         ``alpine:3`` so patches would land
+                     version             silently. Patches must land through
+                     (``alpine:3.19``)   a renewal process (Renovate /
+                                         Dependabot opening a PR), not
+                                         through a tag that moves under you.
+DL035    never       ``FROM`` without    Written during 3.0.0 development and
+         shipped     an ``@sha256:``     dropped before release. It nudged
+                     digest              toward digest pinning, which is good
+                                         practice but not a requirement: a
+                                         digest without renewal automation is
+                                         just a tag that rots silently. Since
+                                         digests are an option and not the
+                                         doctrine, the rule would have fired
+                                         on nearly every Dockerfile in
+                                         existence for no actionable reason.
+                                         The id is burned and is never reused.
+=======  ==========  ==================  ====================================
+
+DL002 (``:latest`` is an error) and DL003 (untagged image implies ``:latest``)
+are intentionally kept. Removing DL004/DL005 is what makes them coherent: the
+analyzer now holds a single position, that a mutable reference is never a
+reproducibility guarantee, rather than rejecting ``:latest`` for its mutability
+while recommending other mutable tags in the same breath.
+
+3.0.0 also fixes a DL003 false positive: a bare ``FROM <stage-name>`` that
+references an earlier ``FROM ... AS <stage-name>`` build stage (the standard
+multi-stage pattern) no longer trips "untagged base image", since a build
+stage has no registry tag to begin with. DL003 keeps its id and severity;
+only the false positive is removed. DL002 was checked for the same shape of
+bug and does not have it: its ``:latest`` regex requires a literal colon,
+which a stage alias can never contain.
+
+3.0.0 also fixes a DL021 false positive/negative pair with a single root
+cause: the check matched "root" as a substring of the last token, so
+``USER nonroot`` (the canonical account in ``gcr.io/distroless/*:nonroot``
+images) was reported as root, and, because that branch never sets
+``has_user``, ALSO triggered DL030 ("No non-root USER defined") on a file
+that has one. The check now compares the exact user name, so ``nonroot``,
+``USER 10001``, and similar are correctly accepted. As a side effect this
+also makes DL021 catch ``USER 0``, which the substring check missed
+entirely. DL021 keeps its id and severity.
+
+New in 3.0.0
+------------
+
+DL036, DL037, and DL038 close the gap that let v2.0.0 ship its own two worst
+defects (F-01, F-02) with a CLEAN analyzer report: none of DL001-DL035 could
+have caught either one, so a green run of this script was never proof of
+correctness for the one thing that mattered most. These three rules exist
+specifically to prevent recurrence.
+
+- **DL036** (error/info) - a ``--chown`` on COPY/ADD naming a user or group
+  that cannot resolve in the current stage. Verified on BuildKit 29.4.0: this
+  does NOT fail the build (the brief's "can't find uid for user" is the
+  legacy pre-BuildKit builder's error and does not apply to the
+  ``dockerfile:1`` frontend). The real, empirically confirmed behaviour is
+  worse: ``--chown`` is silently discarded, the files land owned by root
+  (0:0), and the app then fails at runtime on its first write, long after a
+  green build. This was v2.0.0's F-01, present in 4 of its 6 language
+  templates. Since nothing else in the pipeline can observe this (not the
+  build, not ``docker build --check``, not CI, all exit 0), this static
+  check is the only possible net, which makes it the single most valuable
+  rule this analyzer runs. "error" severity fires only when the name IS
+  created later in the same stage (the exact F-01 shape, near-zero false
+  positives); "info" severity is a heuristic bonus for a name never created
+  anywhere in the stage and not on a short built-in-account allowlist, which
+  may be a real base-image account this analyzer cannot see.
+- **DL037** (error/warning) - ``:latest`` (error, mirrors DL002) or an
+  untagged reference (warning, mirrors DL003) in ``COPY --from=``. DL002
+  only ever inspected ``FROM``, so ``COPY --from=ghcr.io/astral-sh/uv:latest``
+  and ``COPY --from=composer:latest`` both shipped in v2.0.0 untouched. A
+  stage reference (numeric index, ``AS`` alias, or a ``$VAR``) is never
+  flagged; alias tracking is shared with DL003.
+- **DL038** (warning) - a HEALTHCHECK invoking ``curl`` or ``wget`` that this
+  stage never installs. This is v2.0.0's F-02: verified on BuildKit 29.4.0
+  that neither binary ships on ``python:3.11-slim``, ``python:3.12-slim``,
+  nor ``debian:stable-slim``, so the skill's own former rule-10 example
+  (``HEALTHCHECK CMD wget ...`` on a slim base) could never have worked.
+  ``curl`` is flagged unconditionally when absent (ships on neither family
+  tested); ``wget`` is flagged only when the base image is confidently
+  identified as non-alpine, since BusyBox provides it on every alpine-family
+  image with no install step. An unidentifiable base (a bare variable, or an
+  unrecognised custom/private registry ref) is never guessed at for the wget
+  half. This covers only the "binary is absent" half of F-02; the other half
+  (a probe that reports healthy on a non-2xx response) is a semantic
+  question no static check can answer and is intentionally left to doctrine
+  (SKILL.md rule 10).
+
+A team-fix review reproduced six false positives against a real daemon and
+they are fixed in the same 3.0.0 cut:
+
+- DL038 resolved ``FROM <stage-alias>`` as if it were an opaque, confidently
+  non-alpine base, and reset that stage's installed-binary state to empty on
+  every FROM, including one that references an earlier stage by alias. Both
+  are wrong: a stage alias shares its parent's filesystem entirely (verified
+  against a real daemon), so it is neither "confidently non-alpine" nor a
+  fresh, empty filesystem. DL038 now resolves an alias to its declaring
+  stage's already-computed record (base image AND installed binaries) and
+  inherits it; only a genuine registry pull or an unidentifiable reference
+  starts fresh. Install detection was also widened from a literal
+  ``"apt-get install"``/``"apk add"`` substring (missed ``apt-get -y
+  install``, plain ``apt``, ``dnf``/``microdnf``/``yum``, ``zypper``) to a
+  regex covering all of them, and a binary copied in via ``COPY --from=...
+  .../curl`` (exact basename) now counts as installed too.
+- DL037 told a digest-pinned ``COPY --from=composer@sha256:...`` to pin a
+  version, having stripped the digest and found no tag left on the
+  remainder. A digest IS the pin and never implies ``:latest``; DL037 now
+  exempts any ``@``-bearing reference from the untagged check, the same way
+  DL003 already does for FROM.
+- DL036's account-creation scan read a shell redirect target as the account
+  name (``useradd ... app > /dev/null`` was parsed as creating a user named
+  ``/dev/null``), and missed that ``useradd -U``/``--user-group`` creates a
+  same-named group implicitly, with no separate ``groupadd`` command to
+  find. A follow-up review then verified, on a real daemon, that BusyBox
+  ``adduser`` does the same thing under a more tangled rule: it creates a
+  same-named group UNLESS ``-G <group>`` (which requires and reuses an
+  EXISTING group instead) or ``-S`` (system user, which independently
+  suppresses the same-named group in favor of the image's built-in
+  ``nogroup``, regardless of ``-D``) is present. All fixed. The message for
+  an unresolved ``--chown`` also now labels which half (user or group) is
+  the one that doesn't resolve, instead of repeating the bare name for
+  both.
 """
 
 import sys
 import re
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 
 class Issue:
@@ -67,6 +211,562 @@ def _join_continuations(lines: list[str]) -> list[tuple[int, str]]:
     return result
 
 
+# Suffixes that Docker auto-extracts when ADD copies a LOCAL archive. Docker
+# recognises tar plus the gzip/bzip2/xz compressions of it; .zip is NOT in this
+# list because Docker does not unpack zip archives.
+_LOCAL_ARCHIVE_SUFFIXES = (
+    ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz", ".tbz2",
+    ".tar.xz", ".txz", ".tar.z",
+)
+
+
+def _is_remote_url(src: str) -> bool:
+    """Return True when an ADD source is an http(s) URL rather than a local path."""
+    return src.lower().startswith(("http://", "https://"))
+
+
+def _is_git_ref(src: str) -> bool:
+    """Return True when an ADD source is a Git repository reference.
+
+    Git refs are excluded from every DL006 branch: their integrity comes from
+    the commit, and BuildKit resolves them itself. Recognised forms are the
+    scp-like ``git@host:org/repo.git``, the ``git://`` scheme, and any URL whose
+    path ends in ``.git`` (optionally followed by a ``#ref`` fragment).
+    """
+    lowered = src.lower()
+    if lowered.startswith(("git@", "git://")):
+        return True
+    # Strip the optional "#branch" / "#tag:subdir" fragment before testing the
+    # suffix, so https://host/repo.git#v1.0 is still recognised as a git ref.
+    return lowered.split("#", 1)[0].endswith(".git")
+
+
+def _check_add(line_num: int, instruction: str) -> List[Issue]:
+    """Evaluate one ADD instruction against DL006.
+
+    The pre-3.0.0 rule was inverted: it exempted ``ADD https://...`` and
+    ``ADD *.tar``, so it stayed silent on the one case that genuinely needs
+    verification (an unauthenticated remote fetch) while flagging harmless local
+    uses. The rule now keys on what Docker actually does with each source form:
+
+    - remote URL without ``--checksum``: warn, nothing verifies the payload;
+    - remote URL with ``--checksum``: silent, this is the recommended pattern
+      and is strictly better than ``RUN curl | tar`` (which DL017 flags);
+    - git reference: silent, integrity comes from the commit;
+    - local archive: warn, ADD silently auto-extracts it (a real surprise, and
+      one that only applies locally: ADD does NOT extract a remote download);
+    - plain local file or directory: warn, COPY is the explicit instruction.
+
+    Parameters
+    ----------
+    line_num : int
+        Line number of the instruction, for the reported issue.
+    instruction : str
+        The logical ADD instruction, continuations already joined.
+
+    Returns
+    -------
+    list of Issue
+        At most one issue; empty when the ADD is legitimate.
+    """
+    tokens = instruction.split()[1:]  # drop the ADD keyword itself
+
+    flags = [t for t in tokens if t.startswith("--")]
+    operands = [t for t in tokens if not t.startswith("--")]
+
+    has_checksum = any(f.lower().startswith("--checksum=") for f in flags)
+    keeps_git_dir = any(f.lower().startswith("--keep-git-dir") for f in flags)
+
+    # The last operand is the destination; everything before it is a source.
+    sources = operands[:-1] if len(operands) > 1 else operands
+    if not sources:
+        return []
+
+    # --keep-git-dir is only meaningful for a git source, so treat its presence
+    # as a git ADD even if the URL form is unusual.
+    if keeps_git_dir or any(_is_git_ref(s) for s in sources):
+        return []
+
+    if any(_is_remote_url(s) for s in sources):
+        if has_checksum:
+            return []
+        return [Issue(
+            line_num, "warning", "DL006",
+            "ADD downloads a remote artifact without checksum verification",
+            "Add a digest: ADD --checksum=sha256:<hash> <url> <dest>"
+        )]
+
+    if any(s.lower().endswith(_LOCAL_ARCHIVE_SUFFIXES) for s in sources):
+        return [Issue(
+            line_num, "warning", "DL006",
+            "ADD auto-extracts a local archive (implicit, easy to miss)",
+            "Prefer COPY plus an explicit RUN tar -xf, or keep ADD only if the "
+            "auto-extraction is intended and documented"
+        )]
+
+    return [Issue(
+        line_num, "warning", "DL006",
+        "Using ADD to copy a local path",
+        "Use COPY for local files and directories; keep ADD for remote URLs "
+        "with --checksum, git refs, or intentional archive extraction"
+    )]
+
+
+# --- DL036: --chown referencing a user/group not resolvable in this stage ---
+
+_CREATE_ACCOUNT_RE = re.compile(
+    r"\b(useradd|adduser|groupadd|addgroup)\b([^&;|<>]*)",
+    re.IGNORECASE,
+)
+_USER_CREATE_COMMANDS = frozenset({"useradd", "adduser"})
+_GROUP_CREATE_COMMANDS = frozenset({"groupadd", "addgroup"})
+_CHOWN_RE = re.compile(r"--chown=(\S+)", re.IGNORECASE)
+
+# A handful of accounts commonly baked into a base image, so their absence
+# from THIS Dockerfile's own RUN instructions is not evidence they are
+# missing. Deliberately short: this analyzer cannot inspect an arbitrary base
+# image's /etc/passwd, so anything not on this list falls back to the
+# "unresolved" (not "safe") bucket, reported at a lower severity precisely
+# because it is a guess.
+_WELLKNOWN_ACCOUNTS = frozenset({
+    "node", "nobody", "www-data", "postgres", "redis", "nginx", "daemon",
+    "nonroot",
+})
+
+
+def _created_accounts(instruction: str) -> List[tuple]:
+    """Extract every user/group account created by a RUN instruction.
+
+    Handles a RUN line that chains several commands with ``&&`` (the pattern
+    every template in this skill uses: ``groupadd ... && useradd ...``) by
+    scanning each ``useradd``/``adduser``/``groupadd``/``addgroup`` invocation
+    independently, stopping at the next ``&&``/``;``/``|``/``<``/``>``
+    separator. The redirect operators matter: without them, ``useradd -r -u
+    10001 -g app app > /dev/null`` reads ``/dev/null`` as the account name
+    (the true last token before the next separator), silently losing the
+    real one. Stopping the scan there also means a later command's flags are
+    never absorbed into an earlier one's name.
+
+    Both ``useradd`` and BusyBox ``adduser`` can implicitly create a
+    same-named group alongside the user, with no separate ``groupadd``/
+    ``addgroup`` command to find; both cases are verified against a real
+    daemon (BuildKit 29.4.0 / Docker 29.4.0) and recorded here so DL036 does
+    not misreport that group as never created:
+
+    - ``useradd -U`` / ``--user-group``: always creates a same-named group
+      (``useradd -r -u 10001 -U app`` leaves a resolvable ``app`` group).
+    - BusyBox ``adduser``: creates a same-named group UNLESS either ``-G
+      <group>`` or ``-S`` is present. ``-G`` requires and reuses an
+      EXISTING group rather than creating one (``adduser -G app ...``
+      fails outright with "unknown group app" if nothing created ``app``
+      first). ``-S`` (system user) independently suppresses the same-named
+      group regardless of ``-D``: the user falls back to the image's
+      built-in ``nogroup`` instead (confirmed empirically; ``-D`` alone, or
+      neither flag, DOES create the group; ``-S`` alone, or ``-D`` AND
+      ``-S`` together, does NOT).
+
+    Parameters
+    ----------
+    instruction : str
+        A logical RUN instruction, continuations already joined.
+
+    Returns
+    -------
+    list of (str, str)
+        Each pair is ``("user", name)`` or ``("group", name)``, one per
+        account (or implicit account) created. Both ``useradd``/``groupadd``
+        (Debian/RHEL) and ``adduser``/``addgroup`` (BusyBox/Alpine) are
+        recognised; in both families the account name is the command's final
+        positional argument, which is the convention every template in this
+        skill follows. Bundled short flags (``-DS`` for ``-D -S``) are not
+        recognised, only separate tokens, matching the convention every
+        template in this skill already uses.
+    """
+    accounts = []
+    for cmd, rest in _CREATE_ACCOUNT_RE.findall(instruction):
+        tokens = rest.split()
+        if not tokens:
+            continue
+        name = tokens[-1]
+        flags = tokens[:-1]
+        cmd_lower = cmd.lower()
+        if cmd_lower in _USER_CREATE_COMMANDS:
+            accounts.append(("user", name))
+            if cmd_lower == "useradd" and any(f in ("-U", "--user-group") for f in flags):
+                accounts.append(("group", name))
+            elif cmd_lower == "adduser" and "-G" not in flags and "-S" not in flags:
+                accounts.append(("group", name))
+        else:
+            accounts.append(("group", name))
+    return accounts
+
+
+def _chown_names_needing_resolution(instruction: str) -> List[tuple]:
+    """Extract the (kind, name) pairs from a --chown flag that need name resolution.
+
+    Parameters
+    ----------
+    instruction : str
+        A logical COPY or ADD instruction.
+
+    Returns
+    -------
+    list of (str, str)
+        Each pair is ``("user", name)`` or ``("group", name)`` for a
+        ``--chown`` component that names an account. A numeric id (no lookup
+        happens for it) or a ``$VAR``/``${VAR}`` reference (not resolvable
+        statically, and not resolvable to a wrong answer either) is omitted:
+        neither can produce a real finding here.
+    """
+    match = _CHOWN_RE.search(instruction)
+    if not match:
+        return []
+
+    parts = match.group(1).split(":", 1)
+    kinds = ("user", "group")
+    needed = []
+    for kind, part in zip(kinds, parts):
+        if part and not part.isdigit() and not part.startswith("$"):
+            needed.append((kind, part))
+    return needed
+
+
+def _analyze_chown_ordering(logical_lines: list):
+    """Pre-scan a whole Dockerfile for DL036: a --chown name that cannot resolve.
+
+    ``--chown`` on COPY/ADD resolves its user/group NAMES (never numeric ids)
+    against the CURRENT STAGE's own ``/etc/passwd``/``/etc/group`` at the
+    moment the instruction runs during the build; each stage starts its own
+    filesystem, so a name created in an earlier stage does not carry over
+    either. Tracking therefore resets at every FROM.
+
+    Verified against BuildKit 29.4.0: a name that cannot resolve does NOT
+    fail the build. The `--chown` is silently discarded and the files land
+    owned by root (0:0), so the container runs its app as an unprivileged
+    user over root-owned files, which then fails on first write, at runtime,
+    long after the (green) build and the (green) CI check. Nothing else in
+    the pipeline can catch this: not the build, not `docker build --check`.
+    This static check is the only net.
+
+    Two independent findings are computed per --chown-bearing line:
+
+    - "late": the name IS created in this stage, but only after this line.
+      Near-zero false positives: this is precisely the F-01 ordering bug
+      this rule exists to catch.
+    - "unresolved": the name is not created anywhere in this stage, and is
+      not one of a few well-known base-image built-in accounts. This is a
+      heuristic (the account may legitimately ship in the base image, which
+      this function cannot inspect), so the caller reports it at a lower
+      severity than "late".
+
+    Parameters
+    ----------
+    logical_lines : list of (int, str)
+        Output of ``_join_continuations``: (line_number, instruction) pairs.
+
+    Returns
+    -------
+    tuple of (dict, dict)
+        ``(late, unresolved)``, each mapping a COPY/ADD line number to a
+        list of ``(kind, name)`` pairs found on that line. The kind is kept
+        (rather than collapsed to a bare name) because ``--chown=app:app``
+        can have its user half resolve and its group half not (or vice
+        versa); a reader needs to know which one is actually broken.
+    """
+    stage_idx = -1
+    # Per stage: ordered (line_num, kind, name) creation events.
+    creations_by_stage = {}
+    # Per stage: (line_num, [(kind, name), ...]) needing resolution.
+    chowns_by_stage = {}
+
+    for line_num, instruction in logical_lines:
+        stripped = instruction.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        upper = stripped.upper()
+
+        if upper.startswith("FROM "):
+            stage_idx += 1
+            creations_by_stage.setdefault(stage_idx, [])
+            chowns_by_stage.setdefault(stage_idx, [])
+            continue
+
+        if upper.startswith("RUN "):
+            for kind, name in _created_accounts(stripped):
+                creations_by_stage.setdefault(stage_idx, []).append((line_num, kind, name))
+            continue
+
+        if upper.startswith("COPY ") or upper.startswith("ADD "):
+            needed = _chown_names_needing_resolution(stripped)
+            if needed:
+                chowns_by_stage.setdefault(stage_idx, []).append((line_num, needed))
+
+    late = {}
+    unresolved = {}
+
+    for stage_idx, chowns in chowns_by_stage.items():
+        creations = creations_by_stage.get(stage_idx, [])
+        for line_num, needed in chowns:
+            for kind, name in needed:
+                created_at = [ln for ln, k, n in creations if k == kind and n == name]
+                if created_at:
+                    if min(created_at) > line_num:
+                        late.setdefault(line_num, []).append((kind, name))
+                    # else: created earlier in the stage, resolves fine.
+                elif name.lower() not in _WELLKNOWN_ACCOUNTS:
+                    unresolved.setdefault(line_num, []).append((kind, name))
+
+    return late, unresolved
+
+
+def _join_kind_names(pairs: list) -> str:
+    """Format a list of (kind, name) pairs as a readable, labeled phrase.
+
+    Labeling which half is unresolved, rather than rendering bare names,
+    matters because ``--chown=app:app`` can have its user half created and
+    its group half not (or vice versa): showing "'app' and 'app'" hides
+    which one is actually broken.
+
+    Parameters
+    ----------
+    pairs : list of (str, str)
+        Each pair is ``("user", name)`` or ``("group", name)``.
+
+    Returns
+    -------
+    str
+        E.g. ``"user 'app'"``, ``"user 'app' and group 'appgrp'"``, or
+        ``"user 'a', group 'b', and user 'c'"`` for three or more.
+    """
+    labeled = [f"{kind} '{name}'" for kind, name in pairs]
+    if len(labeled) == 1:
+        return labeled[0]
+    if len(labeled) == 2:
+        return f"{labeled[0]} and {labeled[1]}"
+    return ", ".join(labeled[:-1]) + f", and {labeled[-1]}"
+
+
+# --- DL037: :latest / untagged registry ref in COPY --from= ---
+
+_COPY_FROM_RE = re.compile(r"--from=(\S+)", re.IGNORECASE)
+
+
+def _check_copy_from(line_num: int, instruction: str, stage_aliases: set) -> List[Issue]:
+    """Evaluate one COPY instruction's --from= flag against DL037.
+
+    ``COPY --from=`` accepts either a build stage (a numeric index or an
+    ``AS`` alias) or a registry image reference; only the latter is a base
+    image pull and inherits the FROM pinning doctrine (DL002/DL003). A stage
+    reference is never flagged: BuildKit resolves it from the build graph,
+    and it was never fetched from a registry to begin with.
+
+    This mirrors DL002 for an explicit ``:latest`` tag (error, exactly the
+    same doctrine violation as ``FROM x:latest``) and additionally applies
+    the DL003 doctrine to an untagged reference (warning, implies ``:latest``
+    by the same registry-resolution rule): both bugs shipped in v2.0.0
+    (``ghcr.io/astral-sh/uv:latest``, ``composer:latest``), and DL002 alone
+    cannot see either because it only inspects ``FROM``.
+
+    Parameters
+    ----------
+    line_num : int
+        Line number of the instruction, for the reported issue.
+    instruction : str
+        The logical COPY instruction, continuations already joined.
+    stage_aliases : set of str
+        Lowercased stage names declared by an earlier ``FROM ... AS <name>``,
+        shared with the DL003 check so a stage reference is recognised the
+        same way in both rules.
+
+    Returns
+    -------
+    list of Issue
+        At most one issue; empty when --from= is absent, numeric, a
+        variable, a stage reference, or a pinned registry reference.
+    """
+    match = _COPY_FROM_RE.search(instruction)
+    if not match:
+        return []
+
+    ref = match.group(1)
+
+    # A numbered stage ("--from=0"), a variable ("--from=$BUILD_STAGE"), or a
+    # declared stage alias ("--from=builder") are all intra-build references,
+    # never a registry pull.
+    if ref.isdigit() or ref.startswith("$") or ref.lower() in stage_aliases:
+        return []
+
+    # Judge the tag on the reference with any digest suffix removed: a
+    # misleading tag (e.g. "image:latest@sha256:...") is still worth an
+    # error even though the digest makes the pull immutable, exactly as
+    # DL002 treats FROM.
+    ref_without_digest = ref.split("@", 1)[0]
+
+    if ref_without_digest.lower().endswith(":latest"):
+        return [Issue(
+            line_num, "error", "DL037",
+            f"COPY --from={ref} pins :latest on a registry image",
+            "Pin to a specific version, e.g. --from=ghcr.io/astral-sh/uv:0.11.29"
+        )]
+
+    # A digest IS the pin: --from=composer@sha256:... is fully immutable and
+    # does not imply :latest, regardless of whether a tag precedes the "@".
+    # Consistent with DL003, which exempts "@" the same way for FROM.
+    if "@" in ref:
+        return []
+
+    if ":" not in ref_without_digest:
+        return [Issue(
+            line_num, "warning", "DL037",
+            f"COPY --from={ref} is an untagged registry image (implies :latest)",
+            "Pin to a specific version, e.g. --from=composer:2"
+        )]
+
+    return []
+
+
+# --- DL038: HEALTHCHECK probe binary the image may not ship ---
+
+# Recognises a package-manager install command across every package manager
+# this skill's templates (or a plausible future one) might use: apt/apt-get
+# and dnf/microdnf/yum all spell their subcommand "install"; apk spells it
+# "add"; zypper spells it "in". The original "apt-get install"/"apk add"
+# substring check missed ordinary, non-exotic forms like "apt-get -y
+# install" (apt-get accepts flags before the subcommand) or "apt install".
+_INSTALL_COMMAND_RE = re.compile(
+    r"\b(?:apt-get|apt|dnf|microdnf|yum)\b[^&;|]*\binstall\b"
+    r"|\bapk\b[^&;|]*\badd\b"
+    r"|\bzypper\b[^&;|]*\bin\b",
+    re.IGNORECASE,
+)
+
+
+def _from_image_ref(instruction: str) -> Optional[str]:
+    """Extract the image reference token from a FROM instruction, skipping flags.
+
+    The DL002/DL003 regex requires no flag prefix and simply fails to match a
+    platform-flagged FROM (``FROM --platform=$BUILDPLATFORM node:22-alpine``),
+    which is fine for those two rules (they decline rather than guess) but
+    would leave DL038 blind to a very common multi-arch pattern. This helper
+    discards every leading ``--flag`` token first, so the image reference is
+    still found regardless of what precedes it.
+
+    Parameters
+    ----------
+    instruction : str
+        A logical FROM instruction, continuations already joined.
+
+    Returns
+    -------
+    str or None
+        The image reference token (may be a stage alias reference, a
+        variable, or a real registry image; the caller decides what to do
+        with each), or None if the instruction has no operand at all.
+    """
+    tokens = instruction.split()[1:]  # drop the FROM keyword itself
+    while tokens and tokens[0].startswith("--"):
+        tokens.pop(0)
+    return tokens[0] if tokens else None
+
+
+def _check_healthcheck_binary(
+    line_num: int,
+    instruction: str,
+    base_image: Optional[str],
+    installs_curl: bool,
+    installs_wget: bool,
+) -> List[Issue]:
+    """Evaluate one HEALTHCHECK instruction against DL038.
+
+    Verified empirically against three real images on BuildKit 29.4.0:
+    neither ``curl`` nor ``wget`` ships on ``python:3.11-slim``,
+    ``python:3.12-slim``, or ``debian:stable-slim``. This is F-02: the
+    skill's own rule 10 example (``HEALTHCHECK CMD wget ...`` on a slim
+    base) could never have worked. Alpine is the one well-established
+    exception: BusyBox provides ``wget`` (never ``curl``) on every
+    alpine-family image with no install step required.
+
+    Scope is deliberately narrow to keep the false-positive rate low:
+
+    - ``curl`` is flagged whenever it is not installed in this stage,
+      regardless of base image, because the data above shows it ships on
+      neither family tested, and no base image in this skill's templates is
+      curl-specific.
+    - ``wget`` is flagged only when the base image is confidently identified
+      as NOT alpine-family and it is not installed in this stage. When the
+      base image cannot be identified at all (a bare ``ARG``/variable
+      reference, or a stage alias the caller could not resolve to a real
+      image) or is an unrecognised custom/private registry ref, this
+      function has no way to rule out BusyBox, so it stays silent rather
+      than guess: a wrong guess here is exactly the noisy, ignorable finding
+      this rule must avoid.
+    - An interpreter-based probe (``python -c ...``, ``node -e ...``, an exec
+      form calling the app's own binary) matches neither token and is always
+      silent — the pattern this skill's own templates now recommend.
+
+    The other half of F-02 (a probe that passes on a non-2xx response, e.g.
+    ``requests.get()`` not raising on HTTP 500) is a semantic question this
+    static check cannot answer and is intentionally out of scope; it is
+    covered by doctrine (SKILL.md rule 10), not by this rule.
+
+    Parameters
+    ----------
+    line_num : int
+        Line number of the instruction, for the reported issue.
+    instruction : str
+        The logical HEALTHCHECK instruction, continuations already joined.
+    base_image : str or None
+        Lowercased image reference of the current stage, already resolved
+        through any ``FROM <stage-alias>`` chain by the caller (a stage
+        alias is not itself a base image and must never reach this function
+        as one), or None if it could not be resolved to a real reference at
+        all.
+    installs_curl : bool
+        Whether curl is available in this stage: installed via a package
+        manager (apt/apt-get/dnf/microdnf/yum/apk/zypper), copied in as a
+        binary (``COPY --from=... .../curl``), or inherited from an earlier
+        stage this one was built ``FROM`` by alias (a stage alias shares its
+        parent's filesystem; a fresh registry image does not).
+    installs_wget : bool
+        Same as ``installs_curl``, for wget.
+
+    Returns
+    -------
+    list of Issue
+        Zero, one, or two issues; curl and wget are independent checks.
+    """
+    issues = []
+
+    if re.search(r"\bcurl\b", instruction) and not installs_curl:
+        issues.append(Issue(
+            line_num, "warning", "DL038",
+            "HEALTHCHECK calls curl, which this stage never installs",
+            "curl ships on neither Debian/Python slim nor Alpine images by "
+            "default (verified on python:3.11-slim, python:3.12-slim, "
+            "debian:stable-slim). Install it explicitly, or probe with a "
+            "binary the image already has (an interpreter's own HTTP call, "
+            "or busybox wget on an alpine-family base)"
+        ))
+
+    if (
+        re.search(r"\bwget\b", instruction)
+        and not installs_wget
+        and base_image is not None
+        and "$" not in base_image
+        and "alpine" not in base_image
+    ):
+        issues.append(Issue(
+            line_num, "warning", "DL038",
+            "HEALTHCHECK calls wget, which this stage never installs and "
+            "the base image is not alpine-family",
+            "wget ships via BusyBox on alpine-family images only. On this "
+            "base, install it explicitly or probe with a binary the image "
+            "already has (e.g. an interpreter's own HTTP call)"
+        ))
+
+    return issues
+
+
 def analyze_dockerfile(content: str) -> List[Issue]:
     """Analyze Dockerfile content and return list of issues."""
     issues = []
@@ -82,6 +782,30 @@ def analyze_dockerfile(content: str) -> List[Issue]:
     uses_apt = False
     has_apt_cache_config = False
     has_copy_chown_issue = False
+    # Stage names declared so far by "FROM ... AS <name>", lowercased. A stage
+    # can only be referenced after it is declared, so a single forward pass is
+    # enough to tell "FROM builder" (an intra-build stage reference) apart from
+    # "FROM some-registry-image" (a real image that DL002/DL003 should judge).
+    stage_aliases: set[str] = set()
+    # DL038 state. Each stage gets its own record: {"base_image": str|None,
+    # "installs_curl": bool, "installs_wget": bool}, keyed by a 0-based
+    # index that increments at every FROM. A FRESH registry image starts a
+    # record from scratch; a FROM referencing an earlier stage's alias
+    # starts as a COPY of that stage's record instead, since a stage alias
+    # shares its parent's filesystem (verified against a real daemon: a
+    # binary installed in the parent stage is present when a later stage is
+    # built FROM it by name). alias_to_stage_idx maps a declared alias to
+    # the index of the stage that declared it, so that inheritance --
+    # unlike stage_aliases below, which only needs to know an alias EXISTS
+    # -- can find exactly which record to copy.
+    stage_idx = -1
+    alias_to_stage_idx: dict = {}
+    stage_records: dict = {}
+
+    # Pre-scan for DL036: needs to see whether a --chown name is created
+    # LATER in its stage, which the single forward pass below cannot know
+    # about a line before reaching it.
+    late_chowns, unresolved_chowns = _analyze_chown_ordering(logical_lines)
 
     # Check for syntax directive
     first_non_empty = next((l for l in lines if l.strip()), "")
@@ -107,6 +831,13 @@ def analyze_dockerfile(content: str) -> List[Issue]:
             last_from_line = line_num
 
             # Check for :latest tag
+            #
+            # No stage-alias guard needed here: an AS <name> alias can never
+            # contain a colon (Docker only allows word characters, '.', '_',
+            # '-' in a stage name), so this regex cannot match a bare stage
+            # reference like "FROM builder" regardless of what the stage was
+            # named. Confirmed: unlike DL003 below, DL002 has no false-positive
+            # to fix.
             if re.search(r"FROM\s+[\w./-]+:latest", stripped, re.IGNORECASE):
                 issues.append(Issue(
                     line_num, "error", "DL002",
@@ -118,40 +849,104 @@ def analyze_dockerfile(content: str) -> List[Issue]:
             from_match = re.match(r"FROM\s+([\w./-]+)(\s|$)", stripped)
             if from_match:
                 image = from_match.group(1)
-                if ":" not in image and "@" not in image and image not in ("scratch",):
+                # A bare "FROM <name>" is only a real untagged registry image
+                # when <name> was NOT declared as an earlier build stage via
+                # "AS <name>". "FROM builder" referencing a previous
+                # "FROM ... AS builder" is legal multi-stage syntax, not a
+                # missing tag: stages have no registry tag to begin with.
+                is_stage_ref = image.lower() in stage_aliases
+                if not is_stage_ref and ":" not in image and "@" not in image and image not in ("scratch",):
                     issues.append(Issue(
                         line_num, "warning", "DL003",
                         f"Untagged base image '{image}' (implies :latest)",
                         "Pin to specific version"
                     ))
 
-            # Check for OS version pinning
-            os_versions = r"(bookworm|bullseye|buster|jammy|focal|bionic|noble)"
-            os_match = re.search(os_versions, stripped, re.IGNORECASE)
-            if os_match:
-                issues.append(Issue(
-                    line_num, "warning", "DL004",
-                    f"Base image pins OS version ({os_match.group(1)})",
-                    "Use version without OS release (e.g., python:3.12-slim instead of python:3.12-slim-bookworm)"
-                ))
+            # DL038: start this stage's record. A FROM referencing a
+            # PREVIOUSLY DECLARED stage alias inherits that stage's entire
+            # filesystem (base image identity AND whatever it installed);
+            # anything else -- a registry image, an unidentifiable
+            # variable, an unresolved custom ref -- starts fresh, since a
+            # fresh pull has none of the current build's history. Using
+            # dict(...) to copy the parent record means later mutation of
+            # this stage (e.g. installing curl of its own) never reaches
+            # back and rewrites the parent's own record.
+            stage_idx += 1
+            image_ref = _from_image_ref(stripped)
+            image_ref_lower = image_ref.lower() if image_ref else None
+            parent_idx = alias_to_stage_idx.get(image_ref_lower) if image_ref_lower else None
+            if parent_idx is not None:
+                stage_records[stage_idx] = dict(stage_records[parent_idx])
+            else:
+                stage_records[stage_idx] = {
+                    "base_image": image_ref_lower,
+                    "installs_curl": False,
+                    "installs_wget": False,
+                }
 
-            # Check for pinned alpine minor version
-            alpine_pin = re.search(r"alpine:3\.\d+", stripped)
-            if alpine_pin:
-                issues.append(Issue(
-                    line_num, "info", "DL005",
-                    f"Base image pins Alpine minor version ({alpine_pin.group()})",
-                    "Consider alpine:3 for automatic patch updates"
-                ))
+            # Register this stage's own alias (if any) so that LATER FROM
+            # lines can recognize a reference to it, either as a stage
+            # reference (DL003/DL037, stage_aliases) or specifically as an
+            # inheritance source (DL038, alias_to_stage_idx). Must run
+            # after the checks above: a stage can only be referenced once
+            # declared, never on its own declaring line.
+            alias_match = re.search(r"\sAS\s+([\w.-]+)\s*$", stripped, re.IGNORECASE)
+            if alias_match:
+                alias = alias_match.group(1).lower()
+                stage_aliases.add(alias)
+                alias_to_stage_idx[alias] = stage_idx
 
-        # --- ADD checks ---
+        # --- ADD checks (DL006) ---
         if upper.startswith("ADD "):
-            # Allow ADD for URLs and tar extraction explicitly
-            if not re.search(r"ADD\s+(https?://|.*\.tar)", stripped):
+            issues.extend(_check_add(line_num, stripped))
+
+        # --- COPY checks (DL037) ---
+        if upper.startswith("COPY "):
+            issues.extend(_check_copy_from(line_num, stripped, stage_aliases))
+
+            # DL038: a binary copied in from another stage/image is present
+            # too, the same as one installed by a package manager. Matched
+            # on the exact basename only ("curl"/"wget"), not a substring,
+            # so a script merely named e.g. "curl-wrapper.sh" is never
+            # mistaken for the real binary. setdefault guards against a
+            # malformed Dockerfile with COPY before any FROM.
+            record = stage_records.setdefault(
+                stage_idx, {"base_image": None, "installs_curl": False, "installs_wget": False}
+            )
+            copy_operands = [t for t in stripped.split()[1:] if not t.startswith("--")]
+            for operand in copy_operands:
+                basename = operand.rstrip("/").rsplit("/", 1)[-1]
+                if basename == "curl":
+                    record["installs_curl"] = True
+                elif basename == "wget":
+                    record["installs_wget"] = True
+
+        # --- COPY/ADD checks (DL036) ---
+        if upper.startswith("COPY ") or upper.startswith("ADD "):
+            late_names = late_chowns.get(line_num)
+            if late_names:
                 issues.append(Issue(
-                    line_num, "warning", "DL006",
-                    "Using ADD instead of COPY",
-                    "Use COPY unless you specifically need URL download or tar extraction"
+                    line_num, "error", "DL036",
+                    f"--chown references {_join_kind_names(late_names)}, "
+                    "created later in this same stage",
+                    "Move the RUN that creates the user (useradd/adduser) "
+                    "and group (groupadd/addgroup) above this line. "
+                    "Verified on BuildKit 29.4.0: this does NOT fail the "
+                    "build, --chown is silently discarded and the files "
+                    "land owned by root (0:0), then the app fails at "
+                    "runtime on its first write, not at build time."
+                ))
+            unresolved_names = unresolved_chowns.get(line_num)
+            if unresolved_names:
+                issues.append(Issue(
+                    line_num, "info", "DL036",
+                    f"--chown references {_join_kind_names(unresolved_names)}, "
+                    "not created anywhere in this stage",
+                    "If this account ships in the base image this is fine; "
+                    "otherwise create it with useradd/adduser (and "
+                    "groupadd/addgroup for the group) before this line, "
+                    "since an unresolved --chown is silently discarded "
+                    "rather than failing the build"
                 ))
 
         # --- RUN checks ---
@@ -159,6 +954,21 @@ def analyze_dockerfile(content: str) -> List[Issue]:
             # apt-get tracking
             if "apt-get" in stripped:
                 uses_apt = True
+
+            # DL038: track curl/wget installed by THIS stage, so the
+            # HEALTHCHECK check below knows what it can rely on. Covers
+            # every package manager this skill's templates use (apt,
+            # apt-get, dnf, microdnf, yum, apk, zypper) and tolerates flags
+            # before the subcommand ("apt-get -y install curl"), which a
+            # plain substring check on "apt-get install" missed.
+            if _INSTALL_COMMAND_RE.search(stripped):
+                record = stage_records.setdefault(
+                    stage_idx, {"base_image": None, "installs_curl": False, "installs_wget": False}
+                )
+                if re.search(r"\bcurl\b", stripped):
+                    record["installs_curl"] = True
+                if re.search(r"\bwget\b", stripped):
+                    record["installs_wget"] = True
 
             # apt-get install without cleanup (only if no cache mount)
             if "apt-get install" in stripped and "--mount=type=cache" not in stripped:
@@ -241,7 +1051,16 @@ def analyze_dockerfile(content: str) -> List[Issue]:
 
         # --- USER checks ---
         if upper.startswith("USER "):
-            if "root" in stripped.lower().split()[-1]:
+            # Compare the resolved user exactly, not by substring: "root" was
+            # a substring match, so "USER nonroot" (the canonical account in
+            # gcr.io/distroless/*:nonroot images) was misreported as root, and
+            # -- since it landed in this branch -- has_user was never set,
+            # so DL030 then ALSO fired "No non-root USER defined" on a file
+            # that has one. Only the user part before an optional ":group" is
+            # compared; "0" is included because UID 0 is root regardless of
+            # name, and was previously missed entirely.
+            user_name = stripped.split()[-1].split(":", 1)[0].lower()
+            if user_name in ("root", "0"):
                 issues.append(Issue(
                     line_num, "warning", "DL021",
                     "Explicitly setting USER root",
@@ -283,6 +1102,13 @@ def analyze_dockerfile(content: str) -> List[Issue]:
         # --- HEALTHCHECK ---
         if upper.startswith("HEALTHCHECK "):
             has_healthcheck = True
+            record = stage_records.get(
+                stage_idx, {"base_image": None, "installs_curl": False, "installs_wget": False}
+            )
+            issues.extend(_check_healthcheck_binary(
+                line_num, stripped, record["base_image"],
+                record["installs_curl"], record["installs_wget"]
+            ))
 
         # --- LABEL ---
         if upper.startswith("LABEL "):
@@ -308,9 +1134,13 @@ def analyze_dockerfile(content: str) -> List[Issue]:
                 value = stripped[len(directive):].strip()
                 if value and not value.startswith("["):
                     issues.append(Issue(
-                        line_num, "info", "DL025",
-                        f"{directive} uses shell form",
-                        f"Prefer exec form: {directive} [\"executable\", \"arg1\"] for proper signal handling"
+                        line_num, "warning", "DL025",
+                        f"{directive} uses shell form, so the application never receives SIGTERM",
+                        "Shell form runs the command under /bin/sh -c, which makes the shell "
+                        "PID 1: it does not forward signals, so docker stop waits the full "
+                        "grace period and then SIGKILLs. Use exec form "
+                        f"({directive} [\"executable\", \"arg1\"]) to make the application PID 1 "
+                        "and let it handle signals and shut down cleanly."
                     ))
 
     # --- Global checks ---

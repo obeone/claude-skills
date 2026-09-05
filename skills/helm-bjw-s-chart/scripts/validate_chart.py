@@ -20,7 +20,7 @@ import sys
 import yaml
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -127,6 +127,47 @@ def _common_major_set(chart_path: Path) -> set:
         if isinstance(dep, dict) and dep.get('name') == 'common':
             return _detect_common_majors(str(dep.get('version', '')))
     return set()
+
+
+def common_version(chart_path: Path) -> Optional[Tuple[int, int]]:
+    """
+    Read the pinned major/minor of the bjw-s common dependency.
+
+    ``_common_major_set`` answers "which majors does this pin admit"; this
+    answers "which exact minor is pinned", which the 5.0-vs-5.1 feature gates
+    need and a set of majors cannot express.
+
+    Parameters
+    ----------
+    chart_path : Path
+        Root directory of the Helm chart.
+
+    Returns
+    -------
+    Optional[Tuple[int, int]]
+        ``(major, minor)`` of the ``common`` dependency pin, or ``None`` when
+        Chart.yaml is missing, unparseable, has no ``common`` dependency, or
+        the pin is not a plain ``X.Y[.Z]`` version. A leading comparator is
+        stripped, so ``^5.1.0`` reads as ``(5, 1)``.
+    """
+    chart_yaml_path = chart_path / "Chart.yaml"
+    if not chart_yaml_path.exists():
+        return None
+    try:
+        with open(chart_yaml_path) as cf:
+            chart_meta = yaml.safe_load(cf) or {}
+    except (yaml.YAMLError, OSError):
+        return None
+    if not isinstance(chart_meta, dict):
+        return None
+    for dep in (chart_meta.get('dependencies') or []):
+        if not isinstance(dep, dict) or dep.get('name') != 'common':
+            continue
+        parts = str(dep.get('version', '')).lstrip('^~=v ').split('.')
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            return int(parts[0]), int(parts[1])
+        return None
+    return None
 
 
 def _collect_controllers(values: dict) -> dict:
@@ -584,7 +625,7 @@ def _check_env_valuefrom_identifier(values: dict) -> List[Issue]:
     """
     Flag ``identifier`` used inside a per-variable ``env`` ``valueFrom`` ref.
 
-    The bjw-s common-5.0.1 schema (``schemas/envVars.json``) resolves both
+    The bjw-s common-5.1.0 schema (``schemas/envVars.json``) resolves both
     ``configMapKeyRef`` and ``secretKeyRef`` under a per-variable ``valueFrom``
     to ``$defs/objectKeySelector``, which is ``additionalProperties: false``
     with only ``name`` and ``key`` allowed. ``identifier`` there is schema
@@ -737,7 +778,7 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                         'Chart.yaml',
                         'warning',
                         'common library has no version pin',
-                        'Pin a version (current default: 5.0.1)'
+                        'Pin a version (current default: 5.1.0)'
                     ))
                 elif majors:
                     min_major = min(majors)
@@ -756,14 +797,14 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                             'Chart.yaml',
                             'warning',
                             f'common library constraint {raw_version} spans majors 4.x and 5.x',
-                            'Tighten the pin to a single major (e.g. 5.0.1) — a range across majors is ambiguous'
+                            'Tighten the pin to a single major (e.g. 5.1.0) — a range across majors is ambiguous'
                         ))
                     elif 4 in majors:
                         issues.append(Issue(
                             'Chart.yaml',
                             'warning',
                             f'common library pinned to {raw_version} (legacy 4.x track)',
-                            'Migrate to 5.0.1 when K8s ≥ 1.31 / Helm ≥ 3.18 — see references/migration-4-to-5.md'
+                            'Migrate to 5.1.0 when K8s ≥ 1.31 / Helm ≥ 3.18 — see references/migration-4-to-5.md'
                         ))
                     elif min_major >= 5:
                         issues.append(Issue(
@@ -894,6 +935,166 @@ def validate_templates(chart_path: Path) -> List[Issue]:
     return issues
 
 
+# Valid `strategy` values and the default the library applies when the key
+# is absent, per controller type. Job/CronJob have no update strategy.
+_STRATEGIES = {
+    'deployment': ({'Recreate', 'RollingUpdate'}, 'Recreate'),
+    'statefulset': ({'OnDelete', 'RollingUpdate'}, 'RollingUpdate'),
+    # DaemonSet gained a rendered updateStrategy in common 5.1.0; before
+    # that the key was accepted and dropped. No library-side default.
+    'daemonset': ({'OnDelete', 'RollingUpdate'}, None),
+}
+
+# rollingUpdate keys the library renders, per controller type. The
+# `surge` / `unavailable` spellings are the pre-5.1 shorthands.
+_ROLLING_KEYS = {
+    'deployment': {'maxSurge', 'maxUnavailable', 'surge', 'unavailable'},
+    'daemonset': {'maxSurge', 'maxUnavailable', 'surge', 'unavailable'},
+    'statefulset': {'partition', 'maxUnavailable'},
+}
+
+_DEPRECATED_ROLLING_KEYS = {'surge': 'maxSurge', 'unavailable': 'maxUnavailable'}
+
+
+def _validate_strategy(
+    location: str,
+    ctrl_config: dict,
+    common_ver: Optional[Tuple[int, int]],
+) -> List[Issue]:
+    """Check a controller's ``strategy`` and ``rollingUpdate`` keys.
+
+    From common 5.1.0 an invalid ``strategy`` is rejected by the values
+    schema rather than a template failure, and the valid set depends on
+    the controller type. This reproduces that check locally, plus the
+    version gates and deprecations that the schema does not express.
+
+    Parameters
+    ----------
+    location : str
+        Dotted path of the controller, used as the issue location.
+    ctrl_config : dict
+        The controller's values block.
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` of the pinned common library, or ``None`` when
+        it could not be determined. Version-gated checks are skipped in
+        that case rather than guessed at.
+
+    Returns
+    -------
+    List[Issue]
+        Issues found, empty when the controller has neither key set or
+        both are well-formed.
+    """
+    issues: List[Issue] = []
+    ctype = ctrl_config.get('type', 'deployment')
+    strategy = ctrl_config.get('strategy')
+    rolling = ctrl_config.get('rollingUpdate')
+
+    if strategy is None and rolling is None:
+        return issues
+
+    # Job and CronJob have no update strategy; the keys are inert there.
+    if ctype not in _STRATEGIES:
+        if strategy is not None or rolling is not None:
+            issues.append(Issue(
+                location,
+                'warning',
+                f'`strategy` / `rollingUpdate` set on a {ctype} controller',
+                'Neither key is rendered for this controller type — remove them'
+            ))
+        return issues
+
+    valid, default = _STRATEGIES[ctype]
+    effective = default
+
+    if strategy is not None:
+        if not isinstance(strategy, str):
+            issues.append(Issue(
+                f'{location}.strategy',
+                'error',
+                '`strategy` is a string, not a mapping',
+                f'Use `strategy: RollingUpdate` with a sibling `rollingUpdate:` block — one of {sorted(valid)}'
+            ))
+            effective = None
+        elif strategy not in valid:
+            issues.append(Issue(
+                f'{location}.strategy',
+                'error',
+                f'invalid strategy `{strategy}` for a {ctype} controller',
+                f'Use one of {sorted(valid)}'
+            ))
+            effective = None
+        else:
+            effective = strategy
+            if ctype == 'daemonset' and common_ver and common_ver < (5, 1):
+                issues.append(Issue(
+                    f'{location}.strategy',
+                    'warning',
+                    'DaemonSet `strategy` is dropped by common < 5.1.0',
+                    'Pin common 5.1.0 or later for the key to render an updateStrategy'
+                ))
+
+    if rolling is None:
+        return issues
+
+    if not isinstance(rolling, dict):
+        issues.append(Issue(
+            f'{location}.rollingUpdate',
+            'error',
+            '`rollingUpdate` must be a mapping',
+            'Use a block with maxSurge / maxUnavailable (or partition on a StatefulSet)'
+        ))
+        return issues
+
+    # `rollingUpdate` is only read when the effective strategy is
+    # RollingUpdate — which a Deployment does not get by default.
+    if effective is not None and effective != 'RollingUpdate':
+        hint = (
+            'Set `strategy: RollingUpdate` explicitly — the library default is Recreate'
+            if strategy is None
+            else f'`rollingUpdate` is ignored with `strategy: {effective}`'
+        )
+        issues.append(Issue(
+            f'{location}.rollingUpdate',
+            'warning',
+            f'`rollingUpdate` is ignored: effective strategy is {effective}',
+            hint
+        ))
+
+    allowed = _ROLLING_KEYS[ctype]
+    for key in rolling:
+        if key not in allowed:
+            issues.append(Issue(
+                f'{location}.rollingUpdate.{key}',
+                'error',
+                f'`{key}` is not a rollingUpdate key for a {ctype} controller',
+                f'Valid keys: {sorted(allowed)}'
+            ))
+            continue
+        if key in _DEPRECATED_ROLLING_KEYS:
+            issues.append(Issue(
+                f'{location}.rollingUpdate.{key}',
+                'warning',
+                f'`{key}` is deprecated as of common 5.1.0',
+                f'Rename to `{_DEPRECATED_ROLLING_KEYS[key]}` — the shorthand is removed in 6.0'
+            ))
+
+    if (
+        ctype == 'statefulset'
+        and 'maxUnavailable' in rolling
+        and common_ver
+        and common_ver < (5, 1)
+    ):
+        issues.append(Issue(
+            f'{location}.rollingUpdate.maxUnavailable',
+            'warning',
+            'StatefulSet `maxUnavailable` is dropped by common < 5.1.0',
+            'Pin common 5.1.0 or later; the cluster also needs the MaxUnavailableStatefulSet feature gate'
+        ))
+
+    return issues
+
+
 def validate_values(chart_path: Path) -> List[Issue]:
     """
     Validate values.yaml structure.
@@ -941,6 +1142,8 @@ def validate_values(chart_path: Path) -> List[Issue]:
         ))
         return issues
 
+    common_ver = common_version(chart_path)
+
     # Check controllers
     if 'controllers' not in values:
         issues.append(Issue(
@@ -973,6 +1176,8 @@ def validate_values(chart_path: Path) -> List[Issue]:
                 'Add container definitions'
             ))
             continue
+
+        issues.extend(_validate_strategy(location, ctrl_config, common_ver))
 
         # Check containers
         if 'containers' not in ctrl_config:

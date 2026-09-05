@@ -1,31 +1,20 @@
 ---
 name: helm-bjw-s-chart
-description: "Generate production-ready Helm charts using the bjw-s-labs common library (app-template v5, with v4 legacy support). Use when creating a new Helm chart, converting Docker Compose to Helm, configuring controllers with sidecars or init containers, setting up services/ingress/persistence, HorizontalPodAutoscalers, ServiceMonitors/PodMonitors, NetworkPolicies, or handling StatefulSets and multi-controller deployments. Also covers exposing services through Gateway API HTTPRoutes, including migrating an existing Ingress to a route."
+description: "Generate production-ready Helm charts on the bjw-s-labs common library (app-template v5, v4 legacy). Use for new charts, Compose-to-Helm conversion, sidecars, init containers, services, ingress, persistence, StatefulSets, HPAs, Service/PodMonitors, and NetworkPolicies."
 metadata:
-  version: "5.2.0"
+  version: "5.4.0"
 ---
 
 # Helm bjw-s Chart Generator
 
-> **🆕 v5.0.0 — common 5.x is now the default** — The skill is rebased on
-> `common: 5.0.1` (released 2026-05-14). New charts target 5.x out of the
-> box, and the migration path from 4.x is captured in
-> [`references/migration-4-to-5.md`](references/migration-4-to-5.md). 4.x
-> remains supported as a legacy track for clusters that can't meet the
-> Kubernetes 1.31 / Helm 3.18 prerequisites.
->
-> **🔄 Renamed in v3.0.0** — This skill was previously published as
-> `helm-chart-generator`. Update any agent, automation, or documentation
-> that still references the old name.
-
-Generate production-ready Helm charts using the bjw-s-labs common library
-(app-template v5, with v4 legacy support).
+> Published as `helm-chart-generator` until v2.x. Update anything still
+> pointing at the old name.
 
 ## Library version matrix
 
 | common  | Kubernetes | Helm      | Status                                              |
 | :------ | :--------- | :-------- | :-------------------------------------------------- |
-| `5.0.1` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
+| `5.1.0` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
 | `4.6.2` | `>= 1.25`  | `>= 3.14` | Legacy — pin when the cluster can't meet 5.x reqs   |
 
 Everything documented here works on **common 5.x** by default. When a
@@ -33,6 +22,35 @@ pattern is **not available on 4.x** it's tagged **`(5.x only)`** so
 agents pinned to the legacy track can skip it. See
 [`references/migration-4-to-5.md`](references/migration-4-to-5.md) for
 the full 4 → 5 upgrade procedure.
+
+## New in common 5.1.0
+
+Drop-in over 5.0.x — no values change is required to upgrade. Four
+additions, each with a worked example in
+[`references/patterns.md`](references/patterns.md):
+
+1. **DaemonSets accept `strategy` / `rollingUpdate`** and render a real
+   `updateStrategy`. On 5.0.x both keys were silently ignored for this
+   controller type.
+2. **`serviceAccount.<id>.automountServiceAccountToken`** sets the field
+   on the ServiceAccount object itself. It does not replace the pod-level
+   key: the library always writes `automountServiceAccountToken` into the
+   pod spec (default `false`), and the pod spec wins. Set both.
+3. **`route.<id>.namespaceOverride`** deploys a Route into another
+   namespace, and the library then emits the matching `ReferenceGrant`
+   automatically. Turn that off with
+   `route.<id>.referenceGrant.enabled: false`.
+4. **`rollingUpdate` takes the upstream key names** — `maxSurge` and
+   `maxUnavailable`. The old `surge` / `unavailable` shorthands still
+   work but are deprecated and disappear in 6.0. StatefulSets gained
+   `rollingUpdate.maxUnavailable`, which the cluster only honours with the
+   `MaxUnavailableStatefulSet` feature gate — alpha and off by default up
+   to Kubernetes 1.34, beta from 1.35 with the default varying by patch
+   release.
+
+One behavioral change: an invalid `strategy` is now rejected by the values
+schema instead of a template `fail`, so `helm lint` reports it earlier and
+the message names the valid values per controller type.
 
 ## Migration 4.x → 5.x at a glance
 
@@ -55,45 +73,32 @@ Five things to know — full details in
 
 ## Quick Start Workflow
 
-1. **Understand the application**
-   - Ask about the container image, ports, environment variables
-   - Identify if sidecars/init containers are needed
-   - Determine storage requirements (config, data, logs)
-   - Check if ingress/networking is required
-
-2. **Generate base structure**
-   - Use templates from `assets/templates/`
-   - Start with Chart.yaml and basic values.yaml
-   - Add templates/common.yaml (minimal, just includes library)
-   - Create templates/NOTES.txt for post-install instructions
-
-3. **Build values.yaml progressively**
-   - Controllers and containers (main app + sidecars if needed)
-   - Services (one per controller or port)
-   - Ingress if web-accessible
-   - Persistence for stateful data
-   - Secrets/ConfigMaps if needed
-
-4. **Validate and refine**
-   - Run `helm dependency update` to fetch dependencies (generates Chart.lock)
-   - Use `scripts/validate_chart.py` to check structure
-   - Review against `references/best-practices.md`
-   - Test with `helm template` and `helm lint`
+1. **Understand the app.** Image, ports, environment, storage (config,
+   data, logs), ingress, and whether sidecars or init containers apply.
+2. **Generate the base** from `assets/templates/`: `Chart.yaml`,
+   `values.yaml`, `templates/common.yaml`, `templates/NOTES.txt`.
+3. **Build `values.yaml` in order**: controllers and containers, then
+   services, ingress, persistence, secrets and configMaps.
+4. **Validate**: `helm dependency update` (writes `Chart.lock`), then
+   `validate_chart.py`, then `helm lint` and `helm template`.
 
 ## Core Structure
 
-Every chart consists of:
-
 ```text
 my-app/
-├── Chart.yaml           # Chart metadata and dependencies
-├── values.yaml          # Configuration values
+├── Chart.yaml           # Metadata and dependencies
+├── values.yaml          # Configuration
 └── templates/
     ├── common.yaml      # Includes the bjw-s library
     └── NOTES.txt        # Post-install instructions
 ```
 
-### Chart.yaml Template
+`templates/common.yaml` is always exactly one line:
+`{{- include "bjw-s.common.loader.all" . }}`. `NOTES.txt` covers how to
+reach the app, default credentials if any, and the next configuration
+step.
+
+### Chart.yaml
 
 ```yaml
 apiVersion: v2
@@ -105,22 +110,8 @@ appVersion: "<app version>"
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 5.0.1  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
+    version: 5.1.0  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
 ```
-
-### templates/common.yaml (Always the same)
-
-```yaml
-{{- include "bjw-s.common.loader.all" . }}
-```
-
-### templates/NOTES.txt
-
-Provide useful post-install information:
-
-- How to access the application
-- Default credentials if any
-- Next steps for configuration
 
 ## values.yaml Structure
 
@@ -168,7 +159,7 @@ secrets: {}
 
 ## Common Patterns
 
-### Single Container Application
+The baseline, a single container with a service and a PVC:
 
 ```yaml
 controllers:
@@ -196,25 +187,10 @@ persistence:
       - path: /config
 ```
 
-### Application with Sidecar
+A sidecar is one more entry under `containers:` with
+`dependsOn: <container>` to order startup.
 
-```yaml
-controllers:
-  main:
-    containers:
-      main:
-        image:
-          repository: myapp
-          tag: "1.0.0"
-
-      sidecar:
-        dependsOn: main
-        image:
-          repository: sidecar-image
-          tag: "1.0.0"
-```
-
-See [`references/patterns.md`](references/patterns.md) for more examples:
+See [`references/patterns.md`](references/patterns.md) for worked examples:
 
 - Multi-controller setups
 - Init containers
@@ -223,114 +199,45 @@ See [`references/patterns.md`](references/patterns.md) for more examples:
 - Shared volumes between containers
 - Private registries with `imagePullSecrets`
 - StatefulSets with headless service
-- HorizontalPodAutoscaler **(5.x only)**
-- PodMonitor (scrape pods without a Service) **(5.x only)**
-- Generic ephemeral volumes **(5.x only)**
-- NetworkPolicy with single-controller auto-targeting **(5.x only)**
 
-## 5.x-only features
+Plus one section per version-gated key listed below.
 
-The patterns below require `common >= 5.0.0`. They are silently ignored
-or rejected on 4.x.
+## Version-gated features
 
-```yaml
-# 1. HorizontalPodAutoscaler nests under the target controller — there is
-#    no top-level `horizontalPodAutoscaler:` key and no `controller:` field.
-controllers:
-  main:
-    replicas: null              # HPA owns the replica count
-    horizontalPodAutoscaler:
-      enabled: true
-      minReplicas: 2
-      maxReplicas: 10
-      metrics:
-        - type: Resource
-          resource:
-            name: cpu
-            target:
-              type: Utilization
-              averageUtilization: 70
+These are ignored or rejected below the version in the `Since` column.
+Each has a worked example in
+[`references/patterns.md`](references/patterns.md):
 
-# 2. PodMonitor (alternative to ServiceMonitor — scrapes pods directly)
-podMonitor:
-  main:
-    enabled: true
-    controller:
-      identifier: main          # Object form; a bare string fails schema validation
-    podMetricsEndpoints:        # Not `endpoints:` — that key is rejected by the schema
-      - port: metrics
-        path: /metrics
-        interval: 30s
-
-# 3. Generic ephemeral volumes (per-pod PVC, deleted with the pod)
-persistence:
-  scratch:
-    type: ephemeral
-    accessMode: ReadWriteOnce
-    size: 5Gi
-    storageClass: fast-ssd
-    globalMounts:
-      - path: /scratch
-
-# 4. Container / Pod resizePolicy (in-place vertical scaling)
-#    container resizePolicy: Kubernetes >= 1.35
-#    pod resizePolicy:       Kubernetes >= 1.36
-controllers:
-  main:
-    pod:
-      resizePolicy: PreferNoRestart   # k8s >= 1.36
-    containers:
-      main:
-        resizePolicy:                 # k8s >= 1.35
-          - resourceName: cpu
-            restartPolicy: NotRequired
-          - resourceName: memory
-            restartPolicy: RestartContainer
-
-# 5. NetworkPolicy auto-targets the only controller when neither
-#    `controller` nor `podSelector` is given. `controller` and
-#    `podSelector` are now mutually exclusive.
-networkpolicies:
-  default-deny:
-    enabled: true
-    policyTypes:
-      - Egress
-```
+| Key | Since | What it buys you |
+| :-------------------------- | :------ | :--------------------------------------- |
+| `horizontalPodAutoscaler`   | `5.0.0` | Autoscaling bound to a controller identifier |
+| `podMonitor`                | `5.0.0` | Prometheus scraping without a Service     |
+| `persistence.*.type: ephemeral` | `5.0.0` | Per-pod PVC, deleted with the pod     |
+| `resizePolicy` (pod + container) | `5.0.0` | In-place CPU/memory resize, no pod recreation |
+| `networkpolicies`           | `5.0.0` | Auto-targets the only controller when it is unambiguous |
+| `strategy` on a DaemonSet   | `5.1.0` | Real `updateStrategy` instead of a silently dropped key |
+| `serviceAccount.*.automountServiceAccountToken` | `5.1.0` | Declares the token policy on the SA itself, for consumers outside the chart |
+| `route.*.namespaceOverride` | `5.1.0` | Cross-namespace Route with an auto-generated `ReferenceGrant` |
+| `rollingUpdate.maxSurge` / `.maxUnavailable` | `5.1.0` | Upstream key names; `surge` / `unavailable` are deprecated |
 
 ## Best Practices
 
-**Always:**
+These shape every generated chart. The reasoning, and the long form, are
+in [`references/best-practices.md`](references/best-practices.md).
 
-- Use specific image tags, never `:latest`
-- Set resource limits and requests
-- Configure health checks (liveness, readiness, startup)
-- Use non-root security contexts when possible
-- Reference services by identifier, not name
-
-**Naming:**
-
-- Controllers: Use descriptive names (not just "main")
-- Containers: Use descriptive names (not just "main")
-- Services: Match controller name or purpose
-
-**Security:**
-
-- Keep `automountServiceAccountToken: false` (5.x default) unless the
-  workload calls the K8s API — and even then, pair it with an explicit
-  ServiceAccount + RBAC, not the auto-created default
-- Configure proper `securityContext`
-- Use secrets for sensitive data
-- Use `imagePullSecrets` for private registries (see `references/patterns.md`)
-
-**Persistence:**
-
-- Use `globalMounts` for simple cases
-- Use `advancedMounts` for complex multi-container scenarios
-- Specify `existingClaim` for pre-created PVCs
-- Use `type: ephemeral` for scratch space tied to the pod lifecycle (5.x only)
-
-See [`references/best-practices.md`](references/best-practices.md) for
-comprehensive guidelines.
+- Pin image tags, never `:latest`. Requests and limits on every
+  container. Liveness and readiness probes at minimum.
+- Non-root `securityContext`. Secrets for sensitive data,
+  `imagePullSecrets` for private registries.
+- Reference services by identifier, not by name.
+- Name controllers and containers for what they do, not `main`; name
+  services after their controller or their purpose.
+- Keep `automountServiceAccountToken: false` (the 5.x default). When the
+  workload genuinely calls the K8s API, pair it with an explicit
+  ServiceAccount and RBAC rather than the auto-created default.
+- `globalMounts` for simple cases, `advancedMounts` for multi-container,
+  `existingClaim` for pre-created PVCs, `type: ephemeral` for scratch
+  space tied to the pod (5.x only).
 
 ## Validation
 
@@ -378,40 +285,15 @@ Before deploying to a cluster, verify:
 
 ## Publishing the Chart
 
-A published chart must be **self-contained**. Both of these have to ship
-inside the packaged `.tgz` (and the committed chart):
+A published chart must be self-contained: both `Chart.lock` and a
+populated `charts/` have to be present before `helm package` runs, or
+offline consumers cannot resolve the common library. Run
+`helm dependency update` first, then package. Either commit `charts/` to
+git, or gitignore it and run `helm dependency build` in the pipeline.
 
-- `Chart.lock` — pins the exact resolved dependency versions and digests.
-- The full `charts/` directory — the vendored dependency tarballs
-  (`common-<version>.tgz`, …) materialized by `helm dependency update`.
-
-`helm package` bundles whatever is under `charts/` at package time, and the
-default `.helmignore` excludes neither `Chart.lock` nor `charts/`. The rule
-is therefore about making sure both are present *before* you package:
-
-```bash
-# Vendor dependencies into charts/ and (re)generate Chart.lock
-helm dependency update
-
-# ...then package — the .tgz now embeds charts/common-<version>.tgz
-helm package .
-```
-
-Two equally valid ways to satisfy it:
-
-- **Commit `charts/` to git** (vendoring): the checkout is already
-  self-contained; the publish step is just `helm package`.
-- **Gitignore `charts/`** but commit `Chart.lock`, then run
-  `helm dependency build` in the publish pipeline before `helm package`.
-  `helm dependency build` repopulates `charts/` from the locked versions
-  without re-resolving them.
-
-Never publish a chart whose `charts/` is empty while `Chart.yaml` declares
-dependencies: consumers without the `bjw-s-labs.github.io/helm-charts` repo
-pre-added (offline / air-gapped installs) cannot resolve the common library
-at install time. `scripts/validate_chart.py` warns when `Chart.lock` is
-missing or when a declared dependency has no matching tarball under
-`charts/`.
+Full rationale and the two strategies:
+[`references/best-practices.md`](references/best-practices.md), section
+"Publishing and Dependency Vendoring".
 
 ## Common Issues
 
@@ -421,6 +303,8 @@ missing or when a declared dependency has no matching tarball under
 **Controller not starting**: Check `dependsOn` order for init/sidecar containers
 **Unexpected ServiceAccount appears (5.x)**: Set `global.createDefaultServiceAccount: false` or define your own SA
 **Pod can't talk to the K8s API (5.x)**: Set `automountServiceAccountToken: true` on the pod AND grant RBAC
+**`strategy` rejected by `helm lint` (5.1+)**: It is a string, never a map, and the valid values depend on the controller type
+**Cross-namespace Route can't reach the Service**: The `ReferenceGrant` is only emitted from `namespaceOverride`, not from a hand-written `backendRefs.namespace`
 
 ## References
 
