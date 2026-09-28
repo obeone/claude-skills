@@ -2,7 +2,7 @@
 name: helm-bjw-s-chart
 description: "Generate production-ready Helm charts on the bjw-s-labs common library (app-template v5, v4 legacy). Use for new charts, Compose-to-Helm conversion, sidecars, init containers, services, ingress, persistence, StatefulSets, HPAs, Service/PodMonitors, and NetworkPolicies."
 metadata:
-  version: "5.4.0"
+  version: "5.5.0"
 ---
 
 # Helm bjw-s Chart Generator
@@ -14,7 +14,7 @@ metadata:
 
 | common  | Kubernetes | Helm      | Status                                              |
 | :------ | :--------- | :-------- | :-------------------------------------------------- |
-| `5.1.0` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
+| `5.2.1` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
 | `4.6.2` | `>= 1.25`  | `>= 3.14` | Legacy — pin when the cluster can't meet 5.x reqs   |
 
 Everything documented here works on **common 5.x** by default. When a
@@ -22,6 +22,30 @@ pattern is **not available on 4.x** it's tagged **`(5.x only)`** so
 agents pinned to the legacy track can skip it. See
 [`references/migration-4-to-5.md`](references/migration-4-to-5.md) for
 the full 4 → 5 upgrade procedure.
+
+## New in common 5.2
+
+`5.2.0` (2026-09-16) adds resource types and small template-side
+conveniences, drop-in over 5.1.x. `5.2.1` (2026-09-17) is a bugfix-only
+patch (template rendering issues) with no user-facing change.
+
+1. **`ExternalSecret` resources** via a top-level `externalSecrets` map,
+   with `defaultExternalSecretStoreRef` as the shared store default.
+2. **`CiliumNetworkPolicy` and `CiliumClusterwideNetworkPolicy`**
+   through the existing `networkpolicies` map: set
+   `networkpolicies.<id>.type` to `cilium` or `ciliumClusterwide`
+   (`native`, the default, keeps the plain `NetworkPolicy`).
+3. **Initial `ListenerSet` support** via a top-level `listenerSets` map.
+4. **`topologySpreadConstraints` get default selectors** on controllers,
+   so you no longer have to hand-write the label selector for the
+   common case.
+5. **`persistence.<id>.type: projected`** is natively supported,
+   alongside `emptyDir`, `nfs`, `hostPath`, etc.
+6. **String fields are templated globally**, not just on a fixed
+   allowlist — Helm templating (`{{ }}`) now works in more places
+   throughout `values.yaml`.
+7. **Bugfix:** `NetworkPolicy` `extraSelectorLabels` now correctly take
+   precedence over generated selector labels.
 
 ## New in common 5.1.0
 
@@ -110,7 +134,7 @@ appVersion: "<app version>"
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 5.1.0  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
+    version: 5.2.1  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
 ```
 
 ## values.yaml Structure
@@ -219,6 +243,10 @@ Each has a worked example in
 | `serviceAccount.*.automountServiceAccountToken` | `5.1.0` | Declares the token policy on the SA itself, for consumers outside the chart |
 | `route.*.namespaceOverride` | `5.1.0` | Cross-namespace Route with an auto-generated `ReferenceGrant` |
 | `rollingUpdate.maxSurge` / `.maxUnavailable` | `5.1.0` | Upstream key names; `surge` / `unavailable` are deprecated |
+| `externalSecrets`           | `5.2.0` | `ExternalSecret` resources generated like `ConfigMap`/`Secret` |
+| `networkpolicies.*.type: cilium` / `ciliumClusterwide` | `5.2.0` | Renders a `CiliumNetworkPolicy` / `CiliumClusterwideNetworkPolicy` instead of the native `NetworkPolicy` (`type: native`, default) |
+| `listenerSets`              | `5.2.0` | Gateway API `ListenerSet` resources (initial support) |
+| `persistence.*.type: projected` | `5.2.0` | Native `projected` volume support |
 
 ## Best Practices
 

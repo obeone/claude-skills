@@ -1,7 +1,7 @@
 ![Helm](https://img.shields.io/badge/Helm-3.18+-0F1689?logo=helm&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-1.31+-326CE5?logo=kubernetes&logoColor=white)
-![bjw-s common](https://img.shields.io/badge/bjw--s_common-5.1.0-6E56CF)
-![Skill](https://img.shields.io/badge/skill-5.4.0-blue)
+![bjw-s common](https://img.shields.io/badge/bjw--s_common-5.2.1-6E56CF)
+![Skill](https://img.shields.io/badge/skill-5.5.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # helm-bjw-s-chart
@@ -25,7 +25,7 @@ StatefulSets, HPAs, NetworkPolicies, and the full 4 to 5 migration.
 
 | Feature | What you get |
 |---|---|
-| 🎯 **Version matrix** | New charts target `common 5.1.0` (Kubernetes 1.31+, Helm 3.18+). Pin `4.6.2` for legacy clusters and the skill adapts the patterns it emits. |
+| 🎯 **Version matrix** | New charts target `common 5.2.1` (Kubernetes 1.31+, Helm 3.18+). Pin `4.6.2` for legacy clusters and the skill adapts the patterns it emits. |
 | 🧭 **Quick-start workflow** | Five steps, from "understand the app" to `helm install --dry-run`, with the decision points spelled out. |
 | 📐 **Opinionated `values.yaml`** | One ordering everywhere: `defaultPodOptions`, `controllers`, `service`, `ingress`, `persistence`, `configMaps/secrets`. |
 | 🧩 **Pattern library** | Single container, sidecars, init containers, multi-controller, StatefulSets, HPA, PodMonitor, ephemeral volumes, NetworkPolicies with single-controller auto-targeting. The last four are 5.x only. |
@@ -33,6 +33,7 @@ StatefulSets, HPAs, NetworkPolicies, and the full 4 to 5 migration.
 | ✅ **Static validator** | Flags missing dependencies, a missing `Chart.lock`, unvendored `charts/` tarballs, 4.x migration debt, invalid or inert `strategy` / `rollingUpdate` keys, dangling controller/service references, schema-invalid shapes that render as silent no-ops, and the usual structural mistakes. |
 | 🐳 **Compose mapping** | A key-by-key table from a `compose.yaml` service to the equivalent bjw-s values, for conversions. |
 | 🆕 **5.1.0 additions** | DaemonSet `updateStrategy`, `automountServiceAccountToken` on the ServiceAccount itself, cross-namespace Routes with an auto-generated `ReferenceGrant`, and the `maxSurge` / `maxUnavailable` spellings that replace `surge` / `unavailable`. |
+| 🆕 **5.2.0 additions** | `ExternalSecret`, `CiliumNetworkPolicy` / `CiliumClusterwideNetworkPolicy`, initial `ListenerSet` support, default `topologySpreadConstraints` selectors, native `projected` persistence, and global string templating. `5.2.1` is a bugfix-only patch. |
 
 ## 🤔 Why
 
@@ -147,7 +148,7 @@ flowchart TB
 
     VALUES["values.yaml<br/>defaultPodOptions · controllers · service<br/>ingress · persistence · configMaps"]
 
-    VALUES --> DEP["helm dependency update<br/>vendor common 5.1.0, write Chart.lock"]
+    VALUES --> DEP["helm dependency update<br/>vendor common 5.2.1, write Chart.lock"]
     DEP --> VAL["validate_chart.py<br/>structure · Chart.lock · 4.x debt"]
     VAL --> RENDER["helm lint · helm template<br/>helm install --dry-run"]
 
@@ -164,8 +165,8 @@ flowchart TB
 
 ## 📝 Status
 
-`metadata.version: 5.4.0`. Default library `common 5.1.0`, released
-2026-08-16. The 4.x track is maintained, not developed: it gets migration
+`metadata.version: 5.5.0`. Default library `common 5.2.1`, released
+2026-09-17. The 4.x track is maintained, not developed: it gets migration
 guidance and validator warnings, not new patterns.
 
 ## 📄 License
