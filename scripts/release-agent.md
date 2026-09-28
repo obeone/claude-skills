@@ -27,9 +27,11 @@ locked, tag already taken, push refused), go to step 6 with the error.
 
 ## 4. Wait for the publish
 
-The tag push starts the `Publish Skills` workflow. Find its run with
-`gh run list --workflow publish-skills.yml --branch <new tag> --json databaseId,status`
-(retry for up to two minutes while it is not listed yet), then
+The tag push starts the `Publish Skills` workflow. List recent runs with
+`gh run list --workflow publish-skills.yml --event push --limit 10 --json databaseId,status,headBranch`
+and pick the one whose `headBranch` equals the new tag (retry for up to two
+minutes while it is not listed yet; if it never shows up, report that as
+"publish run not found", not as a failed publish), then
 `gh run watch <id> --exit-status`. On failure, grab the tail of
 `gh run view <id> --log-failed` and go to step 6.
 
