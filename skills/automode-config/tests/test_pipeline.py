@@ -23,7 +23,6 @@ import shutil
 import signal
 import stat
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -476,13 +475,8 @@ def test_acc10_critique_nonzero_hardfail(
     env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
 
     proposal = fixtures_dir / "proposal_minimal.json"
-    # Need to compute hash with a passing critique first; use claude_ok
-    # for the dry-run, then claude_fail for the commit.
-    bin_ok = _make_stub_path(tmp_path, stub_claude_dir / "claude_ok", link_name="claude_ok_link")
-    # Re-use bin dir naming so both stubs sit on PATH? Simpler: dry-run
-    # against claude_fail still emits "## Major issues + ## Smaller issues"
-    # on stderr but exits 1; that's caught at the critique step which
-    # only runs in commit mode. Dry-run does not invoke the critique.
+    # The dry-run can run against claude_fail: it never invokes the
+    # critique, so the stub's non-zero exit only bites at commit time.
     dry = subprocess.run(
         [
             UV, "run", str(apply),
