@@ -49,8 +49,9 @@ the tag is GPG-signed; `--dry-run` previews, `--force` releases even when
 1. Next tag = `v$(date +%Y.%m).<micro>` where `<micro>` is the highest
    existing `vYEAR.MONTH.*` tag + 1, or `0` if none this month. Legacy
    SemVer tags (`v4.1.0` and earlier) are ignored for this calculation.
-2. Pre-checks: `main == origin/main`, target commit pushed, and
-   `git rev-parse -q --verify refs/tags/<tag>` shows the tag is free.
+2. Pre-checks: the tag targets the fetched `origin/main` commit (the local
+   `main` is never used), and `git ls-remote --tags origin` shows the tag
+   is free.
    The `Publish Skills` workflow (trigger `v*`) is destructive if a
    published tag is rewritten.
 3. Annotated + GPG-signed tag, message `vYYYY.MM.MICRO - <summary>`.
