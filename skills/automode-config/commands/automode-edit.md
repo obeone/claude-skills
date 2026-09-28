@@ -128,6 +128,18 @@ Write the proposal to `/tmp/automode-edit-proposal.<unix-ts>.json`:
 }
 ```
 
+## Step 3b — self-critique loop (mandatory)
+
+Do not dry-run the first draft. Stop, read the proposal as the critic
+would (`claude auto-mode critique`, the AM001-AM004 lint, a teammate
+reading it cold), list every objection, rewrite, and repeat on the new
+version until a full pass finds no new major or minor objection. Cap at
+three passes; if majors remain, the request itself is unclear, so ask
+the user. Checklist: `skills/automode-config/references/self_critique.md`.
+
+A lint finding at Step 4 means the loop missed something: fix it and
+run one more pass before showing the diff.
+
 ## Step 4 — dry-run + show the diff
 
 Run:
@@ -168,6 +180,8 @@ Always show:
 - The exact new prose rule(s).
 - Whether `"$defaults"` survived in every section.
 - The canonical sha256 from the dry-run (so the user can audit).
+- How many self-critique passes ran, and any objection you chose not
+  to act on, with its one-line reason.
 
 Ask for explicit confirmation before Step 5. In auto mode the agent may
 proceed without asking when the change is low-risk (a non-hard_deny

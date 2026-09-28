@@ -2,7 +2,7 @@
 name: automode-config
 description: "Author, validate, and migrate Claude Code autoMode permission blocks (environment, allow, soft_deny, hard_deny) at project level. Writes .claude/settings.local.json behind a critique and sha256 gate; scans the user and shared settings for adoption candidates. Requires Claude Code 2.1.83+."
 metadata:
-  version: "0.8.0"
+  version: "0.9.0"
 tools:
   - Read
   - Write
@@ -50,7 +50,8 @@ write that drops it.
 uv run scripts/inspect_automode.py
 uv run scripts/scan_project.py --json
 
-# 2. Build a proposal (see below), then dry-run it for the canonical hash.
+# 2. Build a proposal (see below), self-critique it until it stops
+#    changing, then dry-run it for the canonical hash.
 uv run scripts/apply_automode.py --proposal proposal.json --mode auto --dry-run
 
 # 3. Commit with that hash as the gate predicate.
@@ -88,6 +89,15 @@ say into prose rules. Emit one JSON file covering all four sections:
 }
 ```
 
+## Self-critique before the dry-run (mandatory)
+
+Once the proposal is written, stop before running anything. Take the
+critic's seat, list every objection `claude auto-mode critique` and
+the lint would raise, rewrite the proposal, and run the pass again
+from scratch. Exit when a pass finds nothing new (cap: three passes,
+then ask the user). Checklist and exit rule:
+`references/self_critique.md`.
+
 The deterministic guards apply regardless of what the agent proposes,
 and regardless of whether the vendor critique is reachable: schema
 validation, a semantic lint over rule content (misses a bare-noun
@@ -119,6 +129,7 @@ Load on demand, not upfront.
 
 | File | Read it when |
 |---|---|
+| `references/self_critique.md` | always, once the proposal is written |
 | `references/cli.md` | you need a flag or an exit code |
 | `references/automode_doc_bible.md` | the schema or the classifier's semantics is in question |
 | `references/mental_model.md` | you need the full six-phase flow and decision tree |
