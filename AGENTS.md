@@ -42,7 +42,9 @@ Two **decoupled** version spaces — never align one to the other:
   month, `v2026.06.0` the next month). A tag means "a publish happened" —
   it is **not** the version of any skill.
 
-Tagging procedure:
+Tagging procedure, automated by `uv run scripts/release.py` (run locally so
+the tag is GPG-signed; `--dry-run` previews, `--force` releases even when
+`skills/` is unchanged since the last tag, otherwise it is a no-op):
 
 1. Next tag = `v$(date +%Y.%m).<micro>` where `<micro>` is the highest
    existing `vYEAR.MONTH.*` tag + 1, or `0` if none this month. Legacy

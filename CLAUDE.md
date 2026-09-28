@@ -74,7 +74,7 @@ Two version spaces, kept decoupled:
 - **Per-skill `metadata.version` is SemVer**, bumped for changes to that one skill.
 - **Repo release tags are CalVer** (`vYYYY.MM.MICRO`, e.g. `v2026.06.1`). A tag means "a publish happened", not a skill version.
 
-To cut a release: pick the next micro for the current month (`v$(date +%Y.%m).N`, N starting at 0 and incrementing per release that month), confirm `main` matches `origin/main` and the tag is free, then push an annotated GPG-signed tag. The `Publish Skills` workflow triggers on `v*` and builds the `.skill` assets. Legacy SemVer repo tags (`v4.1.0` and earlier) are ignored when computing the next micro.
+To cut a release, run `uv run scripts/release.py` locally (`--dry-run` to preview). It tags `origin/main` with the next micro for the current month (`v$(date +%Y.%m).N`, N starting at 0; legacy SemVer tags such as `v4.1.0` are ignored), as an annotated GPG-signed tag, and pushes it. It does nothing when `skills/` is unchanged since the last tag (`--force` overrides), so it is safe to run on a schedule after Dependabot auto-merges. The `Publish Skills` workflow triggers on `v*` and builds the `.skill` assets.
 
 ## Key Design Decisions
 
