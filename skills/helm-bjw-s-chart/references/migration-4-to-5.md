@@ -10,10 +10,15 @@ Official sources:
 - [Release notes — common-5.0.0](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.0.0)
 - [Release notes — common-5.0.1](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.0.1)
 - [Release notes — common-5.1.0](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.1.0)
+- [Release notes — common-5.2.0](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.2.0)
+- [Release notes — common-5.2.1](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.2.1)
 
-`common-5.1.0` (2026-08-16) is the current default pin. It adds features
-but no breaking change, so landing on it costs nothing beyond what this
-guide already covers.
+`common-5.2.1` (2026-09-17) is the current default pin. `5.2.0`
+(2026-09-16) added `ExternalSecret`/Cilium policy resources, initial
+`ListenerSet` support, default `topologySpreadConstraints` selectors,
+native `projected` persistence, and global string templating; `5.2.1` is
+a bugfix-only follow-up. None of it is a breaking change, so landing on
+the current pin costs nothing beyond what this guide already covers.
 
 ## Prerequisites
 
@@ -33,7 +38,7 @@ chart still pins 4.x.
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 5.1.0   # was 4.6.x
+    version: 5.2.1   # was 4.6.x
 ```
 
 Then:
