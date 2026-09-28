@@ -23,7 +23,6 @@ import shutil
 import signal
 import stat
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -72,6 +71,12 @@ def _scan_cli(scripts_dir: Path) -> Path:
 def _require(path: Path) -> None:
     if not path.exists():
         pytest.skip(f"required script missing: {path}")
+
+
+# Resolved once against the caller's PATH, so tests can clamp the child
+# PATH (no ~/.local/bin, where `claude` also installs) and still run uv
+# wherever it lives: /usr/local/bin, Homebrew, or ~/.local/bin.
+UV = shutil.which("uv") or "uv"
 
 
 def _system_path() -> str:
@@ -219,7 +224,7 @@ def test_acc05_concurrent_cli_lock_contention(
         # (dry-run doesn't lock).
         dry = subprocess.run(
             [
-                "uv", "run", str(apply),
+                UV, "run", str(apply),
                 "--project-root", str(project),
                 "--mode", "fresh",
                 "--proposal", str(proposal),
@@ -238,7 +243,7 @@ def test_acc05_concurrent_cli_lock_contention(
 
         proc = subprocess.run(
             [
-                "uv", "run", str(apply),
+                UV, "run", str(apply),
                 "--project-root", str(project),
                 "--mode", "fresh",
                 "--proposal", str(proposal),
@@ -303,7 +308,7 @@ def test_acc07_fresh_machine_create(
     proposal = fixtures_dir / "proposal_minimal.json"
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -341,7 +346,7 @@ def test_acc07_real_commit_creates_mode_0600(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -355,7 +360,7 @@ def test_acc07_real_commit_creates_mode_0600(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -412,7 +417,7 @@ def test_acc08_backup_mode_0600(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "migrate",
             "--proposal", str(proposal),
@@ -427,7 +432,7 @@ def test_acc08_backup_mode_0600(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "migrate",
             "--proposal", str(proposal),
@@ -470,16 +475,11 @@ def test_acc10_critique_nonzero_hardfail(
     env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
 
     proposal = fixtures_dir / "proposal_minimal.json"
-    # Need to compute hash with a passing critique first; use claude_ok
-    # for the dry-run, then claude_fail for the commit.
-    bin_ok = _make_stub_path(tmp_path, stub_claude_dir / "claude_ok", link_name="claude_ok_link")
-    # Re-use bin dir naming so both stubs sit on PATH? Simpler: dry-run
-    # against claude_fail still emits "## Major issues + ## Smaller issues"
-    # on stderr but exits 1; that's caught at the critique step which
-    # only runs in commit mode. Dry-run does not invoke the critique.
+    # The dry-run can run against claude_fail: it never invokes the
+    # critique, so the stub's non-zero exit only bites at commit time.
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -493,7 +493,7 @@ def test_acc10_critique_nonzero_hardfail(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -533,7 +533,7 @@ def test_acc11_contract_drift_hardfail(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -547,7 +547,7 @@ def test_acc11_contract_drift_hardfail(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -589,7 +589,7 @@ def test_acc12_hash_mismatch(
     bogus_hash = "0" * 64
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -651,7 +651,7 @@ def test_acc13_migrate_drop_all(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "migrate",
             "--migrate-strategy", "drop-all",
@@ -718,7 +718,7 @@ def test_acc14_migrate_keep_all_byte_equal(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "migrate",
             "--migrate-strategy", "keep-all",
@@ -820,7 +820,7 @@ def test_acc16_missing_claude_cli(
     proposal = fixtures_dir / "proposal_minimal.json"
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -836,7 +836,7 @@ def test_acc16_missing_claude_cli(
         assert h
         proc = subprocess.run(
             [
-                "uv", "run", str(apply),
+                UV, "run", str(apply),
                 "--project-root", str(project),
                 "--mode", "fresh",
                 "--proposal", str(proposal),
@@ -886,7 +886,7 @@ def test_acc17_stranded_state(
     proposal = fixtures_dir / "proposal_minimal.json"
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -939,7 +939,7 @@ def test_acc18_repair_restores(
 
     first = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--repair",
         ],
@@ -955,7 +955,7 @@ def test_acc18_repair_restores(
     # Second --repair must be a no-op (still exit 0, idempotent).
     second = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--repair",
         ],
@@ -988,7 +988,7 @@ def test_acc19_adopt_from_shared(
     env = _clean_env(tmp_path)
     proc = subprocess.run(
         [
-            "uv", "run", str(scan),
+            UV, "run", str(scan),
             "--project-root", str(project),
             "--include-shared",
             "--json",
@@ -1022,7 +1022,7 @@ def test_acc19_no_include_shared_omits_candidates(
     env = _clean_env(tmp_path)
     proc = subprocess.run(
         [
-            "uv", "run", str(scan),
+            UV, "run", str(scan),
             "--project-root", str(project),
             "--no-include-shared",
             "--json",
@@ -1066,7 +1066,7 @@ def test_acc20_no_write_shared_keeps_shared_byte_equal(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1080,7 +1080,7 @@ def test_acc20_no_write_shared_keeps_shared_byte_equal(
     assert h
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1119,7 +1119,7 @@ def test_acc20_write_shared_warning_printed(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1136,7 +1136,7 @@ def test_acc20_write_shared_warning_printed(
     # short-circuit). The phase 4 path must still emit the warning.
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1190,7 +1190,7 @@ def test_acc21_multi_file_inspect(
     env = _clean_env(tmp_path, home=home)
     proc = subprocess.run(
         [
-            "uv", "run", str(inspect),
+            UV, "run", str(inspect),
             "--project-root", str(project),
             "--json",
         ],
@@ -1210,7 +1210,7 @@ def test_acc21_multi_file_inspect(
     (project_claude / "settings.local.json").unlink()
     proc2 = subprocess.run(
         [
-            "uv", "run", str(inspect),
+            UV, "run", str(inspect),
             "--project-root", str(project),
             "--json",
         ],
@@ -1278,7 +1278,7 @@ def test_acc22_auto_fresh_migrate_detection(
     proposal = fixtures_dir / "proposal_minimal.json"
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project_b),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1308,7 +1308,7 @@ def test_acc23_gitignore_check_warns_when_missing(
     env = _clean_env(tmp_path)
     proc = subprocess.run(
         [
-            "uv", "run", str(scan),
+            UV, "run", str(scan),
             "--project-root", str(project),
             "--check-gitignore",
             "--json",
@@ -1336,7 +1336,7 @@ def test_acc23_gitignore_check_silent_when_covered(
     env = _clean_env(tmp_path)
     proc = subprocess.run(
         [
-            "uv", "run", str(scan),
+            UV, "run", str(scan),
             "--project-root", str(project),
             "--check-gitignore",
             "--json",
@@ -1409,7 +1409,7 @@ def test_inspect_show_drift_exit_6(
     env = _clean_env(tmp_path, home=home)
     proc = subprocess.run(
         [
-            "uv", "run", str(inspect),
+            UV, "run", str(inspect),
             "--project-root", str(project),
             "--show-drift",
             "--json",
@@ -1447,7 +1447,7 @@ def test_inspect_no_drift_when_cache_matches(
     env = _clean_env(tmp_path, home=home)
     proc = subprocess.run(
         [
-            "uv", "run", str(inspect),
+            UV, "run", str(inspect),
             "--project-root", str(project),
             "--show-drift",
             "--file", "local",
@@ -1479,7 +1479,7 @@ def test_scan_project_human_output(
     env = _clean_env(tmp_path)
     proc = subprocess.run(
         [
-            "uv", "run", str(scan),
+            UV, "run", str(scan),
             "--project-root", str(project),
         ],
         env=env, capture_output=True, timeout=60,
@@ -1704,7 +1704,7 @@ def test_acc24_migrate_drop_all_resets_hard_deny(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "migrate",
             "--migrate-strategy", "drop-all",
@@ -1763,7 +1763,7 @@ def test_acc24_scan_shared_hard_deny_candidates(
     env = _clean_env(tmp_path)
     proc = subprocess.run(
         [
-            "uv", "run", str(scan),
+            UV, "run", str(scan),
             "--project-root", str(project),
             "--include-shared",
             "--json",
@@ -1814,7 +1814,7 @@ def test_acc24_critique_section_validation_off_by_default(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1829,7 +1829,7 @@ def test_acc24_critique_section_validation_off_by_default(
     # Without --strict-critique-sections: exit 0 (drift is ignored).
     proc_permissive = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1847,7 +1847,7 @@ def test_acc24_critique_section_validation_off_by_default(
     # Re-compute hash since the first run wrote the file (migrate mode now).
     dry2 = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "migrate",
             "--migrate-strategy", "keep-all",
@@ -1862,7 +1862,7 @@ def test_acc24_critique_section_validation_off_by_default(
 
     proc_strict = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "migrate",
             "--migrate-strategy", "keep-all",
@@ -1914,7 +1914,7 @@ def test_acc25_empty_critique_fails_the_gate(
 
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1927,7 +1927,7 @@ def test_acc25_empty_critique_fails_the_gate(
     assert h, "could not extract canonical hash from dry-run"
 
     commit_args = [
-        "uv", "run", str(apply),
+        UV, "run", str(apply),
         "--project-root", str(project),
         "--mode", "fresh",
         "--proposal", str(proposal),
@@ -1985,7 +1985,7 @@ def test_acc24_critique_archived_on_success(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -1999,7 +1999,7 @@ def test_acc24_critique_archived_on_success(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2048,7 +2048,7 @@ def test_acc24_critique_archived_on_failure(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2062,7 +2062,7 @@ def test_acc24_critique_archived_on_failure(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2155,7 +2155,7 @@ def test_v041_swap_path_runs_silently_when_settings_unsupported(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2169,7 +2169,7 @@ def test_v041_swap_path_runs_silently_when_settings_unsupported(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2216,7 +2216,7 @@ def test_v041_deprecated_flag_still_accepted_with_warning(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2231,7 +2231,7 @@ def test_v041_deprecated_flag_still_accepted_with_warning(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2284,7 +2284,7 @@ def test_v042_apply_then_inspect_reports_no_drift(
     proposal = fixtures_dir / "proposal_minimal.json"
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2298,7 +2298,7 @@ def test_v042_apply_then_inspect_reports_no_drift(
 
     commit = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2312,7 +2312,7 @@ def test_v042_apply_then_inspect_reports_no_drift(
 
     drift = subprocess.run(
         [
-            "uv", "run", str(inspect),
+            UV, "run", str(inspect),
             "--project-root", str(project),
             "--show-drift",
             "--file", "local",
@@ -2398,7 +2398,7 @@ def _run_swap_commit(
 
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2412,7 +2412,7 @@ def _run_swap_commit(
 
     return subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2657,7 +2657,7 @@ def test_swap_does_not_change_the_approved_hash(
         env = _clean_env(tmp_path, extra_path=[str(bin_dir)], home=home)
         dry = subprocess.run(
             [
-                "uv", "run", str(apply),
+                UV, "run", str(apply),
                 "--project-root", str(project),
                 "--mode", "fresh",
                 "--proposal", str(proposal),
@@ -2673,7 +2673,7 @@ def test_swap_does_not_change_the_approved_hash(
         # And the gate accepts that hash on the real (swapping) run.
         commit = subprocess.run(
             [
-                "uv", "run", str(apply),
+                UV, "run", str(apply),
                 "--project-root", str(project),
                 "--mode", "fresh",
                 "--proposal", str(proposal),
@@ -2787,7 +2787,7 @@ def test_lint_error_blocks_dry_run_without_printing_the_hash(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2827,7 +2827,7 @@ def test_lint_no_lint_bypasses_the_gate(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2865,7 +2865,7 @@ def test_lint_warning_prints_but_does_not_block(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2907,7 +2907,7 @@ def test_lint_strict_makes_warnings_block(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2945,7 +2945,7 @@ def test_lint_no_lint_wins_over_lint_strict(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -2985,7 +2985,7 @@ def test_lint_silent_on_a_clean_proposal(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3044,7 +3044,7 @@ def test_lint_am003_scans_the_real_project_root(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3103,7 +3103,7 @@ def _dry_run_hash(
 
     dry = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3157,7 +3157,7 @@ def test_settings_flag_critique_reviews_the_proposal(
     h = _dry_run_hash(apply, env, project, proposal)
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3259,7 +3259,7 @@ def _spawn_swap_run(
 
     proc = subprocess.Popen(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3332,7 +3332,7 @@ def test_sigkill_mid_critique_leaves_a_sentinel_repair_reclaims(
     apply = _apply_cli(scripts_dir)
     env = _clean_env(tmp_path, home=home)
     repair = subprocess.run(
-        ["uv", "run", str(apply), "--project-root", str(project), "--repair"],
+        [UV, "run", str(apply), "--project-root", str(project), "--repair"],
         env=env, capture_output=True, timeout=60,
     )
     assert repair.returncode == EXIT_OK, repair.stderr.decode("utf-8", "replace")
@@ -3435,7 +3435,7 @@ def test_the_skill_itself_never_echoes_the_merged_document(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3496,7 +3496,7 @@ def test_history_dir_gitignore_warning_fires_when_the_cli_echoes_settings(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3553,7 +3553,7 @@ def test_history_dir_gitignore_warning(
         h = _dry_run_hash(apply, env, project, proposal)
         proc = subprocess.run(
             [
-                "uv", "run", str(apply),
+                UV, "run", str(apply),
                 "--project-root", str(project),
                 "--mode", "fresh",
                 "--proposal", str(proposal),
@@ -3633,7 +3633,7 @@ def test_repair_reclaims_a_stranded_write_temp(
     # A normal run refuses to proceed while the temp is stranded.
     blocked = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--dry-run",
@@ -3647,7 +3647,7 @@ def test_repair_reclaims_a_stranded_write_temp(
     )
 
     repair = subprocess.run(
-        ["uv", "run", str(apply), "--project-root", str(project), "--repair"],
+        [UV, "run", str(apply), "--project-root", str(project), "--repair"],
         env=env, capture_output=True, timeout=60,
     )
     assert repair.returncode == EXIT_OK, repair.stderr.decode("utf-8", "replace")
@@ -3771,7 +3771,7 @@ def test_dropped_pattern_literals_are_repaired_not_fatal(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3850,7 +3850,7 @@ def test_proposal_carrying_hooks_is_rejected_before_any_write(
     env = _lint_env(tmp_path, stub_claude_dir, home)
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3916,7 +3916,7 @@ def test_commit_preserves_other_local_settings_keys(
 
     proc = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--proposal", str(proposal),
@@ -3986,7 +3986,7 @@ def test_repair_reclaims_every_atomic_write_temp(
 
     blocked = subprocess.run(
         [
-            "uv", "run", str(apply),
+            UV, "run", str(apply),
             "--project-root", str(project),
             "--mode", "fresh",
             "--dry-run",
@@ -3999,7 +3999,7 @@ def test_repair_reclaims_every_atomic_write_temp(
     )
 
     repair = subprocess.run(
-        ["uv", "run", str(apply), "--project-root", str(project), "--repair"],
+        [UV, "run", str(apply), "--project-root", str(project), "--repair"],
         env=env, capture_output=True, timeout=60,
     )
     assert repair.returncode == EXIT_OK, repair.stderr.decode("utf-8", "replace")

@@ -209,10 +209,20 @@ def install_signal_release(handle: LockHandle) -> None:
     """Install best-effort SIGTERM/SIGINT handlers that release ``handle``.
 
     The original handlers are chained so the process still terminates.
+    Only the first signal is acted on: a second one (``uv run`` relays
+    the SIGTERM a process-group kill already delivered) would otherwise
+    raise ``SystemExit`` inside the ``finally`` blocks that are restoring
+    state on the way out, and abort them half-done.
     """
+
+    fired = False
 
     def _make(orig):
         def _handler(signum, frame):
+            nonlocal fired
+            if fired:
+                return
+            fired = True
             try:
                 release(handle)
             finally:

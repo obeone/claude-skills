@@ -1,6 +1,6 @@
 ![Claude Code](https://img.shields.io/badge/Claude_Code-2.1.83+-5A67D8?logo=anthropic&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-uv_+_PEP_723-3776AB?logo=python&logoColor=white)
-![Skill](https://img.shields.io/badge/skill-0.7.1-blue)
+![Skill](https://img.shields.io/badge/skill-0.9.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # automode-config
@@ -27,6 +27,7 @@ silently.
 | Feature | What you get |
 |---|---|
 | 🧱 **Four-section schema** | Only `environment`, `allow`, `soft_deny`, `hard_deny` are accepted. Legacy `deny` migrates to `soft_deny`; `ask` is dropped with a warning. |
+| 🪞 **Self-critique loop** | Before any dry-run, the agent reviews its own proposal as the critic would, rewrites, and repeats until a pass finds nothing new, so the real critique is not a round-trip generator. |
 | 🔐 **Critique gate** | `claude auto-mode critique` runs once per commit, and a zero exit is not enough on its own (see below). Raw output archived per run. |
 | 🧮 **Hash gate** | A `--dry-run` prints the canonical sha256; the commit only proceeds if you hand that exact hash back. |
 | 💾 **Atomic and reversible** | Per-file flock, `O_EXCL` write, `os.replace`, five rolling backups, rollback line printed at the end. |
@@ -220,6 +221,7 @@ on demand.
 | `references/mental_model.md` | You want the full six-phase flow and decision tree |
 | `references/three_files.md` | A per-file mode, gotcha, or precedence question comes up |
 | `references/migration.md` | Adopting existing rules, or picking a `--migrate-strategy` |
+| `references/self_critique.md` | Always, once a proposal is written, before the dry-run |
 | `references/critique_workflow.md` | The critique misbehaves, drifts, or the swap-file path triggers |
 | `references/canonicalization.md` | Byte-level output, fixtures, or `__example_only` |
 | `references/recovery.md` | A write failed, or you need rollback and `--repair` |

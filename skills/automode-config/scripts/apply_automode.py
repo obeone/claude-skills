@@ -32,7 +32,6 @@ import json
 import os
 import re
 import shutil
-import signal
 import stat
 import subprocess
 import sys
@@ -63,7 +62,6 @@ from _locks import (  # noqa: E402
     reclaim_if_stale,
 )
 from _paths import (  # noqa: E402
-    EXPECTED_PARENT_MODE,
     EXPECTED_SECRET_MODE,
     PROJECT_DIR,
     ProjectFiles,
@@ -1251,7 +1249,7 @@ def _interview(
             decisions.append((entry, "quit"))
             return kept, decisions
         elif answer.startswith("e"):
-            sys.stdout.write(f"  new value (JSON, blank = keep): ")
+            sys.stdout.write("  new value (JSON, blank = keep): ")
             sys.stdout.flush()
             new_raw = sys.stdin.readline().strip()
             if not new_raw:
@@ -1697,7 +1695,7 @@ def _run(args: argparse.Namespace) -> int:
     if args.dry_run:
         sys.stdout.write(canonical.decode("utf-8"))
         _eprint(f"\ndry-run canonical sha256: {proposal_hash}")
-        _eprint(f"to commit: rerun without --dry-run, passing")
+        _eprint("to commit: rerun without --dry-run, passing")
         _eprint(f"  --approved-canonical-hash {proposal_hash}")
         return EXIT_OK
 
