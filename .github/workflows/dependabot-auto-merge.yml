@@ -25,7 +25,10 @@ jobs:
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor'
         run: |
-          gh pr review --approve "$PR_URL"
+          # Approval needs "Allow GitHub Actions to create and approve pull
+          # requests" in repo settings; don't let it block enabling auto-merge.
+          gh pr review --approve "$PR_URL" \
+            || echo "::warning::Could not approve $PR_URL (Actions approval disabled in repo settings?)"
           gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
