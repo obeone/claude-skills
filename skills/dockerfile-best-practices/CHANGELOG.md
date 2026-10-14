@@ -4,6 +4,19 @@ All notable changes to the `dockerfile-best-practices` skill are recorded here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The skill is versioned with [Semantic Versioning](https://semver.org/spec/v2.0.0.html), tracking `metadata.version` in `SKILL.md`.
 
+## [3.3.1] - 2026-10-14
+
+Documentation only: the READMEs had not followed 3.3.0.
+
+### Fixed
+
+- **`README.md`** now describes what 3.3.0 added: a feature row for the
+  frontend 1.20 to 1.28 coverage, the measured note that the upstream reference
+  is wrong about `--chown`, the new reference sections, `scripts/tests/` in the
+  layout, and 32 analyzer rules in the diagram instead of 31.
+- **The repository README** lists 3.3.1 and mentions the frontend coverage and
+  the empty `--chown` group case.
+
 ## [3.3.0] - 2026-10-14
 
 The skill's content was written against Dockerfile frontend 1.19. The frontend

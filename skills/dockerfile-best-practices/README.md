@@ -1,7 +1,7 @@
 ![Docker](https://img.shields.io/badge/Docker-BuildKit-2496ED?logo=docker&logoColor=white)
 ![Compose](https://img.shields.io/badge/Compose-V2-2496ED?logo=docker&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-uv_+_PEP_723-3776AB?logo=python&logoColor=white)
-![Skill](https://img.shields.io/badge/skill-3.3.0-blue)
+![Skill](https://img.shields.io/badge/skill-3.3.1-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # dockerfile-best-practices
@@ -30,6 +30,7 @@ most common Docker and Compose mistakes.
 | 🐙 **Compose V2 ruleset** | No `version:`, no `container_name:`, no `links:`, pinned tags, `depends_on` with `condition: service_healthy`, plus runtime hardening (`read_only`, `cap_drop`, `no-new-privileges`, `init`). |
 | 🔎 **Two static analyzers** | 32 Dockerfile checks, 19 Compose checks. Findings carry a severity and a stable rule id that points back at the rule it violated. |
 | 🩺 **PID 1 and signals** | Why a shell-form `CMD` makes your container ignore `docker stop` for the entire grace period, and the three ways out in preference order. |
+| 🆕 **Frontend 1.28, measured** | Per-instruction `# check=skip=`, `RUN --device` for GPU steps, `SOURCE_DATE_EPOCH` declared in the Dockerfile, per-step resource limits, and `--chown` semantics across frontends. Every behaviour was checked on a real daemon, which is how the skill caught the upstream reference getting `--chown` wrong. |
 | 🔗 **Linter interop** | Where these rules overlap with `docker build --check` and [DCLint](https://github.com/zavoloklom/docker-compose-linter), and where each tool is the only possible net. |
 
 ## 🤔 Why
@@ -65,7 +66,8 @@ later in the same stage: the modern BuildKit frontend does not fail on
 that, it silently drops the `--chown` and copies the files as root. The
 build stays green, `docker build --check` sees nothing, and the image
 only breaks on the first runtime write. A static rule is the only
-possible net.
+possible net. The official Dockerfile reference now claims that case
+fails the build. Measured on frontend 1.28, it still does not.
 
 ---
 
@@ -144,10 +146,10 @@ loads on demand.
 | Reference | Read it when |
 |---|---|
 | `references/templates.md` | You know the stack and want the starting Dockerfile: Python with `uv`, Node.js, Go, Rust, PHP, Debian. |
-| `references/best_practices.md` | You want the complete checklist with impact levels, the pinning doctrine and the digest tradeoff, UID/GID strategy, PID 1 and signal handling. |
+| `references/best_practices.md` | You want the complete checklist with impact levels, the pinning doctrine and the digest tradeoff, UID/GID strategy, PID 1 and signal handling, measured `--chown` semantics, `RUN --device` and `--security`, the frontend version → feature table. |
 | `references/optimization_guide.md` | You are chasing build time or image size: BuildKit internals, caching strategies, multi-stage, distroless, profiling. |
-| `references/build_checks.md` | You are wiring `docker build --check` and its 21 built-in rules into CI. |
-| `references/supply_chain.md` | Provenance attestations, SBOMs, signing, and the tooling that renews a pinned digest. |
+| `references/build_checks.md` | You are wiring `docker build --check` and its 21 built-in rules into CI, or need to skip one rule for one instruction. |
+| `references/supply_chain.md` | Provenance attestations, SBOMs, signing, reproducible timestamps with `SOURCE_DATE_EPOCH`, and the tooling that renews a pinned digest. |
 | `references/examples.md` | You want 15 before/after optimization scenarios. |
 | `references/uv_integration.md` | Python with `uv`: installation methods, workspaces, multi-stage, every pattern. |
 | `references/compose_best_practices.md` | Compose deep dive: networks, volumes, secrets, dev versus prod, scaling. |
@@ -161,6 +163,7 @@ loads on demand.
 | `scripts/analyze_dockerfile.py` | Dockerfile static analyzer, standard library only |
 | `scripts/analyze_compose.py` | Compose static analyzer |
 | `scripts/extract_dockerfile_blocks.py` | Lints the skill's own fenced examples in CI |
+| `scripts/tests/` | Unit tests for the extractor and the analyzer, run in CI |
 | `assets/dockerignore-template` | Blocklist template, with an allowlist variant |
 | `references/` | The eight deep-dive documents above |
 
@@ -176,7 +179,7 @@ flowchart TB
     TPL --> DF["Dockerfile<br/>syntax directive · cache and secret mounts<br/>non-root UID above 10000"]
     APP --> CF["compose.yaml<br/>no version: · healthy depends_on<br/>runtime hardening"]
 
-    DF --> AN1["analyze_dockerfile.py<br/>31 rules"]
+    DF --> AN1["analyze_dockerfile.py<br/>32 rules"]
     CF --> AN2["analyze_compose.py<br/>19 rules"]
 
     AN1 --> BC["docker build --check<br/>BuildKit's own linter"]
@@ -190,7 +193,7 @@ flowchart TB
 
 ## 📝 Status
 
-`metadata.version: 3.3.0`. The ruleset is stable; rule ids are a public
+`metadata.version: 3.3.1`. The ruleset is stable; rule ids are a public
 contract and are never reused.
 
 ## 📄 License

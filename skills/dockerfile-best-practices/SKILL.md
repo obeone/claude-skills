@@ -2,7 +2,7 @@
 name: dockerfile-best-practices
 description: "Create and optimize Dockerfiles and Compose files with BuildKit, multi-stage builds, cache mounts, and non-root hardening. Also triggers on container images, build performance, or Docker security, even without the word 'Dockerfile'."
 metadata:
-  version: "3.3.0"
+  version: "3.3.1"
 ---
 
 # Dockerfile Best Practices
