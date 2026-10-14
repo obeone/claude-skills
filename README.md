@@ -17,7 +17,7 @@ agent needs to do one job well, with no dependency on the others.
 
 | Skill | Version | What it does | Highlights |
 |---|---|---|---|
-| [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | 3.2.0 | Create and optimize Dockerfiles and Compose files | BuildKit syntax, cache mounts, non-root users, 30+ analyzer rules, DCLint interop |
+| [**dockerfile-best-practices**](./skills/dockerfile-best-practices/) | 3.3.0 | Create and optimize Dockerfiles and Compose files | BuildKit syntax up to frontend 1.28, cache mounts, non-root users, 30+ analyzer rules, DCLint interop |
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.4.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
 | [**automode-config**](./skills/automode-config/) | 0.9.0 | Author, validate, and migrate project-level `autoMode` blocks | Four official sections, critique gate, sha256 hash gate, atomic flock writes |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | 1.0.0 | Generate importable Apple Shortcuts for macOS and iOS | Native and third-party action catalogs, validator, inspector, App Intents discovery |
@@ -164,7 +164,8 @@ Every skill follows the same layout, so an agent that knows one knows them all:
 - **Language templates**: Python/uv, Node.js, Go, Rust, PHP, Debian
 - **Security patterns**: non-root users (UID/GID above 10000), secret mounts, SBOM and provenance attestations
 - **Performance**: cache mounts, multi-stage builds, layer ordering
-- **Static analyzer**: 30+ rules, including defects a green build never reveals (a `--chown` silently discarded to root, a healthcheck calling a binary the image does not ship)
+- **Static analyzer**: 30+ rules, including defects a green build never reveals (a `--chown` silently discarded to root, an empty `--chown` group that meant GID 0 before frontend 1.28, a healthcheck calling a binary the image does not ship)
+- **Current frontend, measured**: Dockerfile frontend features through 1.28 (per-instruction `# check=skip=`, `RUN --device`, `SOURCE_DATE_EPOCH=context`, per-step resource limits), each verified on a real daemon, including where the upstream docs are wrong
 - **Compose support**: V2 practices (no `version:` field, runtime hardening, `container_name:` only where you will never `--scale`)
 - **Linting, ours and everyone else's**: where `docker build --check`, hadolint, [DCLint](https://github.com/zavoloklom/docker-compose-linter) and this repo's analyzers overlap, and where each is the only tool that catches a given defect
 - **Compose file naming**: all four names Compose V2 accepts are valid, so the skill matches whatever the project already uses, asks once when there is no precedent, and remembers the answer
