@@ -1,7 +1,7 @@
 ![Docker](https://img.shields.io/badge/Docker-BuildKit-2496ED?logo=docker&logoColor=white)
 ![Compose](https://img.shields.io/badge/Compose-V2-2496ED?logo=docker&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-uv_+_PEP_723-3776AB?logo=python&logoColor=white)
-![Skill](https://img.shields.io/badge/skill-3.3.0-blue)
+![Skill](https://img.shields.io/badge/skill-3.3.1-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # dockerfile-best-practices
@@ -193,7 +193,7 @@ flowchart TB
 
 ## 📝 Status
 
-`metadata.version: 3.3.0`. The ruleset is stable; rule ids are a public
+`metadata.version: 3.3.1`. The ruleset is stable; rule ids are a public
 contract and are never reused.
 
 ## 📄 License
