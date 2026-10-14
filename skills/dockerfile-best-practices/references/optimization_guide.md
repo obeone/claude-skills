@@ -41,10 +41,14 @@ BuildKit became the default build engine in Docker Engine 23.0. It provides:
 **Best practice:**
 
 ```dockerfile
-# syntax=docker/dockerfile:1  # Latest stable v1
-# or for specific version:
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1
 ```
+
+`:1` is the latest stable 1.x, which is what you want. A parser directive takes
+no trailing comment, so annotate on another line. Pinning a minor
+(`docker/dockerfile:1.28`) is the narrow exception covered in
+[build_checks.md](build_checks.md); the feature-to-version table is in
+[best_practices.md](best_practices.md).
 
 **Without this directive:** You may use an older embedded parser, missing optimizations and bug fixes.
 
@@ -223,12 +227,12 @@ The most common error in this area is treating "receives security patches" and
 **process**.
 
 1. **Pin a readable tag, as specific as you are willing to maintain.**
-   `python:3.12-slim` is fine. `python:3.12-slim-bookworm` is equally fine: an
+   `python:3.14-slim` is fine. `python:3.14-slim-trixie` is equally fine: an
    OS-pinned tag is a legitimate stability choice, not a mistake.
 1. **`:latest` and untagged images stay rejected** (DL002 error, DL003 warning).
    Not because mutability is uniquely evil there, but because they carry zero
    information about what you are actually running.
-1. **Every tag is mutable.** `python:3.12-slim` today and `python:3.12-slim` in
+1. **Every tag is mutable.** `python:3.14-slim` today and `python:3.14-slim` in
    six months are different bytes. A tag is documentation and a rough contract,
    not a reproducibility mechanism. Implying otherwise is the actual hazard.
 1. **Security updates come from rebuilding regularly**, not from your choice of
@@ -239,7 +243,7 @@ The most common error in this area is treating "receives security patches" and
    metadata. Provenance attestations do exactly the latter, so see
    `references/supply_chain.md` rather than rebuilding the argument here.
 
-**Digests, honestly.** A digest (`FROM python:3.12-slim@sha256:<digest>`) is the
+**Digests, honestly.** A digest (`FROM python:3.14-slim@sha256:<digest>`) is the
 strongest guarantee available: it names exact bytes. It also comes with a
 maintenance bill. Without renewal automation, a digest is just a tag that rots
 silently, and you ship known CVEs while feeling rigorous, which is worse than a
@@ -438,6 +442,23 @@ docker buildx build \
 - `type=gha` - GitHub Actions cache
 - `type=s3` - S3 bucket (experimental)
 
+### Per-step resource limits
+
+Since frontend 1.25 on BuildKit 0.31+, `buildx build` accepts the classic
+`--memory`, `--memory-swap`, `--cpu-shares`, `--cpu-period`, `--cpu-quota`,
+`--cpuset-cpus` and `--cpuset-mems` flags again, applied to each `RUN` step
+(Bake targets and Compose `x-bake` take the same fields). Linux builders only.
+
+```bash
+docker buildx build --memory 4g --cpu-quota 200000 -t myapp .
+```
+
+Two things to know before relying on them. They apply **per step**, and BuildKit
+runs independent steps in parallel, so four parallel stages at `--memory 4g` can
+use 16 GB. And they are not part of the cache key: a step that was cached
+without limits stays cached with them. Use them to stop one runaway compile from
+taking a shared runner down, not as a budget for the whole build.
+
 ---
 
 ## Multi-Stage Builds
@@ -497,7 +518,7 @@ resolved to. You are skipping a translation step, not losing anything.
 **Named stages:**
 
 ```dockerfile
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 # ...
 
 FROM nginx:1.29-alpine AS runtime
@@ -550,10 +571,14 @@ EOF
 
 | Instruction | Local | URL | Auto-extract | Recommendation |
 | --- | --- | --- | --- | --- |
-| COPY | ✅ | ❌ | ❌ | **Preferred** |
-| ADD | ✅ | ✅ | ✅ | Avoid |
+| COPY | ✅ | ❌ | ❌ | **Preferred** for the build context |
+| ADD | ✅ | ✅ | ✅ | Remote artifacts, always with `--checksum` |
 
-**Always use COPY** unless you specifically need URL download or tar extraction.
+**Use COPY** for anything in the build context. `ADD --checksum=sha256:<hash>
+<url>` is the right tool for a remote artifact, and git refs are a legitimate
+`ADD` source too. Never `ADD` a local archive you did not build: extraction is
+implicit. Archives it recognizes are gzip, bzip2, xz and, since frontend 1.27,
+zstd; `--unpack=true|false` makes the behaviour explicit for URLs.
 
 **COPY --link (BuildKit):**
 
@@ -632,7 +657,7 @@ docker buildx build --secret id=api_token,env=API_TOKEN .
 
 2. **Base image:**
    - Choose by what you ship: static binary, C extensions, or CVE posture
-   - Pin a readable tag as specific as you will maintain (`python:3.12-slim`)
+   - Pin a readable tag as specific as you will maintain (`python:3.14-slim`)
    - Never `:latest`, never untagged
    - Rebuild on a schedule: that, not the tag, is what patches you
 
@@ -690,8 +715,8 @@ Legend: 🔥 = Impact level (1-3)
 # syntax=docker/dockerfile:1
 
 # --- Build stage ---
-FROM python:3.12-slim-bookworm AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+FROM python:3.14-slim-trixie AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -707,7 +732,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
 # --- Runtime stage ---
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-trixie
 
 WORKDIR /app
 
@@ -754,7 +779,7 @@ for this, which is exactly why it survives code review.
 **Two things worth reading closely in that healthcheck**, because the obvious
 version of it is wrong:
 
-- **It uses only what the image ships.** `python:3.12-slim` has Python, so a
+- **It uses only what the image ships.** `python:3.14-slim` has Python, so a
   stdlib one-liner always runs. The tempting `import requests` does not: nothing
   installs `requests` into the runtime stage unless your project depends on it,
   and a healthcheck that crashes on `ImportError` reports unhealthy for a reason
@@ -856,7 +881,7 @@ Use `TARGETARCH` and `TARGETOS` build arguments:
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Automatic build args
 ARG TARGETARCH
@@ -966,7 +991,7 @@ docker buildx imagetools inspect registry.com/myapp:latest
 
    ```dockerfile
    # Native toolchain, no QEMU. See the $BUILDPLATFORM section above.
-   FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
+   FROM --platform=$BUILDPLATFORM node:24-alpine AS builder
    ```
 
 1. **Separate arch-specific layers:**
@@ -1124,7 +1149,7 @@ is the case for `base-debian13` (glibc) or `cc-debian13` (glibc plus libstdc++).
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 COPY package.json yarn.lock ./

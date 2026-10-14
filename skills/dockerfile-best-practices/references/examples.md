@@ -7,7 +7,7 @@ Real-world examples of Dockerfile optimizations using BuildKit.
 **Input:**
 
 ```dockerfile
-FROM debian:bookworm
+FROM debian:trixie
 RUN apt-get update && apt-get install -y curl
 ```
 
@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y curl
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM debian:bookworm
+FROM debian:trixie
 
 # Configure APT to keep downloaded packages for cache
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 **Input (⚠️ INSECURE):**
 
 ```dockerfile
-FROM alpine:3.19
+FROM alpine:3.24
 ARG TOKEN
 RUN curl -H "Authorization: Bearer $TOKEN" https://api.example.com
 ```
@@ -53,7 +53,7 @@ RUN curl -H "Authorization: Bearer $TOKEN" https://api.example.com
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM alpine:3.19
+FROM alpine:3.24
 
 # Secure secret access without ARG/ENV – avoids leakage
 RUN --mount=type=secret,id=api_token \
@@ -80,7 +80,7 @@ docker buildx build --secret id=api_token,src=./token.txt .
 
 ```dockerfile
 # Anti-pattern: single stage ships the Go toolchain and source in the runtime
-FROM golang:1.21
+FROM golang:1.27
 WORKDIR /app
 COPY . .
 RUN go build -o app
@@ -93,7 +93,7 @@ CMD ["./app"]
 # syntax=docker/dockerfile:1
 
 # --- Build stage ---
-FROM golang:1.21-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -131,7 +131,7 @@ ENTRYPOINT ["/main"]
 **Input:**
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 COPY . /app
 ```
 
@@ -140,7 +140,7 @@ COPY . /app
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Use link-based copy for better rebase/cache reuse
 COPY --link . /app
@@ -159,7 +159,7 @@ COPY --link . /app
 **Input:**
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY package.json yarn.lock ./
 RUN yarn install
@@ -171,7 +171,7 @@ COPY . .
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 # Install dependencies using persistent BuildKit cache
@@ -196,7 +196,7 @@ COPY . .
 
 ```dockerfile
 # Anti-pattern: full python image, no dependency cache, and the app runs as root
-FROM python:3.11
+FROM python:3.14
 WORKDIR /app
 COPY . .
 RUN pip install -r requirements.txt
@@ -208,7 +208,7 @@ CMD ["python", "main.py"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Create the user first, with explicit IDs. --system alone would let the base
 # image pick a free low UID (it lands on 100 here), which collides with host
@@ -244,7 +244,7 @@ CMD ["python", "main.py"]
 **Input:**
 
 ```dockerfile
-FROM php:8.2-fpm
+FROM php:8.4-fpm
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev
@@ -256,7 +256,7 @@ COPY . .
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM php:8.2-fpm-alpine
+FROM php:8.4-fpm-alpine
 WORKDIR /app
 
 # Install Composer. Pin the tag: ":latest" would silently change the Composer
@@ -312,7 +312,7 @@ docker buildx build \
 **Input:**
 
 ```dockerfile
-FROM alpine:3.19
+FROM alpine:3.24
 COPY nginx.conf /etc/nginx/nginx.conf
 ```
 
@@ -321,7 +321,7 @@ COPY nginx.conf /etc/nginx/nginx.conf
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM alpine:3.19
+FROM alpine:3.24
 
 # Reuse config directly from nginx base image
 COPY --from=nginx:1.27-alpine /etc/nginx/nginx.conf /etc/nginx/nginx.conf
@@ -422,7 +422,7 @@ out of an example.
 
 ```dockerfile
 # Anti-pattern: useradd with no explicit UID takes whatever the base image has free
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 COPY . .
@@ -440,7 +440,7 @@ CMD ["python", "app.py"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Create non-root user with UID/GID >10000 (safe range)
 RUN groupadd -r -g 10001 app && \
@@ -478,7 +478,7 @@ CMD ["python", "app.py"]
 
 ```dockerfile
 # Anti-pattern: no cache mount, and the app runs as root
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 COPY . .
@@ -494,7 +494,7 @@ CMD ["python", "app.py"]
 
 # No --platform flag here, deliberately. buildx runs this file once per entry
 # in --platform, and each run already targets its own architecture.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Create the runtime user first so COPY --chown can resolve it by name
 RUN groupadd -r -g 10001 app && \
@@ -556,7 +556,7 @@ stage that is left unpinned:
 # syntax=docker/dockerfile:1
 
 # Builder runs natively on the build machine: no QEMU, no emulation penalty.
-FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 WORKDIR /src
 
 ARG TARGETOS
@@ -604,7 +604,7 @@ See `optimization_guide.md` for the QEMU-versus-native-builder tradeoff.
 
 ```dockerfile
 # Anti-pattern: ships pip, the build toolchain and a shell in the runtime
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 COPY requirements.txt .
@@ -757,7 +757,7 @@ ENTRYPOINT ["/myapp"]
 
 ```dockerfile
 # Anti-pattern: RUN chown -R after COPY duplicates every file into a new layer
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY . .
 RUN addgroup -g 10001 app && adduser -u 10001 -G app -S app
@@ -771,7 +771,7 @@ CMD ["node", "index.js"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 # Create the user FIRST. --chown resolves names against this stage's own

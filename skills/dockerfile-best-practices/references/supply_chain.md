@@ -74,7 +74,7 @@ The fix is the same as it always was:
 
 ```dockerfile
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN --mount=type=secret,id=pip_token \
     PIP_INDEX_URL="https://$(cat /run/secrets/pip_token)@pypi.example.com/simple" \
@@ -107,7 +107,46 @@ SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct) docker buildx build \
   inside layers, which is why v0.11-era reproducibility advice does not get you
   a matching digest.
 
+### Declaring the epoch in the Dockerfile
+
+Since frontend 1.23 the Dockerfile can carry its own default in the global
+scope, so a plain `docker build` is reproducible without anyone exporting a
+variable. A caller's `--build-arg` or `$SOURCE_DATE_EPOCH` still wins.
+
+```dockerfile
+# Fragment: global scope, before the first FROM
+ARG SOURCE_DATE_EPOCH=context
+```
+
+Two special values arrived in 1.24:
+
+- **`context`** resolves from the main build context. Measured: a git URL
+  context gives the commit time to the second. Per the docs, an HTTP context
+  gives `Last-Modified` (or the newest archive entry). A **local** context leaves it
+  unset and the image gets the wall clock, because files on disk have no stable
+  timestamp. So `context` makes CI builds from a git URL reproducible and does
+  nothing for `docker build .` on a laptop. That is by design, not a bug.
+- **`<stage>`** takes it from a named stage, which must be `FROM scratch` with a
+  single remote `ADD` (git or HTTP). Use it when the artifact you package, not
+  the repository, should date the image.
+
+A git URL context also accepts `?mtime=commit` (1.23+), which sets the checked
+out files to the commit time. It is the default when `SOURCE_DATE_EPOCH` is set
+on a git context, so you rarely write it.
+
+`rewrite-timestamp=true` is still required for the file timestamps inside
+layers. The epoch alone only fixes the image config and history.
+
 Source: <https://github.com/moby/buildkit/blob/master/docs/build-repro.md>
+
+## The frontend is part of the supply chain
+
+`# syntax=docker/dockerfile:1` pulls the Dockerfile frontend, an image that
+parses your Dockerfile and decides what gets built. Since 1.21 the frontend
+images are signed, built on Docker's GitHub builder. A
+policy that verifies base images and ignores the frontend is verifying the
+ingredients and trusting the cook unseen. Verify both with the same tooling, or
+at least know the frontend is in scope.
 
 ## Signing
 
@@ -141,7 +180,7 @@ recorded at the moment it was consumed, whether your `FROM` named a digest or
 not. So the reproducibility question stops being "did I type a digest into my
 Dockerfile" and becomes "does my build record what it resolved". A build with
 provenance can answer, six months later and with evidence, what
-`python:3.12-slim` meant on the day it ran. A Dockerfile with a hardcoded digest
+`python:3.14-slim` meant on the day it ran. A Dockerfile with a hardcoded digest
 and no attestations can only tell you what someone once intended it to mean.
 
 This is why the doctrine is a readable tag plus a process rather than a digest

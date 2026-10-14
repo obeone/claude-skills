@@ -34,6 +34,54 @@ any downstream build, without anyone remembering to pass a flag. Individual
 rules can be skipped with `# check=skip=<RuleName>,<RuleName>`, and the two
 forms combine on one line: `# check=skip=JSONArgsRecommended;error=true`.
 
+### Skipping a rule for one instruction
+
+Since frontend 1.21 the same comment, placed directly above an instruction,
+silences that rule for that instruction only:
+
+```dockerfile
+# check=skip=JSONArgsRecommended
+CMD sh -c 'sleep infinity'
+```
+
+Placement decides the scope, and two of the three places that look plausible do
+something else. Measured on frontend 1.28:
+
+| Where the comment sits | Effect |
+| :--- | :--- |
+| Directly above an instruction | That instruction only. |
+| In the directive block, no blank line after `# syntax=` | A parser directive: the whole file. |
+| Above a `FROM`, after the directive block | Nothing. It does not scope to the stage. |
+
+Prefer the per-instruction form to a file-wide skip: it states which line breaks
+the rule and why, and the rule keeps guarding every other line.
+
+### Configuring checks from the command line
+
+The `BUILDKIT_DOCKERFILE_CHECK` build argument takes the same value as the
+directive, which is how CI turns warnings into failures for a Dockerfile it does
+not own:
+
+```bash
+docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=error=true" .
+```
+
+`experimental=all` (or a comma-separated list) opts into experimental rules, and
+wins over `skip`: `# check=skip=all;experimental=all` still runs them.
+
+### `error=true` and the `# syntax=` pin
+
+Docker recommends pinning the frontend to a minor (`docker/dockerfile:1.28`)
+when `error=true` is set, because a frontend release that adds a rule turns a
+green build red with no change to the file. This is the one deliberate
+exception to `SKILL.md` rule 1, which says `docker/dockerfile:1`. Take it only
+with the renewal automation that `best_practices.md` asks of a digest: Renovate
+and Dependabot both bump the `# syntax=` line. Without it you trade a surprise
+failure for a frontend that stops getting fixes, such as the 1.28 `--chown`
+correction. Most repositories are better off on `:1` and running
+`docker build --check` in CI, where a new rule fails a pull request rather than
+a release.
+
 ## The rules
 
 Twenty-one rules, as of the current BuildKit release. `InvalidDefinitionDescription`
@@ -96,11 +144,20 @@ platform rules (`StageNameCasing`, `FromAsCasing`, `ConsistentInstructionCasing`
 `FromPlatformFlagConstDisallowed`, `CopyIgnoredFile`, `NoEmptyContinuation`,
 `InvalidDefinitionDescription`, `ExposeProtoCasing`, `ExposeInvalidFormat`). It
 has no counterpart for DL001, DL002, DL003, DL006, DL007 through DL019, DL021,
-DL022, DL023, DL030, DL031, DL032, DL033, or DL034.
+DL022, DL023, DL030 through DL034, or DL036 through DL039.
 
 `CopyIgnoredFile` is worth calling out as a rule the skill's analyzer structurally
 cannot implement: it requires reading `.dockerignore` and resolving it against
-the real build context.
+the real build context. It also false-positived on negated `!` patterns and on a
+bare `COPY .` until frontends 1.21, 1.22 and 1.26 fixed it in three passes. If
+you skipped it for that reason, drop the skip on a current `:1` frontend.
+
+### Analyzer changes in v3.3.0
+
+- **DL039 is new.** A `--chown=<user>:` with an empty group. Frontends up to
+  1.27 silently set GID 0 for it, 1.28 uses the user's primary group, and the
+  build is green on both. Nothing in BuildKit reports it, so it is a static
+  rule. Write `user:group` in full.
 
 ### Analyzer changes in v3.0.0 that affect this table
 

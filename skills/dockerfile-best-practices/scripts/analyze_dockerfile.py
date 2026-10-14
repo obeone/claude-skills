@@ -149,6 +149,18 @@ they are fixed in the same 3.0.0 cut:
   an unresolved ``--chown`` also now labels which half (user or group) is
   the one that doesn't resolve, instead of repeating the bare name for
   both.
+
+New in 3.3.0
+------------
+
+- **DL039** (warning) - a ``--chown=<user>:`` whose group half is empty.
+  Measured on Docker 29.8.2: frontends up to 1.27 set the GID to 0 for it
+  (``app:`` and ``10001:`` alike), 1.28 uses the user's primary group (or the
+  same number for a numeric uid). The build is green either way, and a
+  Dockerfile pinned to an older ``# syntax=`` keeps the old behaviour, so a
+  static check is the only place it can be caught. Fix: name the group.
+- DL006 recognises zstd-compressed tarballs (``.tar.zst``, ``.tzst``) as local
+  archives, which ``ADD`` auto-extracts since frontend 1.27.
 """
 
 import sys
@@ -216,7 +228,7 @@ def _join_continuations(lines: list[str]) -> list[tuple[int, str]]:
 # list because Docker does not unpack zip archives.
 _LOCAL_ARCHIVE_SUFFIXES = (
     ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz", ".tbz2",
-    ".tar.xz", ".txz", ".tar.z",
+    ".tar.xz", ".txz", ".tar.z", ".tar.zst", ".tzst",
 )
 
 
@@ -606,7 +618,7 @@ def _check_copy_from(line_num: int, instruction: str, stage_aliases: set) -> Lis
         return [Issue(
             line_num, "error", "DL037",
             f"COPY --from={ref} pins :latest on a registry image",
-            "Pin to a specific version, e.g. --from=ghcr.io/astral-sh/uv:0.11.29"
+            "Pin to a specific version, e.g. --from=ghcr.io/astral-sh/uv:0.13.1"
         )]
 
     # A digest IS the pin: --from=composer@sha256:... is fully immutable and
@@ -931,11 +943,22 @@ def analyze_dockerfile(content: str) -> List[Issue]:
                     "created later in this same stage",
                     "Move the RUN that creates the user (useradd/adduser) "
                     "and group (groupadd/addgroup) above this line. "
-                    "Verified on BuildKit 29.4.0: this does NOT fail the "
+                    "Verified on Docker 29.4.0, re-verified on 29.8.2 with "
+                    "frontends 1.27 and 1.28: this does NOT fail the "
                     "build, --chown is silently discarded and the files "
                     "land owned by root (0:0), then the app fails at "
                     "runtime on its first write, not at build time."
                 ))
+            for chown_value in _CHOWN_RE.findall(stripped):
+                chown_value = chown_value.strip("\"'")
+                if chown_value.endswith(":") and chown_value != ":":
+                    issues.append(Issue(
+                        line_num, "warning", "DL039",
+                        f"--chown={chown_value} leaves the group empty",
+                        "Name the group: frontends up to 1.27 silently set "
+                        "GID 0 for this form, 1.28 uses the primary group. "
+                        f"Write --chown={chown_value}<group>"
+                    ))
             unresolved_names = unresolved_chowns.get(line_num)
             if unresolved_names:
                 issues.append(Issue(

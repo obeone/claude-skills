@@ -9,8 +9,8 @@ Complete guide for using uv (the modern Python package manager) in Docker.
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -56,8 +56,8 @@ mounts differ from `COPY` and from cache mounts.
 ### Method 1: Copy from the uv image (recommended)
 
 ```dockerfile
-FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 ```
 
 This is Astral's own documented recommendation, and it is the cheapest correct
@@ -65,7 +65,7 @@ option: no network fetch at build time, no shell, no checksum to manage.
 
 #### Pinning the uv image
 
-Pin a readable version tag. `0.11.29` records exactly which uv you copied.
+Pin a readable version tag. `0.13.1` records exactly which uv you copied.
 `:latest` records nothing, and this skill's own rule rejects it (DL002).
 
 Be honest about what the tag buys you: it is documentation and a rough
@@ -80,21 +80,32 @@ automation a digest rots silently and you ship a known-vulnerable uv while
 feeling safe. Most teams do not have the automation. See
 `supply_chain.md` before choosing it.
 
+#### uv 0.13 and the interpreter it picks
+
+uv 0.13 made Python 3.15 its default for **managed downloads**. It still uses a
+compatible interpreter that is already installed, so on a `python:3.14-slim`
+base with a project that allows 3.14 nothing changes. It bites when the
+project's `requires-python` excludes the base image's Python: uv then downloads
+one, and since 0.13 that is 3.15, inside a layer, behind your back. In an image
+the base image is the interpreter. Set `ENV UV_PYTHON_DOWNLOADS=never` so that
+mismatch fails the build instead, and commit a `.python-version` that matches
+the base tag.
+
 ### Method 2: Use a pre-installed uv image
 
 ```dockerfile
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim
 WORKDIR /app
 # uv is already installed
 ```
 
 Available images:
 
-- `ghcr.io/astral-sh/uv:python3.12-alpine`
-- `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`
-- `ghcr.io/astral-sh/uv:python3.12-bookworm`
+- `ghcr.io/astral-sh/uv:python3.14-alpine`
+- `ghcr.io/astral-sh/uv:python3.14-trixie-slim`
+- `ghcr.io/astral-sh/uv:python3.14-trixie`
 
-These tags name the OS (`bookworm`) as well as the Python version. That is a
+These tags name the OS (`trixie`) as well as the Python version. That is a
 legitimate stability choice: it pins you to a Debian release so a distro
 upgrade cannot arrive unannounced in a rebuild. The tradeoff is that you move
 to the next Debian yourself, on your own schedule.
@@ -106,13 +117,13 @@ mirror-only build). Method 1 is better in every other case.
 
 ```dockerfile
 # Fragment: the checksum is a placeholder; supply the real digest for your version
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 ADD --checksum=sha256:<digest-of-install.sh> \
-    https://astral.sh/uv/0.11.29/install.sh /uv-installer.sh
+    https://astral.sh/uv/0.13.1/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 ENV PATH="/root/.local/bin/:$PATH"
 ```
@@ -146,8 +157,8 @@ ENV UV_CACHE_DIR=/opt/uv-cache/
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -175,8 +186,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # syntax=docker/dockerfile:1
 
 # --- Build stage ---
-FROM python:3.12-slim AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+FROM python:3.14-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -192,7 +203,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-editable
 
 # --- Runtime stage ---
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Create the user BEFORE the --chown below: --chown resolves the name against
 # THIS stage's /etc/passwd, and a new stage does not inherit the builder's user
@@ -301,8 +312,8 @@ rather than assuming either behaviour.
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -367,7 +378,7 @@ If uv is not needed in the final image, mount the binary for one `RUN` instead
 of copying it into a layer:
 
 ```dockerfile
-RUN --mount=from=ghcr.io/astral-sh/uv:0.11.29,source=/uv,target=/bin/uv \
+RUN --mount=from=ghcr.io/astral-sh/uv:0.13.1,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
 ```
@@ -382,8 +393,8 @@ resolves to `:latest` and silently changes uv under you.
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-alpine
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
+FROM python:3.14-alpine
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -407,8 +418,8 @@ ENTRYPOINT ["mytool"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -430,8 +441,8 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \

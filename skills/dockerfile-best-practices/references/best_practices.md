@@ -9,13 +9,13 @@ strings as if the string itself did something. It does not. Two properties get
 attributed to tags that tags do not have:
 
 - **"This tag receives security patches."** No tag patches anything. A floating
-  tag such as `python:3.12-slim` only changes what you run when *someone
+  tag such as `python:3.14-slim` only changes what you run when *someone
   rebuilds the image*. If you build once and deploy that image for a year, a
   floating tag leaves you exactly as unpatched as a frozen one. The patch came
   from the rebuild, not from the tag.
 - **"This tag makes the build reproducible."** No tag guarantees bytes. Every
   tag is mutable: the registry lets the publisher move it whenever they like.
-  `python:3.12-slim` today and `python:3.12-slim` in six months are two
+  `python:3.14-slim` today and `python:3.14-slim` in six months are two
   different images with the same name.
 
 Both properties belong to a **process**, not to a string. Once that is clear,
@@ -27,15 +27,15 @@ images.
 ### The rules
 
 1. **Pin a readable tag, as specific as you are willing to maintain.**
-   `python:3.12-slim` is fine. `python:3.12-slim-bookworm` is equally fine. The
+   `python:3.14-slim` is fine. `python:3.14-slim-trixie` is equally fine. The
    question is not which is "correct" but which one you will actually keep up to
    date.
-1. **OS-pinned tags are legitimate.** `-bookworm`, `alpine3.19`, and friends are
+1. **OS-pinned tags are legitimate.** `-trixie`, `alpine3.24`, and friends are
    a valid stability choice: they trade silent OS rollover for a bump you
    perform deliberately. Nothing in this skill flags them.
 1. **`:latest` and untagged images are rejected.** Not because mutability is
    uniquely evil there, but because they carry zero information about what you
-   are running. `python:3.12-slim` at least tells a reader the major.minor and
+   are running. `python:3.14-slim` at least tells a reader the major.minor and
    the variant. `:latest` tells them nothing at all. This is `DL002` (error) and
    `DL003` (warning).
 1. **Be honest that every tag is mutable.** A tag is a rough contract and a note
@@ -54,8 +54,8 @@ images.
 
 | Reference form | What it tells a reader | What it freezes | Patches arrive |
 | --- | --- | --- | --- |
-| `python:3.12-slim` | major.minor and variant | nothing | on rebuild |
-| `python:3.12-slim-bookworm` | the above, plus the OS release | nothing | on rebuild, until you bump the OS yourself |
+| `python:3.14-slim` | major.minor and variant | nothing | on rebuild |
+| `python:3.14-slim-trixie` | the above, plus the OS release | nothing | on rebuild, until you bump the OS yourself |
 | `python:latest` | nothing | nothing | on rebuild (rejected: `DL002`) |
 | `python` (untagged) | nothing, and it means `:latest` | nothing | on rebuild (rejected: `DL003`) |
 | tag + `@sha256:...` | the tag's intent, plus exact bytes | the image | only when automation moves the digest |
@@ -69,7 +69,7 @@ the only form in the table that actually freezes an image:
 
 ```dockerfile
 # Fragment: illustrates the digest form; <digest> is a placeholder, not a real image
-FROM python:3.12-slim@sha256:<digest>
+FROM python:3.14-slim@sha256:<digest>
 ```
 
 Keep the tag in front of the digest. The digest does the pinning; the tag is
@@ -135,7 +135,7 @@ RUN addgroup -g 10001 app && \
 
 ```dockerfile
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Create non-root user with explicit UID/GID
 RUN groupadd -r -g 10001 app && \
@@ -417,8 +417,12 @@ read the previous state, and that has consequences:
   If you rely on a specific mode on the destination (`/tmp` and its permissive
   bits are the classic case), either skip `--link`, copy the contents rather
   than the directory, or set the mode explicitly with `--chmod`.
+- **`--chown` must be numeric.** The copy lands in an empty filesystem with no
+  `/etc/passwd` to resolve a name against. `COPY --link --chown=app:app` fails
+  the build (an explicit "use numeric uid[:gid]" since frontend 1.28, a cryptic
+  `invalid user index -1` before). Write `--chown=10001:10001`.
 
-Outside those two cases the docs are unambiguous that `--link` is the better
+Outside those three cases the docs are unambiguous that `--link` is the better
 default: equal or better performance, and much better cache reuse.
 
 ### `COPY --parents` and `COPY --exclude`
@@ -438,6 +442,26 @@ COPY --exclude=*.md --exclude=tests ./src /app/src
 
 Per the Dockerfile reference these need syntax `1.20` and `1.19` respectively.
 Both are stable flags on the `docker/dockerfile:1` line, not labs-only.
+
+### `--chown` semantics, measured
+
+What the flag does with a name depends on the frontend, and the upstream
+reference is wrong on the case that matters most. Measured on Docker 29.8.2
+against frontends 1.27 and 1.28:
+
+| Written | 1.27 | 1.28 |
+| :--- | :--- | :--- |
+| `--chown=app:app`, user not created yet | `0:0`, build green | `0:0`, build green |
+| `--chown=app` | `uid:primary-gid` | `uid:primary-gid` |
+| `--chown=app:` | `uid:0` | `uid:primary-gid` |
+| `--chown=10001:` | `10001:0` | `10001:10001` |
+
+The Dockerfile reference states that a name missing from `/etc/passwd` makes
+"the build fail". It does not: the `--chown` is dropped and the files land as
+root, which is why `SKILL.md` rule 8 orders the stage and DL036 exists. The
+trailing-colon form silently meant GID 0 until 1.28 (DL039 flags it), and a
+build that pins an older `# syntax=` still gets that. Write `user:group` in full
+and the question never comes up.
 
 ### `RUN --network=none`
 
@@ -465,6 +489,58 @@ RUN --mount=type=bind,source=go.sum,target=go.sum \
 
 `from=<stage>` binds from another stage or image instead of the build context.
 Writes to the mount are discarded, so it is not a way to produce artifacts.
+
+### `RUN --device`
+
+Exposes a [CDI](https://github.com/cncf-tags/container-device-interface)
+device to one build step, typically a GPU for a step that compiles CUDA kernels,
+quantizes a model or runs a smoke test on real hardware. Stable since frontend
+1.27, needs BuildKit 0.20+.
+
+```dockerfile
+# Fragment: needs a CDI-registered GPU and the device entitlement on both sides
+RUN --device=nvidia.com/gpu=all \
+    --mount=from=model,target=/models \
+    ./llama-cli -m /models/model.gguf -ngl 99 -p "smoke test"
+```
+
+The name is a CDI reference: `vendor.com/class` (first device), `=name` (one
+device), `=*` (all of them), or a bare class set by the
+`org.mobyproject.buildkit.device.class` annotation. It is gated by the `device`
+entitlement, which the builder has to grant
+(`buildkitd --allow-insecure-entitlement device`) **and** the request has to ask
+for (`docker buildx build --allow device`), unless the CDI spec carries
+`org.mobyproject.buildkit.device.autoallow`.
+
+### `RUN --security=insecure`
+
+Runs one step without the sandbox, roughly a `--privileged` container. Stable
+since frontend 1.20, gated by the `security.insecure` entitlement on the builder
+and `--allow security.insecure` on the request. The legitimate uses are narrow:
+mounting a loop device to build a disk image, running a nested container
+runtime, a test suite that needs `CAP_SYS_ADMIN`. If the reason is "it fails
+otherwise", find the one capability that is missing first. The default
+`--security=sandbox` is a no-op.
+
+### Frontend version → feature
+
+`# syntax=docker/dockerfile:1` resolves to the latest 1.x, so all of this is
+available by default. The table matters when a build pins an older minor
+(see the `check=error=true` exception in [build_checks.md](build_checks.md)) or
+runs on a builder that cannot pull the frontend. As of 1.28, 2026-10:
+
+| Since | Feature |
+| :--- | :--- |
+| 1.10 | `RUN --mount=type=secret,env=NAME` |
+| 1.17 | `ADD --unpack` |
+| 1.19 | `COPY`/`ADD --exclude` |
+| 1.20 | `COPY --parents` and `RUN --security` leave labs |
+| 1.21 | Per-instruction `# check=skip=` comments; signed frontend images |
+| 1.23 | Global `ARG SOURCE_DATE_EPOCH=<default>`, git `?mtime=commit` |
+| 1.24 | `ARG SOURCE_DATE_EPOCH=context` and `=<stage>` |
+| 1.25 | Per-step CPU and memory limits set from `buildx build` (BuildKit 0.31+) |
+| 1.27 | `RUN --device` leaves labs; zstd archives in `ADD`; 16 MiB cap on a Dockerfile |
+| 1.28 | `--chown=user:` takes the primary group; named `--chown` with `--link` is an explicit error |
 
 ### `ARG` with defaults
 
@@ -562,7 +638,7 @@ None of the above helps if you wrote the shell form:
 
 ```dockerfile
 # Anti-pattern: /bin/sh -c becomes PID 1 and does not forward signals
-FROM node:22-alpine
+FROM node:24-alpine
 CMD node server.js
 ```
 
