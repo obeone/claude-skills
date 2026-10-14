@@ -345,7 +345,7 @@ buys you that.
 **Input:**
 
 ```dockerfile
-FROM maven:3.9-eclipse-temurin-17
+FROM maven:3.9-eclipse-temurin-25
 WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline
@@ -358,7 +358,7 @@ RUN mvn package -DskipTests
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM maven:3.9-eclipse-temurin-17 AS builder
+FROM maven:3.9-eclipse-temurin-25 AS builder
 WORKDIR /app
 
 COPY pom.xml .
@@ -369,10 +369,10 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 \
     mvn package -B -DskipTests
 
-# Not the -alpine variant: Eclipse Temurin publishes no musl JDK for arm64, so
-# the alpine tags are amd64-only and this stage fails to resolve on Apple
-# Silicon or any arm64 runner. See the note below.
-FROM eclipse-temurin:17-jre-jammy
+# glibc, not the -alpine variant: a dependency that ships a native library
+# (netty-tcnative, a JDBC driver, a compression codec) usually ships it for
+# glibc only. See the note below.
+FROM eclipse-temurin:25-jre-noble
 WORKDIR /app
 
 # Create the runtime user before COPY --chown can name it
@@ -392,27 +392,28 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 - Both stages resolve on amd64 and arm64
 - The jar is owned by the non-root user that runs it, in a single layer
 
-**Why not Alpine here:**
+**Alpine or Ubuntu here:**
 
 This example used to build on `maven:3.9-eclipse-temurin-17-alpine` and run on
-`eclipse-temurin:17-jre-alpine`. Both tags exist, both are amd64-only: Eclipse
-Temurin does not publish a musl build of the JDK for aarch64, so there is no
-arm64 manifest to publish. Anyone on an Apple Silicon laptop or an arm64 CI
-runner got `no match for platform in manifest`, which is a broken example, not
-a smaller one. Measured on amd64, the swap costs about 75 MB uncompressed (175
-MB for the alpine JRE against 250 MB for the jammy one). The JVM dominates
-either way, which is the honest version of the "Alpine = minimal size" line this
-section used to carry: the base was never where the size lived.
+`eclipse-temurin:17-jre-alpine`, and that broke on arm64: Temurin published no
+musl JDK for aarch64 at 17, so Apple Silicon and arm64 runners got
+`no match for platform in manifest`. That is still true of the 17 tags. It is
+no longer true from 21: `eclipse-temurin:21-jre-alpine` and `25-jre-alpine`
+both publish `linux/amd64` and `linux/arm64`, checked October 2026.
 
-This is the same point `optimization_guide.md` makes about musl in general:
-Alpine is a clean answer for a static binary, and a question the moment real
-native code is in play. A JVM is real native code, and whether you can run it on
-Alpine depends on your vendor shipping a musl build for your architecture.
-Temurin does not, for arm64. Other vendors do publish multi-arch musl JREs
-(BellSoft Liberica, Azul Zulu, Amazon Corretto all resolve for `linux/amd64` and
-`linux/arm64`), so Alpine is reachable if you want it: it costs you a vendor
-switch, which is a decision to make deliberately rather than by copying a tag
-out of an example.
+So Alpine is now a real option, and the remaining question is what it saves
+against what it risks. Measured as the size of the root filesystem (`du -sx /`
+inside the container, amd64): 219 MB for `25-jre-alpine`, 309 MB for
+`25-jre-noble`. About 90 MB, and the JVM is still most of either image.
+
+The risk is the one `optimization_guide.md` raises about musl in general:
+Alpine is a clean answer for a static binary and a question the moment native
+code is in play. A pure-Java application runs fine on it. A dependency that
+loads a native library through JNI usually bundles a glibc build only, and on
+musl it fails at runtime, not at build time, with an `UnsatisfiedLinkError` on
+the first code path that needs it. The example stays on glibc because it cannot
+know your dependency tree. Switch to `-alpine` when you do know it, and run
+the test suite on the image you ship.
 
 ---
 

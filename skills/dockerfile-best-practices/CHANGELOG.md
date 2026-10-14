@@ -58,8 +58,14 @@ what this analyzer exists for, so it gets a rule.
   the builder must match. uv 0.11.29 → 0.13.1 (its 0.12 and 0.13 breaking
   changes touch nothing these recipes use), Node 22/20 → 24 (Active LTS; 26
   joins LTS at the end of October), Go 1.21 → 1.27, PHP 8.2 → 8.4, Alpine
-  3.19 → 3.24, Debian bookworm → trixie. Java stays on 17, because the size
-  figures in that example were measured on it.
+  3.19 → 3.24, Debian bookworm → trixie.
+- **The Java example moves from 17 to 25**, and its "Why not Alpine" section is
+  rewritten because its premise expired. Temurin still publishes no arm64 musl
+  build for 17, but it does from 21 on, so Alpine now resolves on both
+  architectures. Re-measured on 25 (root filesystem, amd64): 219 MB for the
+  alpine JRE against 309 MB for noble. The example stays on glibc, now for the
+  reason that still holds: JNI dependencies usually ship glibc natives only and
+  fail on musl at runtime.
 - **The `COPY vs ADD` table in `optimization_guide.md` no longer says "ADD:
   Avoid".** It contradicted rule 7. It now says `COPY` for the build context
   and `ADD --checksum` for remote artifacts, and lists zstd among the formats
