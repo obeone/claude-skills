@@ -1,7 +1,7 @@
 ![Docker](https://img.shields.io/badge/Docker-BuildKit-2496ED?logo=docker&logoColor=white)
 ![Compose](https://img.shields.io/badge/Compose-V2-2496ED?logo=docker&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-uv_+_PEP_723-3776AB?logo=python&logoColor=white)
-![Skill](https://img.shields.io/badge/skill-3.2.0-blue)
+![Skill](https://img.shields.io/badge/skill-3.3.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # dockerfile-best-practices
@@ -28,7 +28,7 @@ most common Docker and Compose mistakes.
 | 📏 **Eleven essential rules** | BuildKit syntax directive, a pinned readable tag, cache mounts per package manager (pip, npm, yarn, go, cargo, composer, maven), APT cache setup, `--mount=type=secret`, non-root UID/GID above 10000, `COPY` for local files and `ADD --checksum` for remote ones, user creation before the first `COPY --chown` naming it, OCI labels, `HEALTHCHECK`, `.dockerignore`. |
 | 🧬 **Six language templates** | Python (with `uv`), Node.js, Go and Rust (multi-stage to distroless), PHP with Composer, Debian base with APT cache. Each bundles the full ruleset and is linted in CI against the skill's own analyzer. |
 | 🐙 **Compose V2 ruleset** | No `version:`, no `container_name:`, no `links:`, pinned tags, `depends_on` with `condition: service_healthy`, plus runtime hardening (`read_only`, `cap_drop`, `no-new-privileges`, `init`). |
-| 🔎 **Two static analyzers** | 31 Dockerfile checks, 19 Compose checks. Findings carry a severity and a stable rule id that points back at the rule it violated. |
+| 🔎 **Two static analyzers** | 32 Dockerfile checks, 19 Compose checks. Findings carry a severity and a stable rule id that points back at the rule it violated. |
 | 🩺 **PID 1 and signals** | Why a shell-form `CMD` makes your container ignore `docker stop` for the entire grace period, and the three ways out in preference order. |
 | 🔗 **Linter interop** | Where these rules overlap with `docker build --check` and [DCLint](https://github.com/zavoloklom/docker-compose-linter), and where each tool is the only possible net. |
 
@@ -48,7 +48,7 @@ a tag string: a floating tag patches nothing on its own, it patches when
 someone rebuilds. So this skill tells you to pin a readable tag as
 specific as you are willing to maintain, and says plainly that every tag
 is mutable, rather than implying the tag protects you. Pinning the OS
-(`python:3.12-slim-bookworm`, `alpine:3.19`) is a legitimate stability
+(`python:3.14-slim-trixie`, `alpine:3.24`) is a legitimate stability
 choice and is not flagged. `:latest` and untagged images stay rejected,
 because they carry zero information about what you are running. Digests
 get one honest paragraph as an option with a real tradeoff: they are the
@@ -190,7 +190,7 @@ flowchart TB
 
 ## 📝 Status
 
-`metadata.version: 3.2.0`. The ruleset is stable; rule ids are a public
+`metadata.version: 3.3.0`. The ruleset is stable; rule ids are a public
 contract and are never reused.
 
 ## 📄 License

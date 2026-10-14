@@ -7,7 +7,7 @@ Real-world examples of Dockerfile optimizations using BuildKit.
 **Input:**
 
 ```dockerfile
-FROM debian:bookworm
+FROM debian:trixie
 RUN apt-get update && apt-get install -y curl
 ```
 
@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y curl
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM debian:bookworm
+FROM debian:trixie
 
 # Configure APT to keep downloaded packages for cache
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 **Input (⚠️ INSECURE):**
 
 ```dockerfile
-FROM alpine:3.19
+FROM alpine:3.24
 ARG TOKEN
 RUN curl -H "Authorization: Bearer $TOKEN" https://api.example.com
 ```
@@ -53,7 +53,7 @@ RUN curl -H "Authorization: Bearer $TOKEN" https://api.example.com
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM alpine:3.19
+FROM alpine:3.24
 
 # Secure secret access without ARG/ENV – avoids leakage
 RUN --mount=type=secret,id=api_token \
@@ -80,7 +80,7 @@ docker buildx build --secret id=api_token,src=./token.txt .
 
 ```dockerfile
 # Anti-pattern: single stage ships the Go toolchain and source in the runtime
-FROM golang:1.21
+FROM golang:1.27
 WORKDIR /app
 COPY . .
 RUN go build -o app
@@ -93,7 +93,7 @@ CMD ["./app"]
 # syntax=docker/dockerfile:1
 
 # --- Build stage ---
-FROM golang:1.21-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -131,7 +131,7 @@ ENTRYPOINT ["/main"]
 **Input:**
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 COPY . /app
 ```
 
@@ -140,7 +140,7 @@ COPY . /app
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Use link-based copy for better rebase/cache reuse
 COPY --link . /app
@@ -159,7 +159,7 @@ COPY --link . /app
 **Input:**
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY package.json yarn.lock ./
 RUN yarn install
@@ -171,7 +171,7 @@ COPY . .
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 # Install dependencies using persistent BuildKit cache
@@ -196,7 +196,7 @@ COPY . .
 
 ```dockerfile
 # Anti-pattern: full python image, no dependency cache, and the app runs as root
-FROM python:3.11
+FROM python:3.14
 WORKDIR /app
 COPY . .
 RUN pip install -r requirements.txt
@@ -208,7 +208,7 @@ CMD ["python", "main.py"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Create the user first, with explicit IDs. --system alone would let the base
 # image pick a free low UID (it lands on 100 here), which collides with host
@@ -244,7 +244,7 @@ CMD ["python", "main.py"]
 **Input:**
 
 ```dockerfile
-FROM php:8.2-fpm
+FROM php:8.4-fpm
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev
@@ -256,7 +256,7 @@ COPY . .
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM php:8.2-fpm-alpine
+FROM php:8.4-fpm-alpine
 WORKDIR /app
 
 # Install Composer. Pin the tag: ":latest" would silently change the Composer
@@ -312,7 +312,7 @@ docker buildx build \
 **Input:**
 
 ```dockerfile
-FROM alpine:3.19
+FROM alpine:3.24
 COPY nginx.conf /etc/nginx/nginx.conf
 ```
 
@@ -321,7 +321,7 @@ COPY nginx.conf /etc/nginx/nginx.conf
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM alpine:3.19
+FROM alpine:3.24
 
 # Reuse config directly from nginx base image
 COPY --from=nginx:1.27-alpine /etc/nginx/nginx.conf /etc/nginx/nginx.conf
@@ -345,7 +345,7 @@ buys you that.
 **Input:**
 
 ```dockerfile
-FROM maven:3.9-eclipse-temurin-17
+FROM maven:3.9-eclipse-temurin-25
 WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline
@@ -358,7 +358,7 @@ RUN mvn package -DskipTests
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM maven:3.9-eclipse-temurin-17 AS builder
+FROM maven:3.9-eclipse-temurin-25 AS builder
 WORKDIR /app
 
 COPY pom.xml .
@@ -369,10 +369,10 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 \
     mvn package -B -DskipTests
 
-# Not the -alpine variant: Eclipse Temurin publishes no musl JDK for arm64, so
-# the alpine tags are amd64-only and this stage fails to resolve on Apple
-# Silicon or any arm64 runner. See the note below.
-FROM eclipse-temurin:17-jre-jammy
+# glibc, not the -alpine variant: a dependency that ships a native library
+# (netty-tcnative, a JDBC driver, a compression codec) usually ships it for
+# glibc only. See the note below.
+FROM eclipse-temurin:25-jre-noble
 WORKDIR /app
 
 # Create the runtime user before COPY --chown can name it
@@ -392,27 +392,28 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 - Both stages resolve on amd64 and arm64
 - The jar is owned by the non-root user that runs it, in a single layer
 
-**Why not Alpine here:**
+**Alpine or Ubuntu here:**
 
 This example used to build on `maven:3.9-eclipse-temurin-17-alpine` and run on
-`eclipse-temurin:17-jre-alpine`. Both tags exist, both are amd64-only: Eclipse
-Temurin does not publish a musl build of the JDK for aarch64, so there is no
-arm64 manifest to publish. Anyone on an Apple Silicon laptop or an arm64 CI
-runner got `no match for platform in manifest`, which is a broken example, not
-a smaller one. Measured on amd64, the swap costs about 75 MB uncompressed (175
-MB for the alpine JRE against 250 MB for the jammy one). The JVM dominates
-either way, which is the honest version of the "Alpine = minimal size" line this
-section used to carry: the base was never where the size lived.
+`eclipse-temurin:17-jre-alpine`, and that broke on arm64: Temurin published no
+musl JDK for aarch64 at 17, so Apple Silicon and arm64 runners got
+`no match for platform in manifest`. That is still true of the 17 tags. It is
+no longer true from 21: `eclipse-temurin:21-jre-alpine` and `25-jre-alpine`
+both publish `linux/amd64` and `linux/arm64`, checked October 2026.
 
-This is the same point `optimization_guide.md` makes about musl in general:
-Alpine is a clean answer for a static binary, and a question the moment real
-native code is in play. A JVM is real native code, and whether you can run it on
-Alpine depends on your vendor shipping a musl build for your architecture.
-Temurin does not, for arm64. Other vendors do publish multi-arch musl JREs
-(BellSoft Liberica, Azul Zulu, Amazon Corretto all resolve for `linux/amd64` and
-`linux/arm64`), so Alpine is reachable if you want it: it costs you a vendor
-switch, which is a decision to make deliberately rather than by copying a tag
-out of an example.
+So Alpine is now a real option, and the remaining question is what it saves
+against what it risks. Measured as the size of the root filesystem (`du -sx /`
+inside the container, amd64): 219 MB for `25-jre-alpine`, 309 MB for
+`25-jre-noble`. About 90 MB, and the JVM is still most of either image.
+
+The risk is the one `optimization_guide.md` raises about musl in general:
+Alpine is a clean answer for a static binary and a question the moment native
+code is in play. A pure-Java application runs fine on it. A dependency that
+loads a native library through JNI usually bundles a glibc build only, and on
+musl it fails at runtime, not at build time, with an `UnsatisfiedLinkError` on
+the first code path that needs it. The example stays on glibc because it cannot
+know your dependency tree. Switch to `-alpine` when you do know it, and run
+the test suite on the image you ship.
 
 ---
 
@@ -422,7 +423,7 @@ out of an example.
 
 ```dockerfile
 # Anti-pattern: useradd with no explicit UID takes whatever the base image has free
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 COPY . .
@@ -440,7 +441,7 @@ CMD ["python", "app.py"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Create non-root user with UID/GID >10000 (safe range)
 RUN groupadd -r -g 10001 app && \
@@ -478,7 +479,7 @@ CMD ["python", "app.py"]
 
 ```dockerfile
 # Anti-pattern: no cache mount, and the app runs as root
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 COPY . .
@@ -494,7 +495,7 @@ CMD ["python", "app.py"]
 
 # No --platform flag here, deliberately. buildx runs this file once per entry
 # in --platform, and each run already targets its own architecture.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Create the runtime user first so COPY --chown can resolve it by name
 RUN groupadd -r -g 10001 app && \
@@ -556,7 +557,7 @@ stage that is left unpinned:
 # syntax=docker/dockerfile:1
 
 # Builder runs natively on the build machine: no QEMU, no emulation penalty.
-FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 WORKDIR /src
 
 ARG TARGETOS
@@ -604,7 +605,7 @@ See `optimization_guide.md` for the QEMU-versus-native-builder tradeoff.
 
 ```dockerfile
 # Anti-pattern: ships pip, the build toolchain and a shell in the runtime
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 COPY requirements.txt .
@@ -757,7 +758,7 @@ ENTRYPOINT ["/myapp"]
 
 ```dockerfile
 # Anti-pattern: RUN chown -R after COPY duplicates every file into a new layer
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY . .
 RUN addgroup -g 10001 app && adduser -u 10001 -G app -S app
@@ -771,7 +772,7 @@ CMD ["node", "index.js"]
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 # Create the user FIRST. --chown resolves names against this stage's own

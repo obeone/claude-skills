@@ -2,7 +2,7 @@
 name: dockerfile-best-practices
 description: "Create and optimize Dockerfiles and Compose files with BuildKit, multi-stage builds, cache mounts, and non-root hardening. Also triggers on container images, build performance, or Docker security, even without the word 'Dockerfile'."
 metadata:
-  version: "3.2.0"
+  version: "3.3.0"
 ---
 
 # Dockerfile Best Practices
@@ -31,7 +31,7 @@ Comprehensive guide for creating optimized, secure, and fast Docker images using
 
 "Receives security patches" and "reproducible" are properties of a **process**, not of a tag string. A floating tag patches nothing by itself: it patches when someone rebuilds.
 
-- **Pin a tag as specific as you are willing to maintain.** `python:3.12-slim` is fine. `python:3.12-slim-bookworm` is equally fine: pinning the OS is a legitimate stability choice, not a mistake.
+- **Pin a tag as specific as you are willing to maintain.** `python:3.14-slim` is fine. `python:3.14-slim-trixie` is equally fine: pinning the OS is a legitimate stability choice, not a mistake.
 - **`:latest` and untagged images stay rejected.** Not because mutability is uniquely evil there, but because they carry zero information about what you are actually running.
 - **Every tag is mutable, and security updates come from rebuilding regularly.** Rebuild in six months and you may get different bytes. A tag is documentation and a rough contract, not a reproducibility mechanism. Name the process, not the string.
 - **Reproducibility comes from a process**: digest pinning backed by Renovate or Dependabot, or recording the resolved digest in build metadata, which is what provenance attestations already do ([references/supply_chain.md](references/supply_chain.md)).
@@ -112,6 +112,8 @@ Distroless is the exception: it has no `groupadd`, so use a `:nonroot` tag and n
 
 Use `COPY --chown=app:app . .` rather than `COPY` plus `RUN chown -R`: the latter copies every file into a second layer, doubling its weight in the image.
 
+Always write both halves. `--chown=app:` (empty group) silently meant GID 0 before frontend 1.28 (DL039), and `--link` needs numeric IDs. Measured semantics: [references/best_practices.md](references/best_practices.md).
+
 ### 9. OCI labels for metadata
 
 ```dockerfile
@@ -126,7 +128,7 @@ LABEL org.opencontainers.image.source="https://github.com/org/repo" \
 
 Two ways to get it wrong:
 
-- **Calling a binary that is not there.** `wget` is not in `python:3.12-slim`, or any Debian slim image. It exists on Alpine only because busybox provides it. Use the runtime the image already has.
+- **Calling a binary that is not there.** `wget` is not in `python:3.14-slim`, or any Debian slim image. It exists on Alpine only because busybox provides it. Use the runtime the image already has.
 - **Passing on a non-2xx response.** A check that fails only on connection refused reports a 500-ing app as healthy. `requests.get()` does not raise on HTTP 500 (`raise_for_status()` does); `fetch()` resolves on 500 too.
 
 ```dockerfile
@@ -218,6 +220,8 @@ scaling, and the full `container_name` tradeoff:
 uv run scripts/analyze_dockerfile.py ./Dockerfile
 uv run scripts/analyze_compose.py ./compose.yaml
 docker buildx build --check .
+# One justified exception: "# check=skip=<Rule>" directly above that instruction
+# (placement rules: references/build_checks.md)
 
 # Compose: schema/interpolation validation, no linter needed for this step
 docker compose config --quiet
@@ -242,9 +246,9 @@ Remote cache (`--cache-from` / `--cache-to`) and the rest of the buildx surface:
 | --------- | ------- |
 | [templates.md](references/templates.md) | The six language templates: Python with uv, Node.js, Go, Rust, PHP, Debian |
 | [optimization_guide.md](references/optimization_guide.md) | BuildKit internals, caching strategies, multi-stage patterns, distroless, profiling |
-| [best_practices.md](references/best_practices.md) | Complete checklist with impact levels, pinning doctrine and the digest tradeoff, UID/GID strategy, PID 1 and signal handling |
-| [build_checks.md](references/build_checks.md) | `docker build --check`: the built-in rule set, wiring it into CI |
-| [supply_chain.md](references/supply_chain.md) | Provenance attestations, SBOMs, signing, digest renewal tooling |
+| [best_practices.md](references/best_practices.md) | Complete checklist with impact levels, pinning doctrine and the digest tradeoff, UID/GID strategy, PID 1 and signal handling, measured `--chown` semantics, frontend version → feature table |
+| [build_checks.md](references/build_checks.md) | `docker build --check`: the built-in rule set, per-instruction skips, wiring it into CI |
+| [supply_chain.md](references/supply_chain.md) | Provenance attestations, SBOMs, signing, digest renewal tooling, `SOURCE_DATE_EPOCH` reproducibility |
 | [examples.md](references/examples.md) | Real-world before/after optimization examples (15 scenarios) |
 | [uv_integration.md](references/uv_integration.md) | Python with uv: installation methods, workspaces, multi-stage, all patterns |
 | [compose_best_practices.md](references/compose_best_practices.md) | Complete Compose guide: networks, volumes, secrets, dev vs prod, scaling |

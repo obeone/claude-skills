@@ -24,10 +24,10 @@ Recommended for Python. Detailed uv patterns: `references/uv_integration.md`.
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # uv is pinned like any other dependency; :latest would break rule 2.
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -67,10 +67,10 @@ on `/root/.local/share/pnpm/store`.
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
 
-# node:22 ships a "node" user, but at UID 1000, which collides with the first
+# node:24 ships a "node" user, but at UID 1000, which collides with the first
 # real host account once a volume is bind-mounted. Rule 6 wins: our own, >10000.
 RUN addgroup -g 10001 app && adduser -u 10001 -G app -S app
 

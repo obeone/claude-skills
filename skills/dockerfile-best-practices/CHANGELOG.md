@@ -4,6 +4,78 @@ All notable changes to the `dockerfile-best-practices` skill are recorded here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The skill is versioned with [Semantic Versioning](https://semver.org/spec/v2.0.0.html), tracking `metadata.version` in `SKILL.md`.
 
+## [3.3.0] - 2026-10-14
+
+The skill's content was written against Dockerfile frontend 1.19. The frontend
+is now at 1.28, and nine releases of changes had gone unrecorded. This release
+catches up, and every behaviour it documents was measured on Docker 29.8.2
+rather than taken from release notes, which turned out to matter twice.
+
+First, the upstream Dockerfile reference now says that a `--chown` naming a
+user missing from `/etc/passwd` makes the build fail. Measured on 1.27 and
+1.28: it does not. The files still land as `0:0` and the build is green, so
+rule 8 and DL036 stand, and the skill now says the official doc is wrong.
+
+Second, the release notes call 1.28's `--chown` change "default group syntax",
+which sounds like a new feature. What it actually fixes is that
+`--chown=app:` and `--chown=10001:` silently set GID 0 on every earlier
+frontend. That is a silent ownership bug in a green build, which is exactly
+what this analyzer exists for, so it gets a rule.
+
+### Added
+
+- **DL039: `--chown=<user>:` with an empty group.** GID 0 up to frontend 1.27,
+  the primary group from 1.28, green either way. A build pinned to an older
+  `# syntax=` keeps the old behaviour, so nothing in BuildKit can report it.
+- **Per-instruction `# check=skip=<Rule>`** (frontend 1.21) in
+  `references/build_checks.md`, with the three placements measured: directly
+  above an instruction scopes to it, inside the directive block covers the
+  whole file, and above a `FROM` does nothing at all, despite reading like a
+  stage scope. Also `experimental=`, the `BUILDKIT_DOCKERFILE_CHECK` build
+  argument for CI, and the `CopyIgnoredFile` false positives fixed across 1.21,
+  1.22 and 1.26.
+- **`RUN --device`** (CDI devices such as GPUs, stable in 1.27) and
+  **`RUN --security=insecure`** (stable in 1.20), with the entitlement each
+  needs on the builder and on the request.
+- **`SOURCE_DATE_EPOCH` declared in the Dockerfile** (1.23/1.24):
+  a global default, `=context` and `=<stage>`, plus git `?mtime=commit`.
+  Measured: `context` yields the commit time on a git URL and is ignored on a
+  local context, so it makes CI reproducible and leaves a laptop build alone.
+- **Per-step CPU and memory limits** from `buildx build` (1.25, BuildKit 0.31+),
+  with the two traps: they apply per step in a build that runs steps in
+  parallel, and they are not part of the cache key.
+- A dated frontend version → feature table, `--chown` semantics measured across
+  frontends, a third `COPY --link` trap (names cannot resolve, use numeric
+  IDs), signed frontend images as a supply-chain concern, and a note on uv
+  0.13 defaulting managed downloads to Python 3.15.
+- `scripts/tests/test_analyze_dockerfile.py`, run in CI next to the extractor
+  tests. The analyzer had no unit tests of its own.
+
+### Changed
+
+- **Version refresh.** Python 3.12 is security-only, so examples move to
+  3.14; the distroless example stays on 3.13 because its runtime ships 3.13 and
+  the builder must match. uv 0.11.29 → 0.13.1 (its 0.12 and 0.13 breaking
+  changes touch nothing these recipes use), Node 22/20 → 24 (Active LTS; 26
+  joins LTS at the end of October), Go 1.21 → 1.27, PHP 8.2 → 8.4, Alpine
+  3.19 → 3.24, Debian bookworm → trixie.
+- **The Java example moves from 17 to 25**, and its "Why not Alpine" section is
+  rewritten because its premise expired. Temurin still publishes no arm64 musl
+  build for 17, but it does from 21 on, so Alpine now resolves on both
+  architectures. Re-measured on 25 (root filesystem, amd64): 219 MB for the
+  alpine JRE against 309 MB for noble. The example stays on glibc, now for the
+  reason that still holds: JNI dependencies usually ship glibc natives only and
+  fail on musl at runtime.
+- **The `COPY vs ADD` table in `optimization_guide.md` no longer says "ADD:
+  Avoid".** It contradicted rule 7. It now says `COPY` for the build context
+  and `ADD --checksum` for remote artifacts, and lists zstd among the formats
+  `ADD` extracts.
+- **DL006 recognises `.tar.zst` and `.tzst`** as auto-extracted local archives.
+- DL036's message records the re-verification on Docker 29.8.2.
+- `optimization_guide.md` no longer suggests `# syntax=docker/dockerfile:1.4`
+  with a trailing comment on the directive line. Pinning a minor is now an
+  explicit exception, documented for `check=error=true` only.
+
 ## [3.2.0] - 2026-08-14
 
 `SKILL.md` is loaded into the agent's context for an entire session, and the
