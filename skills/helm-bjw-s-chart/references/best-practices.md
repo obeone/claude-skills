@@ -334,6 +334,10 @@ service:
 - `ClusterIP`: Default, use with Ingress
 - `LoadBalancer`: Cloud environments only
 - `NodePort`: Dev/testing, avoid in production
+- `clusterIP` is rendered for `ClusterIP`, `LoadBalancer` and `NodePort`
+  Services from 5.3.0 (still omitted for `ExternalName`). Before, it was
+  not rendered on the last two, so a stale `clusterIP` left in values
+  now reaches the API server. Clear it when you change the Service type.
 
 ### Ingress Configuration
 
@@ -498,7 +502,22 @@ defaultPodOptions:
     prometheus.io/path: /metrics
 ```
 
-## Naming Conventions
+### Templated Keys and Selector Labels (5.3.0+)
+
+From 5.3.0 the keys of `annotations`, `labels` and `extraSelectorLabels`
+maps are templated, not just the values. Metadata is rendered before it is
+merged, and selector labels are merged last: a pod label can no longer
+override a selector label, whatever the template produces. Resource-level
+`labels` / `annotations` now override the global ones (it was the other way
+round on Services and several other resources).
+
+```yaml
+controllers:
+  main:
+    pod:
+      annotations:
+        "{{ .Release.Name }}.example.com/owner": platform
+```
 
 ### Resource Naming
 
@@ -834,3 +853,17 @@ containers:
 global:
   fullnameOverride: myapp  # Instead of myapp-myrelease-long-name
 ```
+
+### Literal `{{ }}` in a Value
+
+```yaml
+# ✅ Exclude the path from template evaluation (5.3.0+)
+global:
+  templateEvaluation:
+    excludePaths:
+      - [controllers, main, containers, main, env, VPN_PORT_FORWARDING_UP_COMMAND]
+```
+
+Each path is a list of strings (map keys, array indexes as strings). The
+matching value and its descendants are left untouched, so Gluetun commands
+or Prometheus expressions keep their braces without escaping tricks.

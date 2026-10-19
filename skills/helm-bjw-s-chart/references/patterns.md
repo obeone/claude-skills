@@ -961,3 +961,155 @@ route:
     referenceGrant:
       enabled: false
 ```
+
+## NetworkPolicy Targeting Several Controllers **(5.3.0+)**
+
+One policy can select several controllers by exact identifier or anchored
+regex, and a rule peer can reference controllers the same way instead of
+hand-written `podSelector` labels. `controllers` is mutually exclusive with
+`controller` and `podSelector` at the policy level, and with `podSelector`
+and `ipBlock` inside a peer.
+
+```yaml
+controllers:
+  api:
+    containers:
+      app:
+        image:
+          repository: myapp/api
+          tag: "2.1.0"
+  worker-email:
+    containers:
+      app:
+        image:
+          repository: myapp/worker
+          tag: "2.1.0"
+  worker-reports:
+    containers:
+      app:
+        image:
+          repository: myapp/worker
+          tag: "2.1.0"
+  frontend:
+    containers:
+      app:
+        image:
+          repository: myapp/frontend
+          tag: "2.1.0"
+
+networkpolicies:
+  backend-ingress:
+    enabled: true
+    # Exact identifier plus a regex, anchored as ^(worker-.*)$ and matched
+    # against enabled controllers only. A reference matching nothing fails
+    # the render and lists the available identifiers.
+    controllers: ["api", "worker-.*"]
+    policyTypes:
+      - Ingress
+    rules:
+      ingress:
+        - from:
+            # Peer-level reference: expands to that peer's podSelector
+            - controllers: ["frontend"]
+          ports:
+            - protocol: TCP
+              port: 8080
+```
+
+With several matches the generated selector keeps only the labels shared by
+all matched controllers and adds a `matchExpressions` entry on
+`app.kubernetes.io/controller` (`In`). The singular `controller` key is not
+valid inside a peer. Cilium policies use `fromControllers` / `toControllers`
+in their `ingress` / `egress` rules instead.
+
+## COMMAND Probe for a Container Without an HTTP Endpoint **(5.3.0+)**
+
+A queue consumer exposes no port, so HTTP and TCP probes have nothing to
+hit. Use `command` and the chart renders a native `exec` probe. No `port`
+is emitted for a COMMAND probe. Before 5.3.0 this needed `custom: true`
+with a raw `spec.exec`.
+
+```yaml
+controllers:
+  consumer:
+    containers:
+      app:
+        image:
+          repository: myapp/consumer
+          tag: "1.8.0"
+        probes:
+          liveness:
+            enabled: true
+            type: COMMAND          # optional: implied when `command` is set
+            command: ["/usr/local/bin/healthcheck", "--timeout=3"]
+            spec:
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+          startup:
+            enabled: true
+            command: ["/usr/local/bin/healthcheck", "--startup"]
+            spec:
+              periodSeconds: 5
+              failureThreshold: 30
+```
+
+`type: COMMAND` without `command` fails the render with a message naming
+the probe's `command` path.
+
+## Controller extraSelectorLabels to Address a Set of Pods **(5.3.0+)**
+
+`extraSelectorLabels` on a controller puts labels into the pod labels and
+into every selector generated for it: the workload selector, Services,
+policies, PodMonitor, PodDisruptionBudget and the default topology spread.
+A Service and a policy that target the controller therefore select
+exactly that set of pods, and an external manifest can select it with the
+same labels.
+
+```yaml
+controllers:
+  api:
+    extraSelectorLabels:
+      app.kubernetes.io/component: backend
+      example.com/tier: public
+    containers:
+      app:
+        image:
+          repository: myapp/api
+          tag: "2.1.0"
+  ingest:
+    extraSelectorLabels:
+      app.kubernetes.io/component: backend
+      example.com/tier: internal
+    containers:
+      app:
+        image:
+          repository: myapp/ingest
+          tag: "2.1.0"
+
+service:
+  api:
+    controller: api
+    ports:
+      http:
+        port: 80
+        targetPort: 8080
+
+networkpolicies:
+  api:
+    controller: api
+    policyTypes:
+      - Ingress
+    rules:
+      ingress:
+        - from:
+            - controllers: ["ingest"]
+          ports:
+            - protocol: TCP
+              port: 8080
+```
+
+Caveat: workload selectors are immutable. Adding or changing
+`extraSelectorLabels` on a live Deployment or StatefulSet makes the upgrade
+fail until the workload is deleted and recreated (expect a restart of its
+pods). Decide the labels before the first install.
