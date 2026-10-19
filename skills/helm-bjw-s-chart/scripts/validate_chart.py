@@ -129,13 +129,80 @@ def _common_major_set(chart_path: Path) -> set:
     return set()
 
 
+def _pin_major_minor(pin: str) -> Optional[Tuple[int, int]]:
+    """
+    Parse a single version pin into its ``(major, minor)`` pair.
+
+    Parameters
+    ----------
+    pin : str
+        One version string, optionally prefixed by a comparator (``^5.1.0``,
+        ``v5.3.0``, ``5.3``).
+
+    Returns
+    -------
+    Optional[Tuple[int, int]]
+        ``(major, minor)``, or ``None`` when the string is not a plain
+        ``X.Y[.Z]`` version once the leading comparator is stripped.
+    """
+    parts = pin.lstrip('^~=v ').split('.')
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+        return int(parts[0]), int(parts[1])
+    return None
+
+
+def _locked_common_version(chart_path: Path) -> Optional[str]:
+    """
+    Read the concrete common version Chart.lock resolved the pin to.
+
+    ``helm dependency update`` writes the exact version it fetched into
+    Chart.lock, which is the version the chart actually renders against. It is
+    therefore a better basis for the feature gates than a Chart.yaml range,
+    whose lower bound says nothing about what was resolved.
+
+    Parameters
+    ----------
+    chart_path : Path
+        Root directory of the Helm chart.
+
+    Returns
+    -------
+    Optional[str]
+        The raw ``version`` string recorded for the ``common`` dependency, or
+        ``None`` when Chart.lock is missing, unparseable, or lists no
+        ``common`` dependency.
+    """
+    lock_path = chart_path / "Chart.lock"
+    if not lock_path.exists():
+        return None
+    try:
+        with open(lock_path) as lf:
+            lock_meta = yaml.safe_load(lf) or {}
+    except (yaml.YAMLError, OSError):
+        return None
+    if not isinstance(lock_meta, dict):
+        return None
+    for dep in (lock_meta.get('dependencies') or []):
+        if isinstance(dep, dict) and dep.get('name') == 'common':
+            version = str(dep.get('version', '')).strip()
+            return version or None
+    return None
+
+
 def common_version(chart_path: Path) -> Optional[Tuple[int, int]]:
     """
-    Read the pinned major/minor of the bjw-s common dependency.
+    Read the major/minor of the bjw-s common library the chart resolves to.
 
     ``_common_major_set`` answers "which majors does this pin admit"; this
-    answers "which exact minor is pinned", which the 5.0-vs-5.1 feature gates
-    need and a set of majors cannot express.
+    answers "which exact minor is in force", which the 5.0-vs-5.1-vs-5.3
+    feature gates need and a set of majors cannot express.
+
+    Chart.lock wins when it exists, because a range such as ``^5.2.1`` has a
+    lower bound of 5.2 while the fetched library may well be 5.3.0, so gating
+    on the lower bound reports supported keys as unsupported. The Chart.yaml pin
+    is used when there is no lock file, when the lock lists no ``common``
+    dependency, or when the two disagree about the major (a stale lock, which
+    :func:`validate_chart_yaml` reports separately).
 
     Parameters
     ----------
@@ -145,10 +212,10 @@ def common_version(chart_path: Path) -> Optional[Tuple[int, int]]:
     Returns
     -------
     Optional[Tuple[int, int]]
-        ``(major, minor)`` of the ``common`` dependency pin, or ``None`` when
-        Chart.yaml is missing, unparseable, has no ``common`` dependency, or
-        the pin is not a plain ``X.Y[.Z]`` version. A leading comparator is
-        stripped, so ``^5.1.0`` reads as ``(5, 1)``.
+        ``(major, minor)`` in force for the ``common`` dependency, or ``None``
+        when Chart.yaml is missing, unparseable, has no ``common`` dependency,
+        or neither the lock nor the pin yields a plain ``X.Y[.Z]`` version. A
+        leading comparator is stripped, so ``^5.1.0`` reads as ``(5, 1)``.
     """
     chart_yaml_path = chart_path / "Chart.yaml"
     if not chart_yaml_path.exists():
@@ -163,10 +230,16 @@ def common_version(chart_path: Path) -> Optional[Tuple[int, int]]:
     for dep in (chart_meta.get('dependencies') or []):
         if not isinstance(dep, dict) or dep.get('name') != 'common':
             continue
-        parts = str(dep.get('version', '')).lstrip('^~=v ').split('.')
-        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-            return int(parts[0]), int(parts[1])
-        return None
+        declared = str(dep.get('version', ''))
+        locked = _locked_common_version(chart_path)
+        locked_ver = _pin_major_minor(locked) if locked else None
+        if locked_ver is not None:
+            admitted = _detect_common_majors(declared)
+            # An unparseable constraint admits nothing, so there is no major to
+            # disagree with: trust the lock rather than giving up on the gates.
+            if not admitted or locked_ver[0] in admitted:
+                return locked_ver
+        return _pin_major_minor(declared)
     return None
 
 
@@ -1267,6 +1340,19 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                             f'common library pinned to {raw_version} (5.x, current default)',
                             ''
                         ))
+                # A lock resolved outside the declared constraint is stale:
+                # the version gates then fall back to the Chart.yaml pin, so
+                # say so rather than silently validating the wrong feature set.
+                locked_raw = _locked_common_version(chart_path)
+                locked_majors = _detect_common_majors(locked_raw) if locked_raw else set()
+                if majors and locked_majors and not (locked_majors & majors):
+                    issues.append(Issue(
+                        'Chart.lock',
+                        'warning',
+                        f'Chart.lock resolves common to {locked_raw}, outside the '
+                        f'Chart.yaml constraint {raw_version}',
+                        'Run `helm dependency update` to regenerate Chart.lock'
+                    ))
                 break
 
         if not common_found:
