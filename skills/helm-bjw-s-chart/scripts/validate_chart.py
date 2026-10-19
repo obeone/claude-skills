@@ -694,6 +694,460 @@ def _check_env_valuefrom_identifier(values: dict) -> List[Issue]:
     return issues
 
 
+# First common release that ships the 5.3 feature set (COMMAND probes,
+# networkpolicies `controllers`, controller `extraSelectorLabels`,
+# `global.templateEvaluation`).
+_V5_3 = (5, 3)
+
+# NetworkPolicy types whose pod selector key is `endpointSelector`.
+_CILIUM_POLICY_TYPES = {'cilium', 'ciliumClusterwide'}
+
+
+def _pin_at_least(common_ver: Optional[Tuple[int, int]], minimum: Tuple[int, int]) -> bool:
+    """
+    Tell whether the pinned common library is known and at least ``minimum``.
+
+    Parameters
+    ----------
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` from :func:`common_version`, or ``None`` if unknown.
+    minimum : Tuple[int, int]
+        Lowest ``(major, minor)`` that is accepted.
+
+    Returns
+    -------
+    bool
+        True only when the pin is known and ``>= minimum``.
+    """
+    return common_ver is not None and common_ver >= minimum
+
+
+def _pin_below(common_ver: Optional[Tuple[int, int]], limit: Tuple[int, int]) -> bool:
+    """
+    Tell whether the pinned common library is known and older than ``limit``.
+
+    An unknown pin is neither older nor newer, so version gates built on this
+    helper stay silent when the pin cannot be determined.
+
+    Parameters
+    ----------
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` from :func:`common_version`, or ``None`` if unknown.
+    limit : Tuple[int, int]
+        First ``(major, minor)`` that supports the feature.
+
+    Returns
+    -------
+    bool
+        True only when the pin is known and ``< limit``.
+    """
+    return common_ver is not None and common_ver < limit
+
+
+def _check_probe(probe: dict, location: str, common_ver: Optional[Tuple[int, int]]) -> List[Issue]:
+    """
+    Validate the ``type`` / ``command`` combination of one enabled probe.
+
+    Common 5.3.0 added native exec probes: ``command`` renders ``exec.command``
+    and the probe type defaults to ``COMMAND`` when ``command`` is set and
+    ``type`` is absent or ``AUTO``. Before 5.3 the only way to run a command
+    was ``custom: true`` with a raw ``spec.exec``.
+
+    Parameters
+    ----------
+    probe : dict
+        The probe block (``liveness``, ``readiness`` or ``startup``). Callers
+        pass only enabled, non-custom probes.
+    location : str
+        Dotted path of the probe, used as the issue location.
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` of the pinned common library, or ``None``.
+
+    Returns
+    -------
+    List[Issue]
+        Issues found on the probe.
+    """
+    issues: List[Issue] = []
+    command = probe.get('command')
+    native_command = _pin_at_least(common_ver, _V5_3)
+
+    # With a command and no type the library picks the type itself (COMMAND
+    # from 5.3), so asking for an explicit type would be noise.
+    if 'type' not in probe and not command:
+        if native_command:
+            advice = (
+                'Add type: TCP, HTTP, HTTPS, GRPC, COMMAND, or AUTO. '
+                'For exec/command probes set type: COMMAND with a command: list instead of custom: true'
+            )
+        else:
+            advice = (
+                'Add type: TCP, HTTP, HTTPS, GRPC, or AUTO. '
+                'For exec/command probes set custom: true with a raw spec.exec instead of a type'
+            )
+        issues.append(Issue(location, 'info', 'Probe type not specified', advice))
+
+    if 'command' in probe and _pin_below(common_ver, _V5_3):
+        issues.append(Issue(
+            f'{location}.command',
+            'error',
+            'Probe `command` is unsupported before common 5.3.0',
+            'Use custom: true with a raw spec.exec, or bump the common pin to 5.3.0'
+        ))
+
+    ptype = probe.get('type')
+    if ptype == 'COMMAND' and not command:
+        issues.append(Issue(
+            location,
+            'error',
+            'Probe type COMMAND has no command, the chart fails to render',
+            'Add the `command` key (a non-empty list of strings) or choose another type'
+        ))
+
+    if command and 'type' in probe and ptype not in ('COMMAND', 'AUTO'):
+        issues.append(Issue(
+            f'{location}.command',
+            'warning',
+            f'`command` is ignored: the probe renders as type {ptype}',
+            'Set type: COMMAND (or AUTO) to run the command, or remove `command`'
+        ))
+    return issues
+
+
+def _controllers_since_5_3_issue(location: str, common_ver: Optional[Tuple[int, int]]) -> List[Issue]:
+    """
+    Emit the pre-5.3 gate error for a NetworkPolicy ``controllers`` key.
+
+    Parameters
+    ----------
+    location : str
+        Dotted path of the ``controllers`` key.
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` of the pinned common library, or ``None``.
+
+    Returns
+    -------
+    List[Issue]
+        One error when the pin is known and older than 5.3, else empty.
+    """
+    if not _pin_below(common_ver, _V5_3):
+        return []
+    return [Issue(
+        location,
+        'error',
+        '`controllers` in a NetworkPolicy is unsupported before common 5.3.0',
+        'Use the singular `controller:` key, or bump the common pin to 5.3.0'
+    )]
+
+
+def _enabled_controller_ids(values: dict) -> set:
+    """
+    Collect the identifiers of the controllers that are not disabled.
+
+    The library resolves policy controller references against enabled
+    controllers only, and an existing but disabled identifier fails the
+    render instead of falling through to regex matching.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+
+    Returns
+    -------
+    set
+        Identifiers of every controller whose ``enabled`` is not ``False``.
+    """
+    controllers = values.get('controllers')
+    if not isinstance(controllers, dict):
+        return set()
+    return {
+        cid for cid, cfg in controllers.items()
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is not False
+    }
+
+
+def _check_controller_entries(entries, controller_ids: set, location: str) -> List[Issue]:
+    """
+    Verify the plain-identifier entries of a ``controllers`` list resolve.
+
+    The library treats each entry as an exact identifier or as a regular
+    expression resolved at render time. Only entries free of regex
+    metacharacters are checked; anything else is left to the library.
+
+    Parameters
+    ----------
+    entries : object
+        Value of a ``controllers`` key (expected to be a list of strings).
+    controller_ids : set
+        Identifiers of the enabled controllers.
+    location : str
+        Dotted path of the ``controllers`` key, used as the issue location.
+
+    Returns
+    -------
+    List[Issue]
+        One error per unresolved plain identifier, plus one for an empty
+        list. Identifier resolution is skipped when no controller is
+        enabled, to stay conservative.
+    """
+    issues: List[Issue] = []
+    if isinstance(entries, list) and not entries:
+        # The schema requires minItems 1, so an empty list fails helm lint.
+        return [Issue(
+            location,
+            'error',
+            '`controllers` is empty',
+            'List at least one controller identifier or regular expression, or drop the key'
+        )]
+    if not isinstance(entries, list) or not controller_ids:
+        return issues
+    for entry in entries:
+        # A hyphen is only special inside a character class, and it is
+        # ubiquitous in identifiers, so it must not make an entry look like
+        # a regex (re.escape escapes it anyway).
+        if not isinstance(entry, str) or re.escape(entry).replace('\\-', '-') != entry:
+            continue
+        if entry not in controller_ids:
+            issues.append(Issue(
+                location,
+                'error',
+                f'References controller "{entry}", which is not an enabled controller',
+                f'Use one of: {", ".join(sorted(controller_ids))}'
+            ))
+    return issues
+
+
+def _check_networkpolicy_controllers(
+    values: dict,
+    controller_ids: set,
+    common_ver: Optional[Tuple[int, int]],
+) -> List[Issue]:
+    """
+    Validate policy-level ``controllers`` on ``networkpolicies.<id>``.
+
+    Covers the mutual exclusivity of ``controller``, ``controllers`` and the
+    pod selector (``endpointSelector`` for the cilium types), the pre-5.3
+    version gate, and resolution of plain-identifier entries.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    controller_ids : set
+        Identifiers of the enabled controllers.
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` of the pinned common library, or ``None``.
+
+    Returns
+    -------
+    List[Issue]
+        Issues found across all enabled network policies.
+    """
+    issues: List[Issue] = []
+    policies = values.get('networkpolicies')
+    if not isinstance(policies, dict):
+        return issues
+    for pid, cfg in policies.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is False:
+            continue
+        location = f'networkpolicies.{pid}'
+        selector_key = 'endpointSelector' if cfg.get('type') in _CILIUM_POLICY_TYPES else 'podSelector'
+        present = [k for k in ('controller', 'controllers', selector_key) if cfg.get(k) is not None]
+        if len(present) > 1:
+            issues.append(Issue(
+                location,
+                'error',
+                f'{" and ".join(present)} are mutually exclusive on a network policy',
+                f'Keep only one of controller, controllers or {selector_key}'
+            ))
+        if cfg.get('controllers') is not None:
+            issues.extend(_controllers_since_5_3_issue(f'{location}.controllers', common_ver))
+            issues.extend(_check_controller_entries(
+                cfg.get('controllers'), controller_ids, f'{location}.controllers'
+            ))
+    return issues
+
+
+def _check_networkpolicy_peers(
+    values: dict,
+    controller_ids: set,
+    common_ver: Optional[Tuple[int, int]],
+) -> List[Issue]:
+    """
+    Validate the peers of native NetworkPolicy rules.
+
+    Looks at ``rules.ingress[].from[]`` and ``rules.egress[].to[]``. In a peer
+    ``controllers`` expands to the peer's ``podSelector``, so it excludes
+    ``podSelector`` and ``ipBlock``, and the singular ``controller`` key is not
+    valid there.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    controller_ids : set
+        Identifiers of the enabled controllers.
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` of the pinned common library, or ``None``.
+
+    Returns
+    -------
+    List[Issue]
+        Issues found across all enabled network policies.
+    """
+    issues: List[Issue] = []
+    policies = values.get('networkpolicies')
+    if not isinstance(policies, dict):
+        return issues
+    for pid, cfg in policies.items():
+        if not isinstance(cfg, dict) or cfg.get('enabled', True) is False:
+            continue
+        rules = cfg.get('rules')
+        if not isinstance(rules, dict):
+            continue
+        for direction, peer_key in (('ingress', 'from'), ('egress', 'to')):
+            rule_list = rules.get(direction)
+            if not isinstance(rule_list, list):
+                continue
+            for ridx, rule in enumerate(rule_list):
+                peers = rule.get(peer_key) if isinstance(rule, dict) else None
+                if not isinstance(peers, list):
+                    continue
+                for pidx, peer in enumerate(peers):
+                    if not isinstance(peer, dict):
+                        continue
+                    location = f'networkpolicies.{pid}.rules.{direction}[{ridx}].{peer_key}[{pidx}]'
+                    # The peer schema rejects `controller` on its own, not only
+                    # alongside `controllers`.
+                    if 'controller' in peer:
+                        issues.append(Issue(
+                            f'{location}.controller',
+                            'error',
+                            'The singular `controller` key is not valid inside a policy peer',
+                            'Use `controllers: [<id>]` in the peer instead'
+                        ))
+                    if peer.get('controllers') is None:
+                        continue
+                    issues.extend(_controllers_since_5_3_issue(f'{location}.controllers', common_ver))
+                    clashing = [k for k in ('podSelector', 'ipBlock') if k in peer]
+                    if clashing:
+                        issues.append(Issue(
+                            location,
+                            'error',
+                            f'A peer with `controllers` must not also set {" or ".join(clashing)}',
+                            'Split it into separate peers, one per selector'
+                        ))
+                    issues.extend(_check_controller_entries(
+                        peer.get('controllers'), controller_ids, f'{location}.controllers'
+                    ))
+    return issues
+
+
+def _check_controller_extra_selector_labels(
+    values: dict,
+    common_ver: Optional[Tuple[int, int]],
+) -> List[Issue]:
+    """
+    Flag ``controllers.<id>.extraSelectorLabels`` on a pin older than 5.3.
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` of the pinned common library, or ``None``.
+
+    Returns
+    -------
+    List[Issue]
+        One error per controller using the key on a pre-5.3 pin. Empty when
+        the pin is unknown or at least 5.3.
+    """
+    issues: List[Issue] = []
+    controllers = values.get('controllers')
+    if not isinstance(controllers, dict) or not _pin_below(common_ver, _V5_3):
+        return issues
+    for cid, cfg in controllers.items():
+        if isinstance(cfg, dict) and 'extraSelectorLabels' in cfg:
+            issues.append(Issue(
+                f'controllers.{cid}.extraSelectorLabels',
+                'error',
+                '`extraSelectorLabels` on a controller is unsupported before common 5.3.0',
+                'Bump the common pin to 5.3.0 or remove the key'
+            ))
+    return issues
+
+
+def _check_template_evaluation(
+    values: dict,
+    common_ver: Optional[Tuple[int, int]],
+) -> List[Issue]:
+    """
+    Validate ``global.templateEvaluation`` (version gate and shape).
+
+    Parameters
+    ----------
+    values : dict
+        Parsed values.yaml.
+    common_ver : Optional[Tuple[int, int]]
+        ``(major, minor)`` of the pinned common library, or ``None``.
+
+    Returns
+    -------
+    List[Issue]
+        Errors for a pre-5.3 pin, a non-integer or sub-1 ``passes``, and an
+        ``excludePaths`` that is not a list of lists of strings.
+    """
+    issues: List[Issue] = []
+    global_section = values.get('global')
+    if not isinstance(global_section, dict) or 'templateEvaluation' not in global_section:
+        return issues
+    location = 'global.templateEvaluation'
+    if _pin_below(common_ver, _V5_3):
+        issues.append(Issue(
+            location,
+            'error',
+            '`global.templateEvaluation` is unsupported before common 5.3.0',
+            'Bump the common pin to 5.3.0 or remove the key'
+        ))
+    evaluation = global_section['templateEvaluation']
+    if not isinstance(evaluation, dict):
+        issues.append(Issue(
+            location,
+            'error',
+            '`global.templateEvaluation` must be a mapping with `passes` and `excludePaths`',
+            'Use templateEvaluation: {passes: 2, excludePaths: [[...]]}'
+        ))
+        return issues
+    if 'passes' in evaluation:
+        passes = evaluation['passes']
+        # bool is a subclass of int; `passes: true` is not a valid count.
+        if isinstance(passes, bool) or not isinstance(passes, int) or passes < 1:
+            issues.append(Issue(
+                f'{location}.passes',
+                'error',
+                f'`passes` must be an integer >= 1, got {passes!r}',
+                'Use passes: 1 (default) or a higher whole number'
+            ))
+    if 'excludePaths' in evaluation:
+        paths = evaluation['excludePaths']
+        # Each segment is a map key or an array index written as a string, so
+        # an unquoted index (`0`) is an int in YAML and gets rejected.
+        well_formed = isinstance(paths, list) and all(
+            isinstance(path, list) and all(isinstance(seg, str) for seg in path)
+            for path in paths
+        )
+        if not well_formed:
+            issues.append(Issue(
+                f'{location}.excludePaths',
+                'error',
+                '`excludePaths` must be a list of paths, each a list of strings',
+                'Write each path as [controllers, main, ...] and quote array indexes, e.g. "0"'
+            ))
+    return issues
+
+
 def validate_chart_yaml(chart_path: Path) -> List[Issue]:
     """
     Validate Chart.yaml structure.
@@ -778,7 +1232,7 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                         'Chart.yaml',
                         'warning',
                         'common library has no version pin',
-                        'Pin a version (current default: 5.1.0)'
+                        'Pin a version (current default: 5.3.0)'
                     ))
                 elif majors:
                     min_major = min(majors)
@@ -797,14 +1251,14 @@ def validate_chart_yaml(chart_path: Path) -> List[Issue]:
                             'Chart.yaml',
                             'warning',
                             f'common library constraint {raw_version} spans majors 4.x and 5.x',
-                            'Tighten the pin to a single major (e.g. 5.1.0) — a range across majors is ambiguous'
+                            'Tighten the pin to a single major (e.g. 5.3.0) — a range across majors is ambiguous'
                         ))
                     elif 4 in majors:
                         issues.append(Issue(
                             'Chart.yaml',
                             'warning',
                             f'common library pinned to {raw_version} (legacy 4.x track)',
-                            'Migrate to 5.1.0 when K8s ≥ 1.31 / Helm ≥ 3.18 — see references/migration-4-to-5.md'
+                            'Migrate to 5.3.0 when K8s ≥ 1.31 / Helm ≥ 3.18 — see references/migration-4-to-5.md'
                         ))
                     elif min_major >= 5:
                         issues.append(Issue(
@@ -1311,14 +1765,11 @@ def validate_values(chart_path: Path) -> List[Issue]:
                     if probe_type in probes:
                         probe = probes[probe_type]
                         if probe.get('enabled') and not probe.get('custom'):
-                            if 'type' not in probe:
-                                issues.append(Issue(
-                                    f'{cont_location}.probes.{probe_type}',
-                                    'info',
-                                    'Probe type not specified',
-                                    'Add type: TCP, HTTP, HTTPS, GRPC, or AUTO. '
-                                    'For exec/command probes set custom: true with a raw spec.exec instead of a type'
-                                ))
+                            issues.extend(_check_probe(
+                                probe,
+                                f'{cont_location}.probes.{probe_type}',
+                                common_ver,
+                            ))
 
     # Check services
     if 'service' in values:
@@ -1518,6 +1969,12 @@ def validate_values(chart_path: Path) -> List[Issue]:
     issues.extend(_check_podmonitor_refs(values, controller_ids))
     issues.extend(_check_servicemonitor_refs(values, services_map))
     issues.extend(_check_env_valuefrom_identifier(values))
+    # Policy controller references resolve against enabled controllers only.
+    enabled_controller_ids = _enabled_controller_ids(values)
+    issues.extend(_check_networkpolicy_controllers(values, enabled_controller_ids, common_ver))
+    issues.extend(_check_networkpolicy_peers(values, enabled_controller_ids, common_ver))
+    issues.extend(_check_controller_extra_selector_labels(values, common_ver))
+    issues.extend(_check_template_evaluation(values, common_ver))
 
     return issues
 
