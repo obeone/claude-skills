@@ -12,12 +12,16 @@ Official sources:
 - [Release notes — common-5.1.0](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.1.0)
 - [Release notes — common-5.2.0](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.2.0)
 - [Release notes — common-5.2.1](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.2.1)
+- [Release notes: common-5.3.0](https://github.com/bjw-s-labs/helm-charts/releases/tag/common-5.3.0)
 
-`common-5.2.1` (2026-09-17) is the current default pin. `5.2.0`
+`common-5.3.0` (2026-10-10) is the current default pin. `5.2.0`
 (2026-09-16) added `ExternalSecret`/Cilium policy resources, initial
 `ListenerSet` support, default `topologySpreadConstraints` selectors,
 native `projected` persistence, and global string templating; `5.2.1` is
-a bugfix-only follow-up. None of it is a breaking change, so landing on
+a bugfix-only follow-up. `5.3.0` adds namespace creation, controller
+`extraSelectorLabels`, native `COMMAND` probes, templated annotation and
+label keys, `global.templateEvaluation`, and controller references in
+NetworkPolicy and Cilium rules. None of it is a breaking change, so landing on
 the current pin costs nothing beyond what this guide already covers.
 
 ## Prerequisites
@@ -38,7 +42,7 @@ chart still pins 4.x.
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 5.2.1   # was 4.6.x
+    version: 5.3.0   # was 4.6.x
 ```
 
 Then:
@@ -193,7 +197,8 @@ on `app.kubernetes.io/name` and forget about the legacy.
 ## Breaking change 5 — NetworkPolicy `controller` / `podSelector`
 
 Mutually exclusive in 5.x. 4.x silently let you set both with surprising
-results.
+results. 5.3.0 adds `controllers` (a list of exact identifiers or
+anchored regexes), which is mutually exclusive with both.
 
 ```yaml
 # Pick one — not both

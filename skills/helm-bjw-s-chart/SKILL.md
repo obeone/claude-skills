@@ -2,7 +2,7 @@
 name: helm-bjw-s-chart
 description: "Generate production-ready Helm charts on the bjw-s-labs common library (app-template v5, v4 legacy). Use for new charts, Compose-to-Helm conversion, sidecars, init containers, services, ingress, persistence, StatefulSets, HPAs, Service/PodMonitors, and NetworkPolicies."
 metadata:
-  version: "5.5.0"
+  version: "5.6.0"
 ---
 
 # Helm bjw-s Chart Generator
@@ -14,7 +14,7 @@ metadata:
 
 | common  | Kubernetes | Helm      | Status                                              |
 | :------ | :--------- | :-------- | :-------------------------------------------------- |
-| `5.2.1` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
+| `5.3.0` | `>= 1.31`  | `>= 3.18` | **Default** — latest stable, all examples target it |
 | `4.6.2` | `>= 1.25`  | `>= 3.14` | Legacy — pin when the cluster can't meet 5.x reqs   |
 
 Everything documented here works on **common 5.x** by default. When a
@@ -23,58 +23,134 @@ agents pinned to the legacy track can skip it. See
 [`references/migration-4-to-5.md`](references/migration-4-to-5.md) for
 the full 4 → 5 upgrade procedure.
 
-## New in common 5.2
+## New in common 5.3
 
-`5.2.0` (2026-09-16) adds resource types and small template-side
-conveniences, drop-in over 5.1.x. `5.2.1` (2026-09-17) is a bugfix-only
-patch (template rendering issues) with no user-facing change.
+`5.3.0` (2026-10-10) is drop-in over 5.2.x: no values change is required
+to upgrade, and the Kubernetes and Helm minimums are unchanged.
 
-1. **`ExternalSecret` resources** via a top-level `externalSecrets` map,
-   with `defaultExternalSecretStoreRef` as the shared store default.
-2. **`CiliumNetworkPolicy` and `CiliumClusterwideNetworkPolicy`**
-   through the existing `networkpolicies` map: set
-   `networkpolicies.<id>.type` to `cilium` or `ciliumClusterwide`
-   (`native`, the default, keeps the plain `NetworkPolicy`).
-3. **Initial `ListenerSet` support** via a top-level `listenerSets` map.
-4. **`topologySpreadConstraints` get default selectors** on controllers,
-   so you no longer have to hand-write the label selector for the
-   common case.
-5. **`persistence.<id>.type: projected`** is natively supported,
-   alongside `emptyDir`, `nfs`, `hostPath`, etc.
-6. **String fields are templated globally**, not just on a fixed
-   allowlist — Helm templating (`{{ }}`) now works in more places
-   throughout `values.yaml`.
-7. **Bugfix:** `NetworkPolicy` `extraSelectorLabels` now correctly take
-   precedence over generated selector labels.
+1. **`namespace.create: true`** renders a `v1/Namespace` named after the
+   release namespace, before every other resource. `namespace.labels` and
+   `namespace.annotations` are optional (keys and values are templated).
 
-## New in common 5.1.0
+   ```yaml
+   namespace:
+     create: true
+     labels:
+       pod-security.kubernetes.io/enforce: restricted
+   ```
 
-Drop-in over 5.0.x — no values change is required to upgrade. Four
-additions, each with a worked example in
-[`references/patterns.md`](references/patterns.md):
+2. **`controllers.<id>.extraSelectorLabels`** adds labels that identify the
+   controller's pods. They land in the pod labels and in every generated
+   selector (workload `matchLabels`, Services, native and Cilium policies,
+   PodMonitor, PodDisruptionBudget, default `topologySpreadConstraints`).
 
-1. **DaemonSets accept `strategy` / `rollingUpdate`** and render a real
-   `updateStrategy`. On 5.0.x both keys were silently ignored for this
-   controller type.
-2. **`serviceAccount.<id>.automountServiceAccountToken`** sets the field
-   on the ServiceAccount object itself. It does not replace the pod-level
-   key: the library always writes `automountServiceAccountToken` into the
-   pod spec (default `false`), and the pod spec wins. Set both.
-3. **`route.<id>.namespaceOverride`** deploys a Route into another
-   namespace, and the library then emits the matching `ReferenceGrant`
-   automatically. Turn that off with
-   `route.<id>.referenceGrant.enabled: false`.
-4. **`rollingUpdate` takes the upstream key names** — `maxSurge` and
-   `maxUnavailable`. The old `surge` / `unavailable` shorthands still
-   work but are deprecated and disappear in 6.0. StatefulSets gained
-   `rollingUpdate.maxUnavailable`, which the cluster only honours with the
-   `MaxUnavailableStatefulSet` feature gate — alpha and off by default up
-   to Kubernetes 1.34, beta from 1.35 with the default varying by patch
-   release.
+   ```yaml
+   controllers:
+     main:
+       extraSelectorLabels:
+         app.kubernetes.io/component: backend
+   ```
 
-One behavioral change: an invalid `strategy` is now rejected by the values
-schema instead of a template `fail`, so `helm lint` reports it earlier and
-the message names the valid values per controller type.
+   Workload selectors are immutable: adding or changing this on a live
+   Deployment or StatefulSet means deleting and recreating the workload.
+   The resource-level `extraSelectorLabels` (Service, NetworkPolicy, ...)
+   still only affect that resource's own selector.
+
+3. **Native `COMMAND` probes.** `probes.<n>.command` (array of strings)
+   renders `exec.command`, and `type` gains `COMMAND`. The type defaults to
+   `COMMAND` when `command` is set and `type` is absent or `AUTO`. No
+   `port` is emitted. `type: COMMAND` without `command` fails the render.
+   The old `custom: true` plus raw `spec.exec` workaround is no longer
+   needed.
+
+   ```yaml
+   probes:
+     liveness:
+       enabled: true
+       command: ["/usr/bin/healthcheck", "--timeout=3"]
+   ```
+
+4. **Templated keys.** The keys of `annotations`, `labels` and
+   `extraSelectorLabels` maps go through `tpl` too, not only the values.
+
+5. **`global.templateEvaluation`** controls multi-pass templating.
+   `passes` (integer >= 1, default 1) re-evaluates a string when a
+   templated value itself produces `{{ }}`, and stops early once a pass
+   changes nothing. `excludePaths` lists paths (each a list of map keys or
+   array indexes, as strings) that are left untouched with their
+   descendants, for values that must keep a literal `{{ }}`.
+
+   ```yaml
+   global:
+     templateEvaluation:
+       passes: 2
+       excludePaths:
+         - [controllers, main, containers, main, env, VPN_PORT_FORWARDING_UP_COMMAND]
+   ```
+
+6. **Controller references in network policies.** On
+   `networkpolicies.<id>` (all three types), `controllers: [<id or regex>]`
+   targets several controllers. Entries are exact identifiers or regular
+   expressions anchored as `^(<expr>)$`. It is mutually exclusive with
+   `controller`, `podSelector` and `endpointSelector`. A reference that
+   matches no enabled controller fails the render and lists the available
+   identifiers.
+   - Native rules: a peer in `rules.ingress[].from[]` or
+     `rules.egress[].to[]` may carry `controllers: [...]` (expands to that
+     peer's `podSelector`, exclusive with `podSelector` and `ipBlock`; the
+     singular `controller` is not valid inside a peer).
+   - Cilium and `ciliumClusterwide` rules: `ingress[].fromControllers` and
+     `egress[].toControllers` expand into `fromEndpoints` / `toEndpoints`.
+
+   ```yaml
+   networkpolicies:
+     api:
+       controllers: ["api", "^worker-.*$"]
+       policyTypes: [Ingress]
+       rules:
+         ingress:
+           - from:
+               - controllers: ["frontend"]
+             ports:
+               - port: 8080
+   ```
+
+Three fixes ride along. Global metadata is now the base and resource-level
+`labels` / `annotations` override it (the reverse on Services and several
+other resources). Pod labels and generated selectors share one helper, so
+selector labels are merged last and always win over user pod labels.
+`clusterIP` is now rendered for `LoadBalancer` and `NodePort` Services
+(still omitted for `ExternalName`).
+
+## Earlier 5.x additions
+
+Worked examples for most of these live in
+[`references/patterns.md`](references/patterns.md).
+
+- **5.2.0 (2026-09-16):** `externalSecrets` (with
+  `defaultExternalSecretStoreRef`) generates `ExternalSecret` resources;
+  `networkpolicies.<id>.type: cilium` / `ciliumClusterwide` renders Cilium
+  policies (`native` is the default); `listenerSets` adds initial Gateway
+  API `ListenerSet` support; controllers get default
+  `topologySpreadConstraints` selectors; `persistence.<id>.type: projected`
+  is native; string fields are templated globally, so `{{ }}` works in
+  more places. A bugfix made `NetworkPolicy` `extraSelectorLabels` take
+  precedence over generated selector labels.
+- **5.1.0:** DaemonSets accept `strategy` / `rollingUpdate` (silently
+  ignored on 5.0.x); `serviceAccount.<id>.automountServiceAccountToken`
+  sets the field on the SA itself; `route.<id>.namespaceOverride` deploys a
+  Route into another namespace and emits the `ReferenceGrant`
+  (`route.<id>.referenceGrant.enabled: false` turns that off);
+  `rollingUpdate` takes the upstream `maxSurge` / `maxUnavailable`;
+  StatefulSets gained `rollingUpdate.maxUnavailable`, which needs the
+  `MaxUnavailableStatefulSet` feature gate (alpha, off by default up to
+  Kubernetes 1.34, beta from 1.35). An invalid `strategy` is now rejected
+  by the values schema, so `helm lint` catches it earlier.
+
+Two behavioural notes still bite. The `surge` / `unavailable` shorthands
+are deprecated and removed in 6.0. The library always writes
+`automountServiceAccountToken` into the pod spec (default `false`) and the
+pod spec wins over the ServiceAccount key, so set both.
 
 ## Migration 4.x → 5.x at a glance
 
@@ -134,7 +210,7 @@ appVersion: "<app version>"
 dependencies:
   - name: common
     repository: https://bjw-s-labs.github.io/helm-charts
-    version: 5.2.1  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
+    version: 5.3.0  # Default. Pin to 4.6.2 for legacy clusters (K8s < 1.31 / Helm < 3.18).
 ```
 
 ## values.yaml Structure
@@ -247,6 +323,11 @@ Each has a worked example in
 | `networkpolicies.*.type: cilium` / `ciliumClusterwide` | `5.2.0` | Renders a `CiliumNetworkPolicy` / `CiliumClusterwideNetworkPolicy` instead of the native `NetworkPolicy` (`type: native`, default) |
 | `listenerSets`              | `5.2.0` | Gateway API `ListenerSet` resources (initial support) |
 | `persistence.*.type: projected` | `5.2.0` | Native `projected` volume support |
+| `namespace`                 | `5.3.0` | Renders the release `Namespace` first, with optional labels/annotations |
+| `controllers.*.extraSelectorLabels` | `5.3.0` | Pod identity labels applied to the pods and every generated selector (immutable on live workloads) |
+| `probes.*.command` / `type: COMMAND` | `5.3.0` | Native exec probe, no `custom: true` workaround |
+| `global.templateEvaluation` | `5.3.0` | Multi-pass templating (`passes`) with `excludePaths` for literal `{{ }}` |
+| `networkpolicies.*.controllers` | `5.3.0` | Target several controllers by identifier or regex; rule peers take `controllers` (native) or `fromControllers` / `toControllers` (Cilium) |
 
 ## Best Practices
 

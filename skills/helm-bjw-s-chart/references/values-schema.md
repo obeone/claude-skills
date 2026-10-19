@@ -15,6 +15,15 @@ controllers:
     type: deployment                 # deployment, statefulset, daemonset, cronjob, job
     annotations: {}                  # Annotations on controller resource
     labels: {}                       # Labels on controller resource
+    # (5.3.0+) Labels that identify this controller's pods. They land in
+    # the pod labels AND in every generated selector (workload
+    # selector.matchLabels, Services, native and Cilium policies,
+    # PodMonitor, PodDisruptionBudget, default topologySpreadConstraints).
+    # Keys and values are templated. They override the standard selector
+    # labels and win over plain pod labels. Workload selectors are
+    # immutable: adding or changing this on a live Deployment or
+    # StatefulSet means deleting and recreating the workload.
+    extraSelectorLabels: {}
     replicas: 1                      # Number of replicas (null for HPA)
     # Update strategy. A string, never a map. Valid values depend on
     # `type`: deployment → Recreate (default) | RollingUpdate;
@@ -79,7 +88,8 @@ controllers:
         probes:
           liveness:
             enabled: true
-            type: TCP              # TCP, HTTP, HTTPS, GRPC, AUTO (default TCP)
+            type: TCP              # TCP, HTTP, HTTPS, GRPC, COMMAND (5.3.0+), AUTO (default TCP)
+            # command: []          # (5.3.0+) argv for COMMAND probes, see Probes
             custom: false
             spec:
               initialDelaySeconds: 0
@@ -579,10 +589,32 @@ probes:
       periodSeconds: 10
 ```
 
+### COMMAND Probe (5.3.0+)
+
+Native exec probe: set `command` (array of strings, at least one item) and
+the chart renders `exec.command`. `type` defaults to `COMMAND` when
+`command` is set and `type` is absent or `AUTO`; otherwise it still
+defaults to `TCP`. No `port` is emitted for a COMMAND probe, neither an
+explicit one nor the primary-service fallback. `type: COMMAND` without
+`command` fails the render with a message naming
+`controllers.<c>.containers.<n>.probes.<probe>.command`.
+
+```yaml
+probes:
+  liveness:
+    enabled: true
+    type: COMMAND            # optional when `command` is set
+    command: ["/usr/bin/healthcheck", "--timeout=3"]
+    spec:
+      periodSeconds: 10
+      timeoutSeconds: 5
+```
+
 ### Exec Probe (custom)
 
-There is no `EXEC` type. Exec/command probes require `custom: true` with a
-raw pod-probe `spec` containing `exec.command`.
+There is no `EXEC` type. Before 5.3.0, exec/command probes require
+`custom: true` with a raw pod-probe `spec` containing `exec.command`. That
+workaround still works, but prefer the `COMMAND` probe above on 5.3.0+.
 
 ```yaml
 probes:
@@ -656,6 +688,49 @@ service:
       service-specific: annotation
 ```
 
+## Release Namespace (5.3.0+)
+
+Top-level `namespace` renders a `v1/Namespace` named after
+`.Release.Namespace`, **before** every other resource. Labels and
+annotations merge over the chart's global metadata; keys and values are
+templated.
+
+```yaml
+namespace:
+  create: false                      # Default false
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations: {}
+```
+
+## Template Evaluation (5.3.0+)
+
+```yaml
+global:
+  templateEvaluation:
+    passes: 1                        # Integer >= 1, default 1
+    excludePaths: []                 # Default []
+```
+
+- `passes`: maximum number of times each string is re-evaluated. Raise it
+  when a templated value itself produces `{{ }}`. Evaluation stops early
+  once a pass changes nothing.
+- `excludePaths`: a list of paths, each path being a list of strings, one
+  per map key or array index from the values root. A matching path **and
+  its descendants** are left untouched. Array indexes count as segments
+  (written as strings, e.g. `"0"`), so a path can point inside a list.
+- `externalSecrets.<id>.target.template.data` stays deferred automatically.
+
+```yaml
+global:
+  templateEvaluation:
+    excludePaths:
+      # Map keys only
+      - [controllers, main, containers, main, env, VPN_PORT_FORWARDING_UP_COMMAND]
+      # Array index as a path segment
+      - [controllers, main, containers, main, args, "1"]
+```
+
 ## rawResources
 
 Ship arbitrary Kubernetes manifests alongside the chart-managed
@@ -688,6 +763,9 @@ networkpolicies:
     # (5.x only) If you omit both `controller` and `podSelector`
     # and exactly one controller exists, it is auto-targeted.
     controller: <controller-id>      # Which controller to target
+    # (5.3.0+) Several controllers by exact identifier or regex, see below.
+    # Mutually exclusive with `controller` and `podSelector`.
+    # controllers: [<controller-id>, "worker-.*"]
 
     policyTypes:
       - Ingress
@@ -711,4 +789,63 @@ networkpolicies:
           ports:
             - protocol: TCP
               port: 443
+```
+
+### Targeting Controllers by Identifier or Regex (5.3.0+)
+
+`controllers: [<id or regex>, ...]` is available on all three policy types
+(`native`, `cilium`, `ciliumClusterwide`). It is mutually exclusive with
+`controller` (singular) and with `podSelector` / `endpointSelector`. Each
+entry is an exact controller identifier or a regular expression, anchored
+as `^(<expr>)$`.
+
+- One matched controller gives a plain `matchLabels` selector. Several
+  matched controllers give only the labels they all share, plus a
+  `matchExpressions` entry on `app.kubernetes.io/controller` with
+  operator `In`.
+- A reference matching no **enabled** controller fails the render and lists
+  the available identifiers. An existing but disabled identifier does not
+  fall through to regex matching. An invalid regex also fails explicitly.
+- `ciliumClusterwide` still rejects `nodeSelector` combined with
+  `endpointSelector`, `controller` or `controllers`.
+
+```yaml
+networkpolicies:
+  backend:
+    controllers: ["api", "worker-.*"]
+    policyTypes: [Ingress]
+    rules:
+      ingress:
+        - from:
+            # Peer-level reference, expands to that peer's podSelector
+            - controllers: ["frontend"]
+          ports:
+            - protocol: TCP
+              port: 8080
+```
+
+Peer-level `controllers` (native only) goes inside `rules.ingress[].from[]`
+and `rules.egress[].to[]`. In a peer it is mutually exclusive with
+`podSelector` and `ipBlock`, and the singular `controller` key is **not**
+valid there.
+
+Cilium (`type: cilium` / `ciliumClusterwide`) rules use dedicated keys
+instead, in the policy's `ingress` / `egress` lists: `fromControllers`
+(ingress) and `toControllers` (egress). They expand into `fromEndpoints` /
+`toEndpoints`. Direction matters: `toControllers` under `ingress` or
+`fromControllers` under `egress` is rejected by the schema.
+
+```yaml
+networkpolicies:
+  backend-cilium:
+    type: cilium
+    controllers: ["api"]
+    ingress:
+      - fromControllers: ["frontend"]
+        toPorts:
+          - ports:
+              - port: "8080"
+                protocol: TCP
+    egress:
+      - toControllers: ["db"]
 ```
