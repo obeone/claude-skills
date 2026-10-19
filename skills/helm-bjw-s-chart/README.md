@@ -1,7 +1,7 @@
 ![Helm](https://img.shields.io/badge/Helm-3.18+-0F1689?logo=helm&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-1.31+-326CE5?logo=kubernetes&logoColor=white)
 ![bjw-s common](https://img.shields.io/badge/bjw--s_common-5.3.0-6E56CF)
-![Skill](https://img.shields.io/badge/skill-5.6.0-blue)
+![Skill](https://img.shields.io/badge/skill-5.6.1-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # helm-bjw-s-chart
@@ -166,7 +166,7 @@ flowchart TB
 
 ## 📝 Status
 
-`metadata.version: 5.6.0`. Default library `common 5.3.0`, released
+`metadata.version: 5.6.1`. Default library `common 5.3.0`, released
 2026-10-10. The 4.x track is maintained, not developed: it gets migration
 guidance and validator warnings, not new patterns.
 

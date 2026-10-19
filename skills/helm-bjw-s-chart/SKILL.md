@@ -2,7 +2,7 @@
 name: helm-bjw-s-chart
 description: "Generate production-ready Helm charts on the bjw-s-labs common library (app-template v5, v4 legacy). Use for new charts, Compose-to-Helm conversion, sidecars, init containers, services, ingress, persistence, StatefulSets, HPAs, Service/PodMonitors, and NetworkPolicies."
 metadata:
-  version: "5.6.0"
+  version: "5.6.1"
 ---
 
 # Helm bjw-s Chart Generator
