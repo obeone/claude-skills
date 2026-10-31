@@ -1,0 +1,40 @@
+{
+  "name": "obeone-claude-skills",
+  "owner": {
+    "name": "Grégoire Compagnon",
+    "email": "obeone@obeone.org"
+  },
+  "metadata": {
+    "description": "Claude Agent Skills Stack: one plugin per skill, tracking main."
+  },
+  "plugins": [
+    {
+      "name": "dockerfile-best-practices",
+      "source": "./skills/dockerfile-best-practices",
+      "description": "Create and optimize Dockerfiles and Compose files: BuildKit, multi-stage builds, cache mounts, non-root hardening, plus the analyze_dockerfile and analyze_compose linters.",
+      "category": "development",
+      "tags": ["docker", "dockerfile", "compose", "buildkit", "containers"]
+    },
+    {
+      "name": "helm-bjw-s-chart",
+      "source": "./skills/helm-bjw-s-chart",
+      "description": "Generate production-ready Helm charts on the bjw-s-labs common library (app-template v5), with a chart validator.",
+      "category": "development",
+      "tags": ["helm", "kubernetes", "bjw-s", "app-template"]
+    },
+    {
+      "name": "automode-config",
+      "source": "./skills/automode-config",
+      "description": "Author, validate and migrate Claude Code autoMode permission blocks behind a critique and sha256 gate. Ships the /automode-edit command.",
+      "category": "productivity",
+      "tags": ["claude-code", "automode", "permissions", "settings"]
+    },
+    {
+      "name": "apple-shortcuts",
+      "source": "./skills/apple-shortcuts",
+      "description": "Generate importable Apple Shortcuts (.shortcut / plist XML) for macOS and iOS, including third-party app actions.",
+      "category": "productivity",
+      "tags": ["apple", "shortcuts", "macos", "ios", "automation"]
+    }
+  ]
+}

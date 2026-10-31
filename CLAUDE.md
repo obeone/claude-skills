@@ -66,6 +66,7 @@ Natural-language editing is the `/automode-edit` slash command (e.g. `add a hard
    ```
 2. **POSIX text**: every text file ends with a newline (`\n`) and uses LF line endings.
 3. **Python via uv**: use `uv` for dependency management.
+4. **Marketplace entry**: every skill has one plugin entry in `.claude-plugin/marketplace.json` (`"source": "./skills/<name>"`, no `version` so users track commits). Adding, renaming or removing a skill updates that file; check with `claude plugin validate .`.
 
 ## Release and Versioning
 

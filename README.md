@@ -67,7 +67,43 @@ hash gate, and an atomic flock-protected write. Full contract:
 
 ## 📦 Installation
 
-### Recommended: the `skills` CLI
+### Claude Code: plugin marketplace (auto-update)
+
+The repo is a Claude Code plugin marketplace named `obeone-claude-skills`,
+with one plugin per skill. Inside a session:
+
+```text
+/plugin marketplace add obeone/claude-skills
+/plugin install dockerfile-best-practices@obeone-claude-skills
+/plugin install helm-bjw-s-chart@obeone-claude-skills
+/plugin install automode-config@obeone-claude-skills
+/plugin install apple-shortcuts@obeone-claude-skills
+```
+
+Auto-update is off by default for third-party marketplaces. Turn it on once:
+`/plugin`, **Marketplaces** tab, select `obeone-claude-skills`, then
+**Enable auto-update**. Or declare it in `~/.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "obeone-claude-skills": {
+      "source": { "source": "github", "repo": "obeone/claude-skills" },
+      "autoUpdate": true
+    }
+  }
+}
+```
+
+Plugins carry no pinned `version`, so every commit on `main` that touches a
+skill is a new version. Claude Code checks in the background a few minutes
+after a session starts and prints `Run /reload-plugins to apply` when
+something changed. Force it with `claude plugin update <plugin>@obeone-claude-skills`.
+
+Plugin skills are namespaced: `automode-config` exposes its command as
+`/automode-config:automode-edit`.
+
+### The `skills` CLI
 
 The [`skills`](https://skills.sh/) CLI resolves any GitHub repo and wires the
 bundles into the right agent directories (Claude Code, Cursor, and others).
