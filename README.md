@@ -67,10 +67,38 @@ hash gate, and an atomic flock-protected write. Full contract:
 
 ## 📦 Installation
 
-### Claude Code: plugin marketplace (auto-update)
+### Recommended: the `skills` CLI
 
-The repo is a Claude Code plugin marketplace named `obeone-claude-skills`,
-with one plugin per skill. Inside a session:
+The [`skills`](https://skills.sh/) CLI resolves any GitHub repo and wires the
+bundles into the right agent directories (Claude Code, Cursor, and others).
+Run it via `npx`, no global Node install required.
+
+```bash
+# Interactive: pick scope and agents
+npx skills add obeone/claude-skills
+
+# All skills, user-global (~/.claude/skills)
+npx skills add obeone/claude-skills -g --all
+
+# All skills, current project (./.claude/skills)
+npx skills add obeone/claude-skills --all
+
+# A single skill (project-scoped; add -g for global)
+npx skills add obeone/claude-skills --skill dockerfile-best-practices -y
+
+# List what the repo offers without installing
+npx skills add obeone/claude-skills -l
+```
+
+Update with `npx skills update`, remove with `npx skills remove`, inspect with
+`npx skills list`. Full options: `npx skills -h`.
+
+### Claude Code only: plugin marketplace (auto-update)
+
+Pick this instead of the `skills` CLI if you only use Claude Code and want
+updates without running `npx skills update`. Don't install the same skill both
+ways, or it loads twice. The repo is a plugin marketplace named
+`obeone-claude-skills`, with one plugin per skill. Inside a session:
 
 ```text
 /plugin marketplace add obeone/claude-skills
@@ -98,36 +126,11 @@ Auto-update is off by default for third-party marketplaces. Turn it on once:
 Plugins carry no pinned `version`, so every commit on `main` that touches a
 skill is a new version. Claude Code checks in the background a few minutes
 after a session starts and prints `Run /reload-plugins to apply` when
-something changed. Force it with `claude plugin update <plugin>@obeone-claude-skills`.
+something changed. To force it:
+`claude plugin update <plugin>@obeone-claude-skills`.
 
 Plugin skills are namespaced: `automode-config` exposes its command as
 `/automode-config:automode-edit`.
-
-### The `skills` CLI
-
-The [`skills`](https://skills.sh/) CLI resolves any GitHub repo and wires the
-bundles into the right agent directories (Claude Code, Cursor, and others).
-Run it via `npx`, no global Node install required.
-
-```bash
-# Interactive: pick scope and agents
-npx skills add obeone/claude-skills
-
-# All skills, user-global (~/.claude/skills)
-npx skills add obeone/claude-skills -g --all
-
-# All skills, current project (./.claude/skills)
-npx skills add obeone/claude-skills --all
-
-# A single skill (project-scoped; add -g for global)
-npx skills add obeone/claude-skills --skill dockerfile-best-practices -y
-
-# List what the repo offers without installing
-npx skills add obeone/claude-skills -l
-```
-
-Update with `npx skills update`, remove with `npx skills remove`, inspect with
-`npx skills list`. Full options: `npx skills -h`.
 
 ### Claude.ai (web)
 
