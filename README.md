@@ -204,7 +204,7 @@ Every skill follows the same layout, so an agent that knows one knows them all:
 ```text
 .
 ├── README.md             # This file
-├── CLAUDE.md             # Claude Code guidance for this repo
+├── AGENTS.md             # Claude Code guidance for this repo
 ├── AGENTS.md             # Agent guidelines
 ├── .github/workflows/    # CI and release automation
 └── skills/
