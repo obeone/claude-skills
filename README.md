@@ -21,6 +21,7 @@ agent needs to do one job well, with no dependency on the others.
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.4.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
 | [**automode-config**](./skills/automode-config/) | 0.9.0 | Author, validate, and migrate project-level `autoMode` blocks | Four official sections, critique gate, sha256 hash gate, atomic flock writes |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | 1.0.0 | Generate importable Apple Shortcuts for macOS and iOS | Native and third-party action catalogs, validator, inspector, App Intents discovery |
+| [**cheap-orchestration**](./skills/cheap-orchestration/) | 2.1.0 | Decide whether work runs inline or on a cheaper delegated agent | Decision rule by size and stakes, pinned scout/editor/worker/reviewer crew, spec templates, benchmark evidence |
 
 ## ⚡ Quick start
 
@@ -106,7 +107,7 @@ For hosts where Node is not an option:
 ```bash
 mkdir -p ~/.claude/skills
 
-for skill in dockerfile-best-practices helm-bjw-s-chart automode-config apple-shortcuts; do
+for skill in dockerfile-best-practices helm-bjw-s-chart automode-config apple-shortcuts cheap-orchestration; do
   curl -L "https://github.com/obeone/claude-skills/releases/latest/download/${skill}.skill" \
     -o /tmp/skill.zip && unzip -o /tmp/skill.zip -d ~/.claude/skills/
 done
@@ -195,6 +196,13 @@ Every skill follows the same layout, so an agent that knows one knows them all:
 - **Action catalogs**: native actions plus common third-party apps
 - **Tooling**: validator, inspector, and App Intents discovery
 
+### cheap-orchestration
+
+- **Decision rule**: whether a unit of work runs inline or is delegated, by task size and stakes
+- **Pinned crew**: scout, editor, worker and reviewer, each with a defined role
+- **Templates**: spec and return templates for delegation, plus the benchmark evidence behind each rule
+- **Not shipped**: the operative rules live in your own `CLAUDE.md` ("Delegation & cost") and the agent definitions in `~/.claude/agents/`; the skill carries neither
+
 ---
 
 ## 🔨 Development
@@ -211,7 +219,8 @@ Every skill follows the same layout, so an agent that knows one knows them all:
     ├── dockerfile-best-practices/
     ├── helm-bjw-s-chart/
     ├── automode-config/
-    └── apple-shortcuts/
+    ├── apple-shortcuts/
+    └── cheap-orchestration/
 ```
 
 ### Mandatory requirements
@@ -292,6 +301,7 @@ flowchart TB
         S2[helm-bjw-s-chart]
         S3[automode-config]
         S4[apple-shortcuts]
+        S5[cheap-orchestration]
     end
 
     repo --> CI["publish-skills.yml<br/>on tag vYYYY.MM.MICRO"]
