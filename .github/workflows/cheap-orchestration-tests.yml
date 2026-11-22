@@ -1,0 +1,30 @@
+name: Cheap Orchestration Tests
+
+# Unit tests for skills/cheap-orchestration/scripts/setup_crew.py: the crew
+# installer renders agent definitions for three harnesses, and a wrong model
+# or a clobbered user file is a cost or data-loss bug, not a cosmetic one.
+
+on:
+  pull_request:
+    paths:
+      - 'skills/cheap-orchestration/**'
+      - '.github/workflows/cheap-orchestration-tests.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/cheap-orchestration/**'
+      - '.github/workflows/cheap-orchestration-tests.yml'
+
+jobs:
+  test-setup-crew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Unit-test the crew installer
+        run: uv run skills/cheap-orchestration/scripts/tests/test_setup_crew.py -v
