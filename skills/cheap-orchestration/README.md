@@ -1,5 +1,5 @@
 ![Models](https://img.shields.io/badge/models-Claude_%7C_GPT_%7C_Gemini-5A67D8)
-![Skill](https://img.shields.io/badge/skill-2.3.0-blue)
+![Skill](https://img.shields.io/badge/skill-2.3.1-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # cheap-orchestration
@@ -13,6 +13,13 @@ context, and pinning the subagent to a cheaper model cuts the bill again. It
 also costs some quality. This skill holds the rule that arbitrates between
 the two, the spec templates that make a delegation worth its overhead, and
 the benchmark numbers behind each rule.
+
+> **Benchmarked, not guessed.** 313 Claude Code sessions, 607.50 $ of API
+> usage, 18 configurations. On a long session, a Sonnet worker with a final
+> Opus review costs **58% less** than no delegation (1.36 $ against 3.22 $)
+> for **0.26 of a point less** judged quality out of 5. The interactive
+> report and every run are in
+> [benchmarks/cheap-orchestration](../../benchmarks/cheap-orchestration/).
 
 It ships the four agent definitions and a setup script that installs them
 for Claude Code, Codex CLI or Gemini CLI. See
@@ -31,7 +38,7 @@ for Claude Code, Codex CLI or Gemini CLI. See
 | 🏷️ | **Model label** | Every delegation starts its description with the model in brackets: `[Haiku]`, `[Terra]`, `[Carbon]` |
 | 🧱 | **Guards** | Binding order between units, one test per requirement, `path:line` re-check |
 | 📝 | **Templates** | Spec and return formats for each agent, sized to keep reports short |
-| 📊 | **Evidence** | 277 benchmark runs, with the number that backs each rule |
+| 📊 | **Evidence** | A published benchmark of 313 sessions, with the number that backs each rule |
 
 ---
 
@@ -91,7 +98,7 @@ from a source checkout are covered in the repository
 
 ```bash
 head -6 ~/.claude/skills/cheap-orchestration/SKILL.md
-# expect: name: cheap-orchestration, then metadata.version: 2.3.0 (or higher)
+# expect: name: cheap-orchestration, then metadata.version: 2.3.1 (or higher)
 ```
 
 ### Requirements
@@ -203,7 +210,9 @@ These numbers hold for that model family and its price grid. On GPT or
 Gemini the reasoning transfers, the percentages are unverified.
 
 Full table, failures and what was dropped from v1:
-[references/evidence.md](./references/evidence.md).
+[references/evidence.md](./references/evidence.md). Interactive report,
+configuration legend and per-run dataset:
+[benchmarks/cheap-orchestration](../../benchmarks/cheap-orchestration/).
 
 ---
 

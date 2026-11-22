@@ -9,7 +9,7 @@
 Each skill bundles the instructions, validators, and reference material an
 agent needs to do one job well, with no dependency on the others.
 
-[Installation](#-installation) • [Skills](#-available-skills) • [Quick start](#-quick-start) • [Development](#-development) • [Architecture](#-architecture)
+[Installation](#-installation) • [Skills](#-available-skills) • [Benchmark](#-benchmark) • [Quick start](#-quick-start) • [Development](#-development) • [Architecture](#-architecture)
 
 ---
 
@@ -21,7 +21,24 @@ agent needs to do one job well, with no dependency on the others.
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.4.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
 | [**automode-config**](./skills/automode-config/) | 0.9.0 | Author, validate, and migrate project-level `autoMode` blocks | Four official sections, critique gate, sha256 hash gate, atomic flock writes |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | 1.0.0 | Generate importable Apple Shortcuts for macOS and iOS | Native and third-party action catalogs, validator, inspector, App Intents discovery |
-| [**cheap-orchestration**](./skills/cheap-orchestration/) | 2.3.0 | Decide whether work runs inline or on a cheaper delegated agent | Decision rule by size and stakes, model-agnostic tiers (Claude, GPT, Gemini), pinned scout/editor/worker/reviewer crew with a setup script, spec templates, benchmark evidence |
+| [**cheap-orchestration**](./skills/cheap-orchestration/) | 2.3.1 | Decide whether work runs inline or on a cheaper delegated agent | Decision rule by size and stakes, model-agnostic tiers (Claude, GPT, Gemini), pinned scout/editor/worker/reviewer crew with a setup script, spec templates, benchmark evidence |
+
+## 📊 Benchmark
+
+**Is handing code to cheaper models worth it? Less than half the price, a
+little less polish.** The `cheap-orchestration` skill is built on a published
+benchmark: 313 Claude Code sessions, 607.50 $ of API usage, 18 configurations.
+
+| Long session, Opus main loop | Cost | vs no delegation | Quality (of 5) |
+|---|---|---|---|
+| No delegation | 3.22 $ | baseline | 4.31 |
+| Sonnet worker | 1.15 $ | -64% | 3.83 |
+| Sonnet worker, final Opus review | 1.36 $ | -58% | 4.04 |
+
+The interactive report, the configuration legend and every run are in
+[benchmarks/cheap-orchestration](./benchmarks/cheap-orchestration/).
+
+---
 
 ## ⚡ Quick start
 
@@ -216,6 +233,7 @@ Every skill follows the same layout, so an agent that knows one knows them all:
 ├── AGENTS.md             # Claude Code guidance for this repo
 ├── AGENTS.md             # Agent guidelines
 ├── .github/workflows/    # CI and release automation
+├── benchmarks/           # Published benchmark reports and datasets
 └── skills/
     ├── dockerfile-best-practices/
     ├── helm-bjw-s-chart/

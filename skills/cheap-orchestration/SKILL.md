@@ -2,7 +2,7 @@
 name: cheap-orchestration
 description: This skill should be used when planning how to split a task across subagents, writing a delegation spec, or deciding whether a unit runs inline, on a cheaper agent pinned to a smaller model tier (scout, editor, worker) or not at all. It holds the decision rule by task size and stakes, the pinned agent crew, the ordering and guard rules, spec and return templates, and the benchmark evidence behind each rule. The rules themselves live in the "Delegation & cost" section of your agent instruction file (CLAUDE.md, AGENTS.md); this skill is the detail and the rationale.
 metadata:
-  version: "2.3.0"
+  version: "2.3.1"
 tools:
   - Agent
   - Bash
@@ -106,6 +106,7 @@ on the bill.
    the `path:line` references into every file it touched.
 
 Evidence, numbers and what was dropped from v1:
-[Evidence](references/evidence.md). The numbers were measured on Claude
+[Evidence](references/evidence.md). Full report and per-run dataset:
+<https://github.com/obeone/claude-skills/tree/main/benchmarks/cheap-orchestration>. The numbers were measured on Claude
 models with a large-tier main loop; on another provider the reasoning
 transfers, the percentages are unverified.
