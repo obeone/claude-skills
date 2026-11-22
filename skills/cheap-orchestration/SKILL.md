@@ -2,7 +2,7 @@
 name: cheap-orchestration
 description: This skill should be used when planning how to split a task across subagents, writing a delegation spec, or deciding whether a unit runs inline, on a cheaper agent pinned to a smaller model tier (scout, editor, worker) or not at all. It holds the decision rule by task size and stakes, the pinned agent crew, the ordering and guard rules, spec and return templates, and the benchmark evidence behind each rule. The rules themselves live in the "Delegation & cost" section of your agent instruction file (CLAUDE.md, AGENTS.md); this skill is the detail and the rationale.
 metadata:
-  version: "2.3.1"
+  version: "2.3.2"
 tools:
   - Agent
   - Bash
@@ -41,7 +41,10 @@ model at call time: the pin is the cost boundary.
 | `worker` | medium | edits, shell | Every other unit whose output is files | 10-line report |
 | `reviewer` | large | edits, shell | Final restriction check and polish pass: default on long multi-part sessions, otherwise on request | 10-line report |
 
-None can launch agents itself, so no subagent can fan out on its own.
+No crew member launches another agent, so no subagent fans out on its own.
+Claude Code enforces it (the definitions carry no `Agent` tool); on Codex
+and Gemini it is an instruction in each role, see
+[Harnesses](references/harnesses.md).
 
 ## Setup
 
@@ -55,17 +58,23 @@ uv run scripts/setup_crew.py --provider claude --apply
 `--provider` takes `claude`, `codex` or `gemini` and writes the format that
 harness reads, with the model of each tier. `--scope project` targets the
 current repository, `--small`, `--medium` and `--large` replace a model
-identifier. An existing file is kept unless `--force` is given. The rule text
+identifier. An existing file or symlink is kept unless `--force` is given,
+and user scope follows `CLAUDE_CONFIG_DIR` or `CODEX_HOME` when set. The rule text
 to add to the instruction file is `assets/delegation-and-cost.md`. Harness
 details: [Harnesses](references/harnesses.md).
 
-Before the first delegation of a session, check the crew:
+Before the first delegation of a session, check the crew from the project
+directory, with the script's full path and the same `--provider`, `--scope`
+and tier overrides as the install:
 
 ```bash
-uv run scripts/setup_crew.py --provider claude --check
+uv run <skill directory>/scripts/setup_crew.py --provider <provider> --scope <user|project> --check
 ```
 
-If an agent is missing, its units stay inline. Never fall back to an agent
+The check reads each definition: it fails on a missing agent, on a
+definition from another provider, and on a model other than the tier's (a
+kept file with `model: inherit`, for instance). If an agent fails it, its
+units stay inline. Never fall back to an agent
 that inherits the session model: that is the expensive path this skill
 exists to avoid.
 
@@ -101,8 +110,9 @@ on the bill.
 3. Write each spec with [the templates](references/templates.md).
 4. Verify through reports, `git diff --stat` and one test run.
 5. Last unit before the final check: re-check every written `path:line`.
-6. Long multi-part session: one `reviewer` pass, given the commit the task
-   started from, then the final check. The reviewer may edit, so it re-checks
+6. Long multi-part session: one `reviewer` pass, given the baseline noted
+   before the first unit (a snapshot of the tree, so work that predates the
+   task is never reverted), then the final check. The reviewer may edit, so it re-checks
    the `path:line` references into every file it touched.
 
 Evidence, numbers and what was dropped from v1:
