@@ -21,7 +21,7 @@ agent needs to do one job well, with no dependency on the others.
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.4.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
 | [**automode-config**](./skills/automode-config/) | 0.9.0 | Author, validate, and migrate project-level `autoMode` blocks | Four official sections, critique gate, sha256 hash gate, atomic flock writes |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | 1.0.0 | Generate importable Apple Shortcuts for macOS and iOS | Native and third-party action catalogs, validator, inspector, App Intents discovery |
-| [**cheap-orchestration**](./skills/cheap-orchestration/) | 2.4.0 | Decide whether work runs inline or on a cheaper delegated agent | Decision rule by size and stakes, model-agnostic tiers (Claude, GPT, Gemini), pinned scout/editor/worker/reviewer crew with a setup script, spec templates, benchmark evidence |
+| [**cheap-orchestration**](./skills/cheap-orchestration/) | 2.4.1 | Decide whether work runs inline or on a cheaper delegated agent | Decision rule by size and stakes, model-agnostic tiers (Claude, GPT, Gemini), pinned scout/editor/worker/reviewer crew with a setup script, spec templates, benchmark evidence |
 
 ## 📊 Benchmark
 

@@ -1,5 +1,5 @@
 ![Models](https://img.shields.io/badge/models-Claude_%7C_GPT_%7C_Gemini-5A67D8)
-![Skill](https://img.shields.io/badge/skill-2.4.0-blue)
+![Skill](https://img.shields.io/badge/skill-2.4.1-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # cheap-orchestration
@@ -100,7 +100,7 @@ from a source checkout are covered in the repository
 
 ```bash
 head -6 ~/.claude/skills/cheap-orchestration/SKILL.md
-# expect: name: cheap-orchestration, then metadata.version: 2.4.0 (or higher)
+# expect: name: cheap-orchestration, then metadata.version: 2.4.1 (or higher)
 ```
 
 ### Requirements
@@ -169,6 +169,34 @@ your harness loads every session (`CLAUDE.md`, `AGENTS.md`). It ships as
 [assets/delegation-and-cost.md](./assets/delegation-and-cost.md), stated by
 tier: paste it in and replace the tier placeholders in the label examples
 with your model names. The script never edits your instruction file.
+
+### Optional: active from the first turn, everywhere
+
+The handiest setup: put the rules in the **user-level** instruction file
+instead of a project one. Every session in every repository then starts
+with them, with no hook and no preload, and the skill body still loads only
+when a delegation question comes up.
+
+| Harness | User-level file | Add |
+|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` | `assets/delegation-and-cost.md` as is |
+| Codex CLI | `~/.codex/AGENTS.md` | The same rules, plus where the crew lives and how to launch it ([details](./references/harnesses.md#loading-at-session-start)) |
+
+To run both harnesses from one copy of the skill, link the Codex one to the
+Claude one (remove any copy already there first, or `ln` puts the link
+inside it):
+
+```bash
+ln -s ~/.claude/skills/cheap-orchestration ~/.codex/skills/cheap-orchestration
+```
+
+Skip the hooks: in the benchmark, preloading the skill at session start,
+routing prompts or nudging mid-session cost as much as the plain rules or
+more, for no quality gain. Check that a new Codex session sees the rules:
+
+```bash
+codex exec --skip-git-repo-check -s read-only "Without running any tool: does your loaded instruction context mention the cheap-orchestration skill? Answer yes or no and name the file."
+```
 
 ### Optional deny list (Claude Code)
 

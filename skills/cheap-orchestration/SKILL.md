@@ -2,7 +2,7 @@
 name: cheap-orchestration
 description: This skill should be used when planning how to split a task across subagents, writing a delegation spec, or deciding whether a unit runs inline, on a cheaper agent pinned to a smaller model tier (scout, editor, worker) or not at all. It holds the decision rule by task size and stakes, the pinned agent crew, the ordering and guard rules, spec and return templates, and the benchmark evidence behind each rule. The rules themselves live in the "Delegation & cost" section of your agent instruction file (CLAUDE.md, AGENTS.md); this skill is the detail and the rationale.
 metadata:
-  version: "2.4.0"
+  version: "2.4.1"
 tools:
   - Agent
   - Bash
@@ -62,7 +62,9 @@ identifier. For Codex, `--effort <agent>=<level>` (repeatable) and
 `--verbosity <level>` pin `model_reasoning_effort` and `model_verbosity` in
 the roles. An existing file or symlink is kept unless `--force` is given,
 and user scope follows `CLAUDE_CONFIG_DIR` or `CODEX_HOME` when set. The rule text
-to add to the instruction file is `assets/delegation-and-cost.md`. Harness
+to add to the instruction file is `assets/delegation-and-cost.md`: in the
+user-level file it applies from the first turn of every session, while this
+skill only loads when needed. Harness
 details: [Harnesses](references/harnesses.md).
 
 Before the first delegation of a session, check the crew from the project
