@@ -1,5 +1,9 @@
 # Evidence
 
+Every number below was measured on Claude models: Opus is the `large` tier,
+Sonnet `medium`, Haiku `small`. The findings name the models that ran; the
+rules they back are stated by tier.
+
 From the cheap-orchestration benchmark (2026-10, pristine `CLAUDE_CONFIG_DIR`
 installs, Opus 5.5 main loop, 277 runs on a long three-part session T4 and a
 shorter three-part task T5, quality as the mean of 3 blind judge ratings out
@@ -11,8 +15,8 @@ of 5). Full design notes: `cheap-bench/co-v2/DESIGN.md`.
 | Hooks (label gate, router, nudges) | gate 0 denials; router no effect; nudges +0.16 $ and +10k context on T5 | No hooks; the rule text carries the effect |
 | Rule #0 alone, long session | -38% cost | Delegate by default |
 | All-Opus crew, long session | -53% | Savings are mostly context isolation |
-| Sonnet worker, long session | about -65% | Pin the worker to Sonnet |
-| Short task, Opus subagents | about 0% | Never an Opus subagent |
+| Sonnet worker, long session | about -65% | Pin the worker to the medium tier |
+| Short task, Opus subagents | about 0% | Never a large-tier subagent on a short task |
 | Short task, pinned cheaper agents | about -40% | Delegate short tasks too |
 | Quality, any delegation | about -0.3 of 5, no 5/5 grades; same with an Opus worker | Stakes branch: write it yourself |
 | Guard rules (order, tests, references) | cost about 0; test lines 154 vs 97 without; reference re-check 8/8 vs 2/4 | Keep the three guards |
@@ -28,15 +32,15 @@ of 5). Full design notes: `cheap-bench/co-v2/DESIGN.md`.
 
 - The SessionStart preload, the label gate, the delegation router and the
   `delegation-nudge.sh` / `[DELEGATION NOTICE]` nudges. The label itself
-  (`[Haiku] ...` at the start of each `description`) came back in 2.1.0 as
+  (the model name in brackets at the start of each `description`) came back in 2.1.0 as
   rule text; only the hook that enforced it stays dropped (0 denials).
 - The OMC routing matrix and the fan-out pseudo-calls naming OMC agents.
 - Review and verification agents by default: they cost 0.2 to 1.3 $ each
   with no measured quality gain. Exception measured in v2: one final
   `reviewer` pass on long multi-part sessions (variant R).
-- Models above Opus: still no place in delegation.
+- Models above the large tier: still no place in delegation.
 
-## Built-in agents
+## Built-in agents (Claude Code)
 
 `general-purpose`, `Explore`, `Plan` and `claude` run with `model: inherit`,
 so under an Opus session they bill Opus. The optional deny list in
