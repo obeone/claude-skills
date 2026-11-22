@@ -7,7 +7,9 @@ rules they back are stated by tier.
 From the cheap-orchestration benchmark (2026-10, pristine `CLAUDE_CONFIG_DIR`
 installs, Opus 5.5 main loop, 277 runs on a long three-part session T4 and a
 shorter three-part task T5, quality as the mean of 3 blind judge ratings out
-of 5). Full design notes: `cheap-bench/co-v2/DESIGN.md`.
+of 5). The interactive report and the per-run dataset (313 sessions, the
+first bench included) are published in the repository:
+<https://github.com/obeone/claude-skills/tree/main/benchmarks/cheap-orchestration>.
 
 | Finding | Number | Rule it backs |
 |---|---|---|
