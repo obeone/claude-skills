@@ -26,7 +26,7 @@ skills/<skill-name>/
 | helm-bjw-s-chart          | `skills/helm-bjw-s-chart/SKILL.md`          | `validate_chart.py`                                                    |
 | automode-config           | `skills/automode-config/SKILL.md`           | `scan_project.py`, `inspect_automode.py`, `apply_automode.py --dry-run` |
 | apple-shortcuts           | `skills/apple-shortcuts/SKILL.md`           | `validate-shortcut.py`, `inspect-shortcut.py`, `list-app-intents.py`   |
-| cheap-orchestration       | `skills/cheap-orchestration/SKILL.md`       | none (documentation only)                                              |
+| cheap-orchestration       | `skills/cheap-orchestration/SKILL.md`       | `setup_crew.py --check`                                                |
 
 > Historical: the skill once named `helm-chart-generator` became `helm-bjw-s-chart` (renamed in v3.0.0). Update any lingering reference to the old name (directory, asset filename, or skill name).
 

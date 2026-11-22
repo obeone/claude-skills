@@ -2,7 +2,11 @@
 name: cheap-orchestration
 description: This skill should be used when planning how to split a task across subagents, writing a delegation spec, or deciding whether a unit runs inline, on a cheaper agent pinned to a smaller model tier (scout, editor, worker) or not at all. It holds the decision rule by task size and stakes, the pinned agent crew, the ordering and guard rules, spec and return templates, and the benchmark evidence behind each rule. The rules themselves live in the "Delegation & cost" section of your agent instruction file (CLAUDE.md, AGENTS.md); this skill is the detail and the rationale.
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
+tools:
+  - Agent
+  - Bash
+  - Read
 ---
 
 # Cheap Orchestration
@@ -18,18 +22,17 @@ The rules name tiers, not models. Map each tier to your provider once:
 
 | Tier | Claude | GPT | Gemini |
 |---|---|---|---|
-| `large` | Opus | Sol | Pro |
-| `medium` | Sonnet | Terra | Flash |
-| `small` | Haiku | Luna | Flash-Lite |
+| `large` | Opus | Sol | Carbon |
+| `medium` | Sonnet | Terra | Neon |
+| `small` | Haiku | Luna | Hydrogen |
 
 The main loop usually runs on `large`. A model above `large` has no place in
 delegation.
 
 ## Crew
 
-Each agent has its model pinned in its own definition (in Claude Code, the
-`model` key of a file in `~/.claude/agents/`). Never override the model at
-call time: the pin is the cost boundary.
+Each agent has its model pinned in its own definition. Never override the
+model at call time: the pin is the cost boundary.
 
 | Agent | Tier | Tools | Use for | Returns |
 |---|---|---|---|---|
@@ -40,9 +43,35 @@ call time: the pin is the cost boundary.
 
 None can launch agents itself, so no subagent can fan out on its own.
 
+## Setup
+
+The definitions ship in `assets/agents/`. Install them once per harness:
+
+```bash
+uv run scripts/setup_crew.py --provider claude          # dry run
+uv run scripts/setup_crew.py --provider claude --apply
+```
+
+`--provider` takes `claude`, `codex` or `gemini` and writes the format that
+harness reads, with the model of each tier. `--scope project` targets the
+current repository, `--small`, `--medium` and `--large` replace a model
+identifier. An existing file is kept unless `--force` is given. The rule text
+to add to the instruction file is `assets/delegation-and-cost.md`. Harness
+details: [Harnesses](references/harnesses.md).
+
+Before the first delegation of a session, check the crew:
+
+```bash
+uv run scripts/setup_crew.py --provider claude --check
+```
+
+If an agent is missing, its units stay inline. Never fall back to an agent
+that inherits the session model: that is the expensive path this skill
+exists to avoid.
+
 Every delegation call starts its description with the model the agent runs
 on, in brackets: `[Haiku] Where is X resolved`, `[Terra] Implement X`,
-`[Pro] Final review`. The label is the only place the model shows up in the
+`[Carbon] Final review`. The label is the only place the model shows up in the
 transcript, so a unit sent to the wrong tier is visible at launch instead of
 on the bill.
 
@@ -72,7 +101,9 @@ on the bill.
 3. Write each spec with [the templates](references/templates.md).
 4. Verify through reports, `git diff --stat` and one test run.
 5. Last unit before the final check: re-check every written `path:line`.
-6. Long multi-part session: one `reviewer` pass, then the final check.
+6. Long multi-part session: one `reviewer` pass, given the commit the task
+   started from, then the final check. The reviewer may edit, so it re-checks
+   the `path:line` references into every file it touched.
 
 Evidence, numbers and what was dropped from v1:
 [Evidence](references/evidence.md). The numbers were measured on Claude
