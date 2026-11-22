@@ -45,6 +45,8 @@ of 5). Full design notes: `cheap-bench/co-v2/DESIGN.md`.
 `general-purpose`, `Explore`, `Plan` and `claude` run with `model: inherit`,
 so under an Opus session they bill Opus. The optional deny list in
 `settings.json` (`Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`,
-`Agent(claude)`) makes the pinned crew the only target. Trade-off: `Explore`
+`Agent(claude)`) blocks those four targets and nothing else: any other
+user-defined or plugin agent stays callable and can still inherit the session
+model, so the list is not a cost boundary on its own. Trade-off: `Explore`
 (fast read-only search) and `Plan` are gone, and any skill or plugin that
 launches `general-purpose` stops working until the deny is lifted.

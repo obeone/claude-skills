@@ -1,5 +1,5 @@
 ![Models](https://img.shields.io/badge/models-Claude_%7C_GPT_%7C_Gemini-5A67D8)
-![Skill](https://img.shields.io/badge/skill-2.2.0-blue)
+![Skill](https://img.shields.io/badge/skill-2.3.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # cheap-orchestration
@@ -14,8 +14,9 @@ also costs some quality. This skill holds the rule that arbitrates between
 the two, the spec templates that make a delegation worth its overhead, and
 the benchmark numbers behind each rule.
 
-It is a documentation skill: no scripts, no validators. It is also not
-self-contained, see [Configuration](#-configuration) before installing.
+It ships the four agent definitions and a setup script that installs them
+for Claude Code, Codex CLI or Gemini CLI. See
+[Configuration](#-configuration).
 
 ---
 
@@ -26,7 +27,8 @@ self-contained, see [Configuration](#-configuration) before installing.
 | ⚖️ | **Decision rule** | Inline, write it yourself, or delegate, decided by task size and stakes |
 | 👥 | **Pinned crew** | Four agents (`scout`, `editor`, `worker`, `reviewer`), each tied to one model tier (`small`, `medium`, `large`) |
 | 🧩 | **Model agnostic** | Rules name tiers; one table maps them to Claude, GPT and Gemini |
-| 🏷️ | **Model label** | Every delegation starts its description with the model in brackets: `[Haiku]`, `[Terra]`, `[Pro]` |
+| 🛠️ | **Setup script** | Installs the crew for Claude Code, Codex CLI or Gemini CLI, dry run by default |
+| 🏷️ | **Model label** | Every delegation starts its description with the model in brackets: `[Haiku]`, `[Terra]`, `[Carbon]` |
 | 🧱 | **Guards** | Binding order between units, one test per requirement, `path:line` re-check |
 | 📝 | **Templates** | Spec and return formats for each agent, sized to keep reports short |
 | 📊 | **Evidence** | 277 benchmark runs, with the number that backs each rule |
@@ -37,15 +39,30 @@ self-contained, see [Configuration](#-configuration) before installing.
 
 ```bash
 npx skills add obeone/claude-skills -g --skill cheap-orchestration -y
+cd ~/.claude/skills/cheap-orchestration
+uv run scripts/setup_crew.py --provider claude          # dry run
+uv run scripts/setup_crew.py --provider claude --apply  # install the crew
 ```
 
-Then create the four agents and add the rules to your instruction file, as
-described in [Configuration](#-configuration). Once that is done, invoke it
-when planning a task:
+Then paste [assets/delegation-and-cost.md](./assets/delegation-and-cost.md)
+into your instruction file, and invoke the skill when planning a task:
 
 ```text
 /cheap-orchestration
 ```
+
+### Setup commands
+
+| Command | Effect |
+|---|---|
+| `uv run scripts/setup_crew.py --provider <p>` | Dry run: prints what would be written, writes nothing |
+| `... --apply` | Writes the four definitions, keeps any existing file that differs |
+| `... --apply --force` | Replaces existing definitions |
+| `... --scope project` | Targets the current repository instead of the home directory |
+| `... --check` | Exits 1 if a crew agent is missing |
+| `... --medium <model>` | Replaces a model identifier (`--small`, `--large` likewise) |
+
+`<p>` is `claude`, `codex` or `gemini`.
 
 ---
 
@@ -74,23 +91,24 @@ from a source checkout are covered in the repository
 
 ```bash
 head -6 ~/.claude/skills/cheap-orchestration/SKILL.md
-# expect: name: cheap-orchestration, then metadata.version: 2.2.0 (or higher)
+# expect: name: cheap-orchestration, then metadata.version: 2.3.0 (or higher)
 ```
 
 ### Requirements
 
 | Requirement | Why |
 |---|---|
-| **A harness with subagents** | Something must launch an agent on a pinned model. The examples use Claude Code and its `Agent` tool |
-| **Four agent definitions** (in Claude Code, `~/.claude/agents/`) | The skill names them, it does not create them |
+| **A harness with subagents** | Claude Code, Codex CLI or Gemini CLI: something must launch an agent on a pinned model |
+| **`uv`** on `$PATH` ([install](https://astral.sh/uv/)) | Runs `setup_crew.py`, which is standard library only |
+| **The crew installed** | `setup_crew.py --apply` writes the four definitions; without them the units stay inline |
 | **A "Delegation & cost" section** in your `CLAUDE.md` or `AGENTS.md` | The operative rules live there, the skill is the detail and the rationale |
 
 ---
 
 ## 🔧 Configuration
 
-The skill ships neither the agents nor the rule text. Without them, the
-first delegated unit asks for an agent type that does not exist.
+The skill ships the four agent definitions and the rule text, and installs
+neither on its own: run the setup once per harness.
 
 ### Tiers
 
@@ -98,17 +116,16 @@ The rules name tiers, not models. Map each tier to your provider once:
 
 | Tier | Claude | GPT | Gemini |
 |---|---|---|---|
-| `large` | Opus | Sol | Pro |
-| `medium` | Sonnet | Terra | Flash |
-| `small` | Haiku | Luna | Flash-Lite |
+| `large` | Opus | Sol | Carbon |
+| `medium` | Sonnet | Terra | Neon |
+| `small` | Haiku | Luna | Hydrogen |
 
 The main loop usually runs on `large`.
 
 ### The crew
 
-Define four agents, each with its model pinned in its own definition. Give
-none of them the ability to launch agents, so no subagent can fan out on its
-own.
+Four agents, each with its model pinned in its own definition. None can
+launch agents, so no subagent can fan out on its own.
 
 | Agent | Tier | Tools | Use for | Returns |
 |---|---|---|---|---|
@@ -117,30 +134,32 @@ own.
 | `worker` | medium | edits, shell | Every other unit whose output is files | 10-line report |
 | `reviewer` | large | edits, shell | Final restriction check and polish pass on long sessions | 10-line report |
 
-In Claude Code, an agent is one file in `~/.claude/agents/` with the model in
-its front-matter. A minimal `scout.md`:
+The definitions ship in [assets/agents/](./assets/agents/) and
+`scripts/setup_crew.py` renders them for your harness:
 
-```markdown
----
-name: scout
-description: Read-only code scout. Answers questions about the code with path:line facts. Never edits.
-model: haiku
-tools: Read, Grep, Glob, Bash
----
+| Provider | Written to | Format | Models (small, medium, large) |
+|---|---|---|---|
+| `claude` | `~/.claude/agents/<name>.md` | Markdown, YAML front-matter | `haiku`, `sonnet`, `opus` |
+| `codex` | `~/.codex/agents/<name>.toml` | TOML | `gpt-6-luna`, `gpt-6.1-terra`, `gpt-6.2-sol` |
+| `gemini` | `~/.gemini/agents/<name>.md` | Markdown, YAML front-matter | `gemini-4-hydrogen`, `gemini-4-neon`, `gemini-4-carbon` |
 
-Answer the question in at most 15 lines of facts, each with a path:line.
-Never return file contents. Never edit anything.
-```
+The Codex layout was checked by Codex against its CLI 0.171.0. The Gemini
+layout is as reported by Gemini and was not run against an installed CLI;
+subagents are experimental there and need `experimental.enableAgents`.
+Per-harness limits (sandbox inheritance on Codex, tool inheritance on
+Gemini): [references/harnesses.md](./references/harnesses.md).
 
-On another harness, use its own agent or profile mechanism and pin the
-matching tier there. Never override the model at call time: the pin is the
-cost boundary.
+Never override the model at call time: the pin is the cost boundary. If an
+agent is missing, its units stay inline; the skill never falls back to an
+agent that inherits the session model.
 
 ### The rules
 
-The rule text that the main loop follows belongs in the instruction file your harness
-loads every session (`CLAUDE.md`, `AGENTS.md`), under a "Delegation & cost" section. [SKILL.md](./SKILL.md) states the
-decision rule and the workflow in a form you can adapt.
+The rule text that the main loop follows belongs in the instruction file
+your harness loads every session (`CLAUDE.md`, `AGENTS.md`). It ships as
+[assets/delegation-and-cost.md](./assets/delegation-and-cost.md), stated by
+tier: paste it in and replace the tier placeholders in the label examples
+with your model names. The script never edits your instruction file.
 
 ### Optional deny list (Claude Code)
 
@@ -195,6 +214,8 @@ Full table, failures and what was dropped from v1:
 | [SKILL.md](./SKILL.md) | Crew, decision rule, workflow |
 | [references/templates.md](./references/templates.md) | Spec and return templates for each agent |
 | [references/evidence.md](./references/evidence.md) | Benchmark findings, built-in agents, v1 leftovers |
+| [references/harnesses.md](./references/harnesses.md) | Agent format, paths, models and limits per harness |
+| [assets/delegation-and-cost.md](./assets/delegation-and-cost.md) | Rule text for your instruction file |
 
 ---
 
