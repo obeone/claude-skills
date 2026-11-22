@@ -65,3 +65,43 @@ Treat every line as unverified until you have run it.
   agents get none and inherit. Every role gets a no-delegation instruction,
   which is a request and not an enforced limit: add a `tools` list yourself
   if you need a hard one.
+
+## Loading at session start
+
+Nothing has to load the skill at startup. What must be active from the first
+turn is the rule text, and every harness already reads a user-level
+instruction file at the start of each session:
+
+| Harness | File read at startup | What goes in it |
+|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` | `assets/delegation-and-cost.md`, pasted as is |
+| Codex CLI | `~/.codex/AGENTS.md` (`$CODEX_HOME/AGENTS.md` when set) | The same rules, plus the crew mapping below |
+| Gemini CLI | not checked | |
+
+The skill itself stays on demand: the harness lists its description and
+loads the body when a delegation question comes up. On Codex, skills are read
+from `~/.codex/skills/`; a symlink to the Claude copy keeps a single source.
+
+The Codex file also needs the facts the generic rules leave open: the crew
+lives in `~/.codex/agents/`, an agent is launched with `spawn_agent` and
+`agent_type` set to its name, and the call never sets `model` or the
+reasoning effort, which would replace the pin. Keep the model names in that
+file in step with the installed roles, or leave them out and let
+`--check` be the reference: a stale name there misleads the main loop about
+the tier it pays for.
+
+No hook is needed, and the benchmark argues against one. Preloading the skill
+at session start (configuration E), a prompt router (D), mid-session nudges
+(H) and a gate on model labels (G) all cost as much as or more than the
+plain rules, with no quality gain; the cheapest configurations carried the
+rules in the instruction file and no hook (Y, Q, S).
+
+Check that both halves are in place:
+
+```bash
+uv run <skill directory>/scripts/setup_crew.py --provider codex --check
+codex exec --skip-git-repo-check -s read-only "Without running any tool: does your loaded instruction context mention the cheap-orchestration skill? Answer yes or no and name the file."
+```
+
+For Claude Code, `--provider claude --check`, then ask the same question in
+a new session.
