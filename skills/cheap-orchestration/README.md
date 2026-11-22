@@ -1,5 +1,5 @@
 ![Models](https://img.shields.io/badge/models-Claude_%7C_GPT_%7C_Gemini-5A67D8)
-![Skill](https://img.shields.io/badge/skill-2.3.1-blue)
+![Skill](https://img.shields.io/badge/skill-2.3.2-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # cheap-orchestration
@@ -63,10 +63,10 @@ into your instruction file, and invoke the skill when planning a task:
 | Command | Effect |
 |---|---|
 | `uv run scripts/setup_crew.py --provider <p>` | Dry run: prints what would be written, writes nothing |
-| `... --apply` | Writes the four definitions, keeps any existing file that differs |
-| `... --apply --force` | Replaces existing definitions |
+| `... --apply` | Writes the four definitions, keeps any existing file or symlink |
+| `... --apply --force` | Replaces existing entries (a symlink is replaced, its target is left alone) |
 | `... --scope project` | Targets the current repository instead of the home directory |
-| `... --check` | Exits 1 if a crew agent is missing |
+| `... --check` | Exits 1 if an agent is missing, comes from another provider or is not pinned to its tier's model |
 | `... --medium <model>` | Replaces a model identifier (`--small`, `--large` likewise) |
 
 `<p>` is `claude`, `codex` or `gemini`.
@@ -98,7 +98,7 @@ from a source checkout are covered in the repository
 
 ```bash
 head -6 ~/.claude/skills/cheap-orchestration/SKILL.md
-# expect: name: cheap-orchestration, then metadata.version: 2.3.1 (or higher)
+# expect: name: cheap-orchestration, then metadata.version: 2.3.2 (or higher)
 ```
 
 ### Requirements
@@ -131,8 +131,8 @@ The main loop usually runs on `large`.
 
 ### The crew
 
-Four agents, each with its model pinned in its own definition. None can
-launch agents, so no subagent can fan out on its own.
+Four agents, each with its model pinned in its own definition. None launches
+another agent: enforced on Claude Code, an instruction on Codex and Gemini.
 
 | Agent | Tier | Tools | Use for | Returns |
 |---|---|---|---|---|
