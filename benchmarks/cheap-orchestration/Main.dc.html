@@ -1,0 +1,1370 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Cheap Orchestration Lab</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#0A0E15;color:#E8EDF5;font-family:"Geist","IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.6}
+a{color:#9DB8FF}a:hover{color:#C9D8FF}
+p{margin:0}
+code{font-family:"Geist Mono",ui-monospace,Menlo,monospace;font-size:0.86em;background:#1A2232;color:#C9D8FF;padding:1px 6px;border-radius:5px}
+h1,h2,h3{text-wrap:balance}
+details>summary{list-style:none;cursor:pointer}
+details>summary::-webkit-details-marker{display:none}
+details[open]>summary .chev{transform:rotate(90deg)}
+#acts>details>div{max-height:760px;overflow-y:auto}
+#story>details>:not(summary){max-height:640px;overflow-y:auto}
+.chev{transition:transform .2s ease}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.tbl .th{text-align:left;font-weight:500;color:#8593AA;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid #2A3447;white-space:nowrap}
+.tbl .td{padding:10px 12px;border-bottom:1px solid #1C2433;vertical-align:top}
+button{font:inherit}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #9DB8FF;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</helmet>
+<div style="background-color: #0A0E15; background-image: linear-gradient(rgba(157,184,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(157,184,255,0.045) 1px, transparent 1px); background-size: 56px 56px; color: #E8EDF5; padding-block: 48px 96px; padding-inline: 24px;">
+<div style="max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px;">
+
+<header style="display: flex; flex-direction: column; gap: 24px;">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #8593AA;"><span style="color: #3CCB7F;">●</span> {{heroKicker}}</span>
+<div style="display: flex; align-items: center; gap: 10px;">
+<a href="Explorer.dc.html" style="display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid #2A3447; border-radius: 999px; text-decoration: none; font-size: 14px; color: #E8EDF5; background: #111723;">{{exploreLabel}} →</a>
+<div style="display: flex; gap: 2px; padding: 3px; background: #111723; border: 1px solid #2A3447; border-radius: 999px;" role="group" aria-label="Langue / Language">
+<button type="button" onClick="{{setFr}}" aria-pressed="{{frPressed}}" style="min-width: 48px; min-height: 36px; border: 0; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; background: {{frBg}}; color: {{frFg}};">FR</button>
+<button type="button" onClick="{{setEn}}" aria-pressed="{{enPressed}}" style="min-width: 48px; min-height: 36px; border: 0; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; background: {{enBg}}; color: {{enFg}};">EN</button>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px;">
+<h1 style="margin: 0; font-family: 'Unbounded', 'Geist', sans-serif; font-weight: 700; font-size: clamp(30px, 4.2vw, 50px); line-height: 1.1; letter-spacing: -0.03em;">{{question}}</h1>
+<p style="font-family: 'Unbounded', 'Geist', sans-serif; font-weight: 500; font-size: clamp(19px, 2.3vw, 27px); line-height: 1.3; letter-spacing: -0.015em;"><span style="color: #9DB8FF;">{{head1}}</span> <span style="color: #6F7C92;">{{head2}}</span></p>
+</div>
+<p style="max-width: 88ch; font-size: 17px; line-height: 1.6; color: #A9B4C6;">{{lede}} <a href="#glossary" style="font-size: 15px;">{{glossLink}}</a></p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1px; background: #2A3447; border: 1px solid #2A3447; border-radius: 14px; overflow: hidden;">
+<sc-for list="{{heroNums}}" as="hn" hint-placeholder-count="3">
+<div style="background: #0E131D; padding: 22px 24px; display: flex; flex-direction: column; justify-content: flex-start; gap: 10px; min-width: 0; box-sizing: border-box;">
+<span style="font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 44px; line-height: 1; color: {{hn.color}};">{{hn.value}}</span>
+<span title="{{hn.tip}}" style="font-size: 15px; font-weight: 600; color: #E8EDF5;">{{hn.plain}}</span>
+<sc-if value="{{hn.hasBars}}" hint-placeholder-val="{{ false }}"><span style="display: flex; flex-direction: column; gap: 6px;"><sc-for list="{{hn.bars}}" as="hb" hint-placeholder-count="3"><span title="{{hb.tip}}" style="display: grid; grid-template-columns: minmax(0, 1fr) 34%; gap: 10px; align-items: center;"><span style="font-size: 13px; color: #8593AA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{hb.label}}</span><span style="display: block; height: 6px; width: {{hb.w}}%; border-radius: 3px; background: {{hb.color}};"></span></span></sc-for></span></sc-if>
+<sc-if value="{{hn.hasSub}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; line-height: 1.5; color: #8593AA;">{{hn.sub}}</span></sc-if>
+</div>
+</sc-for>
+</div>
+<div style="background: linear-gradient(180deg, #121A2A 0%, #0E131D 100%); border: 1px solid #3A4A6B; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px;">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+<strong style="font-size: 16px;">{{doTitle}}</strong>
+</div>
+<ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: #C6CFDD; font-size: 15px;">
+<sc-for list="{{doList}}" as="d" hint-placeholder-count="3"><li>{{d.t}}</li></sc-for>
+</ol>
+<div style="display: flex; flex-direction: column; gap: 6px;">
+<span style="font-size: 13px; color: #8593AA;">{{doCmdLabel}}</span>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px;">
+<pre style="margin: 0; flex: 1 1 300px; min-width: 0; overflow-x: auto; background: #06090E; border: 1px solid #1C2433; color: #C9D8FF; border-radius: 10px; padding: 10px 14px; font-family: 'Geist Mono', monospace; font-size: 13px; line-height: 1.7; user-select: text;"><span style="display: block; white-space: pre;"><span style="color: #6F7C92;">$</span> python3 apply-v2.py           <span style="color: #6F7C92;"># {{doCmdDry}}</span></span><span style="display: block; white-space: pre;"><span style="color: #6F7C92;">$</span> python3 apply-v2.py --apply   <span style="color: #6F7C92;"># {{doCmdApply}}</span></span></pre>
+<button type="button" onClick="{{copyV2}}" style="min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid #2A3447; background: #0A0E15; color: #C9D8FF; font-family: 'Geist Mono', monospace; font-size: 12px; cursor: pointer;">{{copyV2Label}}</button>
+</div>
+</div>
+</div>
+</header>
+
+<p id="trust" style="margin: -40px 0 0 0; padding: 10px 16px; border-left: 3px solid #9DB8FF; background: #111723; border-radius: 0 10px 10px 0; font-size: 14px; color: #C6CFDD;"><strong style="color: #E8EDF5;">{{trustTitle}}</strong> {{trustBody}}</p>
+
+<section id="glossary" style="display: flex; flex-direction: column; gap: 14px;">
+<details open="" style="background: #111723; border: 1px solid #2A3447; border-radius: 14px;">
+<summary style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 18px 22px; min-height: 44px;"><span class="chev" style="color: #9DB8FF; font-family: 'Geist Mono', monospace;">›</span><strong style="font-size: 17px;">{{gTitle}}</strong><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{gHint}}</span></summary>
+<div style="padding: 0 22px 18px 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 24px;">
+<sc-for list="{{glossary}}" as="g" hint-placeholder-count="9"><div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; border-top: 1px solid #1C2433; padding-top: 10px;"><strong style="font-size: 14px; color: #E8EDF5;">{{g.k}}</strong><span style="font-size: 14px; color: #A9B4C6;">{{g.v}}</span></div></sc-for>
+</div>
+<div id="quality" style="margin: 0 22px 18px 22px; background: #0A0E15; border: 1px solid #1C2433; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+<strong style="font-size: 16px;">{{qxTitle}}</strong>
+<sc-for list="{{qxText}}" as="qp" hint-placeholder-count="3"><p style="font-size: 14px; color: #C6CFDD; max-width: 90ch;">{{qp.t}}</p></sc-for>
+<div style="display: flex; flex-direction: column; gap: 10px;">
+<sc-for list="{{qxBars}}" as="qb" hint-placeholder-count="4">
+<div style="display: grid; grid-template-columns: minmax(110px, 210px) minmax(0, 1fr); gap: 12px; align-items: center;">
+<span style="font-size: 13px; color: #A9B4C6;">{{qb.label}}</span>
+<span style="display: flex; height: 24px; border-radius: 6px; overflow: hidden; gap: 2px; background: #111723;"><sc-for list="{{qb.segs}}" as="qs" hint-placeholder-count="3"><span title="{{qs.tip}}" style="width: {{qs.w}}%; background: {{qs.color}}; color: #0A0E15; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden;">{{qs.text}}</span></sc-for></span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: #A9B4C6;">
+<sc-for list="{{qxLegend}}" as="ql" hint-placeholder-count="3"><span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: {{ql.color}};"></span>{{ql.label}}</span></sc-for>
+</div>
+<p style="font-size: 13px; color: #6F7C92;">{{qxNote}}</p>
+</div>
+<details style="margin: 0 22px 22px 22px; border: 1px solid #1C2433; border-radius: 12px; background: #0A0E15;">
+<summary style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; min-height: 44px;"><span class="chev" style="color: #9DB8FF; font-family: 'Geist Mono', monospace;">›</span><strong style="font-size: 15px;">{{gVarTitle}}</strong></summary>
+<div style="padding: 0 16px 16px 16px; display: flex; flex-direction: column; gap: 14px;">
+<sc-for list="{{gVarGroups}}" as="gg" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{gg.label}}</span>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px 20px;">
+<sc-for list="{{gg.items}}" as="vi" hint-placeholder-count="6"><div style="display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start;"><span style="display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: {{vi.bg}}; color: #0A0E15; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500;">{{vi.code}}</span><span style="font-size: 13px; color: #A9B4C6; min-width: 0;"><strong style="color: #E8EDF5;">{{vi.name}}</strong> · {{vi.desc}}</span></div></sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</details>
+</details>
+</section>
+
+<section id="verdict" style="display: flex; flex-direction: column; gap: 16px;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #9DB8FF;">~/verdict</span>
+<h2 style="margin: 0; font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: -0.02em;">{{vTitle}}</h2>
+<p style="color: #A9B4C6; max-width: 76ch;">{{vHead}}</p>
+<p style="font-size: 13px; color: #8593AA;"><span style="color: #E8EDF5;">{{vtLegendClear}}</span> {{vtLegendClearText}} <span style="color: #E8EDF5; margin-left: 10px;">{{vtLegendNoise}}</span> {{vtLegendNoiseText}}</p>
+<div style="background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 6px 4px; overflow-x: auto;">
+<div role="table" class="tbl" style="display: table; min-width: 760px;">
+<div role="rowgroup" style="display: table-header-group;"><div role="row" style="display: table-row;"><sc-for list="{{vtHead}}" as="h" hint-placeholder-count="5"><div role="columnheader" class="th" title="{{h.tip}}" style="display: table-cell;">{{h.label}}</div></sc-for></div></div>
+<div role="rowgroup" style="display: table-row-group;"><sc-for list="{{vtRows}}" as="r" hint-placeholder-count="7"><div role="row" style="display: table-row;">
+<div role="cell" class="td" style="display: table-cell;"><span style="display: flex; flex-direction: column; gap: 2px;"><strong style="font-size: 14px;">{{r.plain}}</strong><span title="{{r.tip}}" style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8593AA;">{{r.name}}</span></span></div>
+<sc-for list="{{r.cells}}" as="c" hint-placeholder-count="4"><div role="cell" class="td" title="{{c.tip}}" style="display: table-cell; font-family: 'Geist Mono', monospace; white-space: nowrap; color: {{c.color}};">{{c.t}}</div></sc-for>
+</div></sc-for></div>
+</div>
+</div>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #8593AA; max-width: 100ch;">
+<sc-for list="{{vtNotes}}" as="n" hint-placeholder-count="3"><li>{{n.t}}</li></sc-for>
+</ul>
+</section>
+
+<section id="method" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px; align-items: start;">
+<div style="display: flex; flex-direction: column; gap: 14px; max-width: 68ch; color: #C6CFDD; font-size: 16px; line-height: 1.7;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #9DB8FF;">~/method</span>
+<h2 style="margin: 0; font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: -0.02em;">{{mhTitle}}</h2>
+<sc-for list="{{mhText}}" as="mp" hint-placeholder-count="2"><p>{{mp.t}}</p></sc-for>
+</div>
+<aside style="background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{flowLabel}}</span>
+<sc-for list="{{flow}}" as="fl" hint-placeholder-count="4">
+<div style="display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start;">
+<span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: {{fl.bg}}; color: #0A0E15; font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 500;">{{fl.tag}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;"><strong style="font-size: 14px;">{{fl.title}}</strong><span style="font-size: 13px; color: #A9B4C6;">{{fl.body}}</span></div>
+</div>
+</sc-for>
+<p style="font-size: 13px; color: #8593AA; border-top: 1px solid #1C2433; padding-top: 12px;">{{flowNote}}</p>
+</aside>
+</section>
+
+<section id="acts" style="display: flex; flex-direction: column; gap: 14px;">
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 70ch;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #9DB8FF;">~/acts</span>
+<h2 style="margin: 0; font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: -0.02em;">{{actsTitle}}</h2>
+<p style="color: #A9B4C6;">{{actsIntro}}</p>
+</div>
+<sc-for list="{{acts}}" as="ac" hint-placeholder-count="5">
+<details id="{{ac.id}}" style="background: #111723; border: 1px solid #2A3447; border-radius: 14px;">
+<summary style="display: flex; flex-direction: column; gap: 10px; padding: 18px 22px; min-height: 44px;">
+<span style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px;"><span class="chev" style="color: #9DB8FF; font-family: 'Geist Mono', monospace;">›</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9DB8FF;">{{ac.kicker}}</span><strong style="font-size: 18px;">{{ac.title}}</strong></span>
+<span style="color: #C6CFDD; font-size: 15px; padding-left: 24px;">{{ac.result}}</span>
+<span style="display: flex; flex-wrap: wrap; gap: 8px; padding-left: 24px;"><sc-for list="{{ac.strip}}" as="sp" hint-placeholder-count="4"><span title="{{sp.tip}}" style="display: inline-flex; align-items: baseline; gap: 8px; padding: 4px 10px; border-radius: 999px; background: #0A0E15; border: 1px solid #1C2433; font-family: 'Geist Mono', monospace; font-size: 12px;"><span style="color: #8593AA;">{{sp.label}}</span><span style="color: {{sp.color}};">{{sp.value}}</span></span></sc-for></span>
+</summary>
+<div style="padding: 0 22px 22px 22px; display: flex; flex-direction: column; gap: 18px;">
+<p style="color: #A9B4C6; max-width: 76ch;">{{ac.intro}}</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start;">
+<div style="background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{ac.protoLabel}}</span>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; color: #C6CFDD; font-size: 14px;">
+<sc-for list="{{ac.proto}}" as="m" hint-placeholder-count="4"><li><strong style="color: #E8EDF5;">{{m.k}}</strong> {{m.v}}</li></sc-for>
+</ul>
+</div>
+<div style="background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{ac.varLabel}}</span>
+<sc-for list="{{ac.variants}}" as="vr" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start;">
+<span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: {{vr.bg}}; color: #0A0E15; font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 500;">{{vr.code}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;"><strong style="font-size: 14px;">{{vr.name}}</strong><span style="font-size: 13px; color: #A9B4C6;">{{vr.desc}}</span></div>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 6px 4px; overflow-x: auto;">
+<div role="table" class="tbl" style="display: table; min-width: 960px;">
+<div role="rowgroup" style="display: table-header-group;"><div role="row" style="display: table-row;"><sc-for list="{{ac.head}}" as="h" hint-placeholder-count="12"><div role="columnheader" class="th" title="{{h.tip}}" style="display: table-cell;">{{h.label}}</div></sc-for></div></div>
+<div role="rowgroup" style="display: table-row-group;"><sc-for list="{{ac.rows}}" as="r" hint-placeholder-count="6"><div role="row" style="display: table-row;"><sc-for list="{{r.cells}}" as="c" hint-placeholder-count="12"><div role="cell" class="td" title="{{c.tip}}" style="display: table-cell; font-family: 'Geist Mono', monospace; white-space: nowrap; color: {{c.color}}; font-weight: {{c.w}};">{{c.t}}</div></sc-for></div></sc-for></div>
+</div>
+</div>
+<p style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #6F7C92; max-width: 100ch;">{{ac.foot}}</p>
+<div style="display: flex; flex-direction: column; gap: 10px;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{ac.takeLabel}}</span>
+<ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
+<sc-for list="{{ac.take}}" as="ta" hint-placeholder-count="4"><li style="background: #0A0E15; border: 1px solid #1C2433; border-radius: 12px; padding: 16px 18px; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; font-size: 14px; color: #C6CFDD; min-width: 0;"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9DB8FF;">{{ta.n}}</span><span>{{ta.t}}</span></li></sc-for>
+</ol>
+</div>
+<sc-if value="{{ac.hasNext}}" hint-placeholder-val="{{ false }}">
+<p style="border-left: 2px solid #9DB8FF; padding: 4px 0 4px 16px; color: #C6CFDD; max-width: 76ch;"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9DB8FF;">{{ac.nextLabel}}</span> {{ac.next}}</p>
+</sc-if>
+</div>
+</details>
+</sc-for>
+
+<!-- Acts 2 to 5 are rendered by the acts loop above; further acts go into the `acts` array in renderVals. -->
+</section>
+
+<section id="explore" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px;">
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 70ch;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #9DB8FF;">~/explore</span>
+<h2 style="margin: 0; font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: -0.02em;">{{exTitle}}</h2>
+<p style="color: #A9B4C6;">{{exIntro}}</p>
+</div>
+<a href="Explorer.dc.html" style="display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 600; color: #0A0E15; background: #9DB8FF;">{{exploreLabel}} →</a>
+</section>
+
+<section id="duel" style="display: flex; flex-direction: column; gap: 20px;">
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 70ch;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #9DB8FF;">~/duel</span>
+<h2 style="margin: 0; font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: -0.02em;">{{dTitle}}</h2>
+<p style="color: #A9B4C6;">{{dIntro}}</p>
+</div>
+<div style="background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 22px; min-width: 0;">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;" role="group" aria-label="Banc / Bench">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA; margin-right: 4px;">{{benchLabel}}</span>
+<sc-for list="{{benchOpts}}" as="o" hint-placeholder-count="7"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" title="{{o.hint}}" style="min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-size: 13px; cursor: pointer; opacity: {{o.op}};">{{o.label}}</button></sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #E8EDF5; vertical-align: middle; margin-right: 6px;"></span>{{leftLabel}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px;">
+<sc-for list="{{leftOpts}}" as="o" hint-placeholder-count="18"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" title="{{o.hint}}" style="min-height: 34px; padding: 0 11px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-size: 13px; cursor: pointer; opacity: {{o.op}};">{{o.label}}</button></sc-for>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #9DB8FF; box-sizing: border-box; vertical-align: middle; margin-right: 6px;"></span>{{rightLabel}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px;">
+<sc-for list="{{rightOpts}}" as="o" hint-placeholder-count="18"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" title="{{o.hint}}" style="min-height: 34px; padding: 0 11px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-size: 13px; cursor: pointer; opacity: {{o.op}};">{{o.label}}</button></sc-for>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+<div style="display: flex; gap: 2px; padding: 3px; background: #0A0E15; border: 1px solid #2A3447; border-radius: 999px;" role="group" aria-label="Tâche / Task">
+<sc-for list="{{taskOpts}}" as="o" hint-placeholder-count="2"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" title="{{o.hint}}" style="min-width: 56px; min-height: 36px; border: 0; border-radius: 999px; font-family: 'Geist Mono', monospace; font-size: 13px; cursor: pointer; background: {{o.bg}}; color: {{o.fg}};">{{o.label}}</button></sc-for>
+</div>
+<button type="button" onClick="{{swap}}" style="min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #2A3447; background: transparent; color: #E8EDF5; font-size: 13px; cursor: pointer;">⇄ {{swapLabel}}</button>
+<sc-if value="{{benchWarn}}" hint-placeholder-val="{{ false }}">
+<span role="status" style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px 0 8px; border-radius: 999px; background: #3A2E1A; border: 1px solid #6B5326; color: #F2B66D; font-family: 'Geist Mono', monospace; font-size: 12px;"><span style="display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #F2B66D; color: #0A0E15; font-weight: 600;">!</span>{{benchWarnText}}</span>
+</sc-if>
+</div>
+
+<sc-for list="{{duel}}" as="dm" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #1C2433; padding-top: 18px;">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 10px;">
+<strong style="font-size: 16px;">{{dm.title}}</strong>
+<span title="{{dm.pTip}}" style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; background: {{dm.chipBg}}; color: {{dm.chipFg}}; font-family: 'Geist Mono', monospace; font-size: 12px;">{{dm.verdict}}</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">● {{dm.lName}}</span><span style="font-family: 'Unbounded', sans-serif; font-size: 24px;">{{dm.lMean}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{dm.lCi}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">○ {{dm.rName}}</span><span style="font-family: 'Unbounded', sans-serif; font-size: 24px; color: #9DB8FF;">{{dm.rMean}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{dm.rCi}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{dm.deltaLabel}}</span><span style="font-family: 'Unbounded', sans-serif; font-size: 24px; color: {{dm.deltaColor}};">{{dm.delta}}</span><span title="{{dm.pTip}}" style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{dm.pText}}</span></div>
+</div>
+<div style="position: relative; height: 92px; background: #0A0E15; border: 1px solid #1C2433; border-radius: 10px;">
+<sc-for list="{{dm.ticks}}" as="tk"><span style="position: absolute; top: 0; bottom: 18px; left: {{tk.left}}%; width: 1px; background: #1C2433;"></span><span style="position: absolute; bottom: 2px; left: {{tk.left}}%; transform: translateX(-50%); font-family: 'Geist Mono', monospace; font-size: 10px; color: #6F7C92; white-space: nowrap;">{{tk.label}}</span></sc-for>
+<span style="position: absolute; top: 22px; height: 2px; left: {{dm.lLo}}%; width: {{dm.lCiW}}%; background: rgba(232,237,245,0.35);"></span>
+<span style="position: absolute; top: 14px; height: 18px; width: 2px; left: {{dm.lM}}%; background: #E8EDF5;"></span>
+<span style="position: absolute; top: 52px; height: 2px; left: {{dm.rLo}}%; width: {{dm.rCiW}}%; background: rgba(157,184,255,0.35);"></span>
+<span style="position: absolute; top: 44px; height: 18px; width: 2px; left: {{dm.rM}}%; background: #9DB8FF;"></span>
+<sc-for list="{{dm.dots}}" as="dt">
+<button type="button" onClick="{{dt.pick}}" aria-label="{{dt.aria}}" title="{{dt.aria}}" style="position: absolute; top: {{dt.top}}px; left: {{dt.left}}%; transform: translate(-50%, -50%); width: 22px; height: 22px; border: 0; padding: 0; background: transparent; cursor: pointer; display: grid; place-items: center;"><span style="width: {{dt.size}}px; height: {{dt.size}}px; border-radius: 50%; box-sizing: border-box; background: {{dt.fill}}; border: 2px solid {{dt.stroke}};"></span></button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+
+<sc-if value="{{hasRun}}" hint-placeholder-val="{{ false }}">
+<div style="background: #0A0E15; border: 1px solid #9DB8FF; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: baseline;">
+<strong style="font-family: 'Geist Mono', monospace; font-size: 15px;">{{run.title}}</strong>
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{run.meta}}</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+<sc-for list="{{run.kpis}}" as="kp" hint-placeholder-count="6"><div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-family: 'Geist Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #8593AA;">{{kp.label}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 16px;">{{kp.value}}</span></div></sc-for>
+</div>
+<div style="overflow-x: auto;">
+<div role="table" class="tbl" style="display: table; min-width: 560px;">
+<div role="rowgroup" style="display: table-header-group;"><div role="row" style="display: table-row;"><sc-for list="{{run.head}}" as="h" hint-placeholder-count="6"><div role="columnheader" class="th" style="display: table-cell;">{{h.label}}</div></sc-for></div></div>
+<div role="rowgroup" style="display: table-row-group;"><sc-for list="{{run.models}}" as="r" hint-placeholder-count="2"><div role="row" style="display: table-row;"><sc-for list="{{r.cells}}" as="c" hint-placeholder-count="6"><div role="cell" class="td" style="display: table-cell; font-family: 'Geist Mono', monospace; color: {{c.color}};">{{c.t}}</div></sc-for></div></sc-for></div>
+</div>
+</div>
+</div>
+</sc-if>
+<p style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #6F7C92;">{{dFoot}}</p>
+</div>
+</section>
+
+<section id="ranking" style="display: flex; flex-direction: column; gap: 20px;">
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 70ch;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #9DB8FF;">~/leaderboard</span>
+<h2 style="margin: 0; font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: -0.02em;">{{rTitle}}</h2>
+<p style="color: #A9B4C6;">{{rIntro}}</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;" role="group" aria-label="Banc / Bench">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA; margin-right: 4px;">{{benchLabel}}</span>
+<sc-for list="{{benchOpts}}" as="o" hint-placeholder-count="7"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" title="{{o.hint}}" style="min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-size: 13px; cursor: pointer; opacity: {{o.op}};">{{o.label}}</button></sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 18px; font-family: 'Geist Mono', monospace; font-size: 12px; color: #A9B4C6;">
+<span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background: #3987e5;"></span>Opus 5.5</span>
+<span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background: #d95926;"></span>Sonnet 5.5</span>
+<span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background: #199e70;"></span>Haiku 4.5 / 5.5</span>
+<span title="{{ciTip}}" style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 2px; background: #E8EDF5;"></span>{{ciLabel}}</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 16px;">
+<sc-for list="{{boards}}" as="bd" hint-placeholder-count="4">
+<figure style="margin: 0; background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+<figcaption style="display: flex; flex-direction: column; gap: 2px;"><strong style="font-size: 16px;">{{bd.title}}</strong><span style="font-size: 13px; color: #8593AA;">{{bd.sub}}</span></figcaption>
+<div style="display: flex; flex-direction: column;">
+<sc-for list="{{bd.rows}}" as="row" hint-placeholder-count="14">
+<button type="button" onClick="{{row.pick}}" title="{{row.hint}}" style="display: grid; grid-template-columns: 112px minmax(0, 1fr) 76px; gap: 12px; align-items: center; width: 100%; padding: 5px 6px; border: 0; border-radius: 8px; background: {{row.hl}}; color: inherit; text-align: left; cursor: pointer;">
+<span style="display: flex; flex-direction: column; line-height: 1.2; min-width: 0;"><span style="font-size: 13px; font-weight: {{row.weight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{row.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6F7C92;">{{row.code}}</span></span>
+<span style="position: relative; display: block; height: 24px;">
+<sc-for list="{{bd.ticks}}" as="tk"><span style="position: absolute; top: 0; bottom: 0; left: {{tk.left}}%; width: 1px; background: #1C2433;"></span></sc-for>
+<sc-for list="{{row.segs}}" as="sg"><span style="position: absolute; top: 5px; height: 14px; left: {{sg.left}}%; width: {{sg.width}}%; background: {{sg.color}}; border-radius: {{sg.radius}}; box-sizing: border-box; border-right: {{sg.gap}};"></span></sc-for>
+<span style="position: absolute; top: 11px; height: 2px; left: {{row.loL}}%; width: {{row.ciW}}%; background: #E8EDF5;"></span>
+</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; text-align: right; white-space: nowrap;">{{row.valText}}</span>
+</button>
+</sc-for>
+<div style="display: grid; grid-template-columns: 112px minmax(0, 1fr) 76px; gap: 12px; padding: 0 6px;">
+<span></span>
+<span style="position: relative; display: block; height: 16px;"><sc-for list="{{bd.ticks}}" as="tk"><span style="position: absolute; left: {{tk.left}}%; transform: translateX(-50%); font-family: 'Geist Mono', monospace; font-size: 10px; color: #6F7C92; white-space: nowrap;">{{tk.label}}</span></sc-for></span>
+<span></span>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</section>
+
+
+
+
+
+
+
+
+
+<section id="more" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 22px 24px;">
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 70ch;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #9DB8FF;">~/critique</span>
+<h2 style="margin: 0; font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: -0.02em;">{{moreTitle}}</h2>
+<p style="color: #A9B4C6;">{{moreIntro}}</p>
+</div>
+<a href="Critique.dc.html" style="display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 600; color: #0A0E15; background: #9DB8FF;">{{moreLabel}} →</a>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"lang":{"editor":"enum","options":["fr","en"],"default":"fr"},"$preview":{"width":1280,"height":7600}}'>
+const DATA_URL = './data/runs.json';
+const TCRIT = [0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131];
+/* ORDER is the original bench (act 1) and drives the builder; ALL adds the clean, ideal and guarded variants. */
+const ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+const ALL = ORDER.concat(['V', 'X', 'Z', 'W', 'Y', 'Q', 'O', 'S', 'R']);
+const NAME = { A: 'Full Stack', B: 'Soft Note', C: 'Bare', D: 'Router', E: 'Preload', F: 'Rule Zero', G: 'Gatekeeper', H: 'Nudger', I: 'Zero Gate', V: 'Vanilla', X: 'Clean Stack', Z: 'Clean Zero', W: 'Vanilla Twin', Y: 'Pinned Crew', Q: 'Guarded Crew', O: 'Opus Crew', S: 'Sized Crew', R: 'Reviewed Crew' };
+const BENCHES = ['all', 'orig', 'clean', 'ideal', 'guarded', 'opuscrew', 'v2'];
+/* Variants that delegate on purpose (highlighted in the context leaderboards). */
+const DELEG = ['A', 'F', 'I', 'X', 'Z', 'Y', 'Q', 'O', 'S', 'R'];
+const PIECE_KEYS = ['rule', 'soft', 'pre', 'gate', 'router', 'nudge'];
+const SIG = { A: 'rule,pre,gate,router,nudge', B: 'soft', C: '', D: 'soft,router', E: 'soft,pre', F: 'rule,pre', G: 'soft,pre,gate', H: 'soft,pre,nudge', I: 'rule,pre,gate' };
+const MODELS = [['opus', 'Opus 5.5', '#3987e5'], ['sonnet', 'Sonnet 5.5', '#d95926'], ['haiku', 'Haiku', '#199e70']];
+
+/** Arithmetic mean of a list (0 for an empty list). */
+function mean(xs) { return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; }
+
+/** Pass flag of a run: the re-scored T4 check (passed2) when present, else the original check. */
+function passOf(r) { return r.passed2 != null ? !!r.passed2 : !!r.passed; }
+
+/** Judge score of a run: judge3 (mean of up to 3 blind ratings) when present, else the single rating (original bench). */
+function judgeOf(r) { return r.judge3 != null ? r.judge3 : r.judge; }
+
+/** Correct turn count: turns_all sums every result event; the legacy turns only counts the last resumed segment. */
+function turnsOf(r) { return r.turns_all != null ? r.turns_all : (r.turns || 0); }
+
+/**
+ * Display name of a model family for one run.
+ * Haiku changed between benches (4.5 in the original bench, 5.5 afterwards), so its version
+ * comes from the run's exact model ids (hv), falling back on the bench.
+ */
+function modelName(md, r) {
+  if (md[0] !== 'haiku') return md[1];
+  const hv = (r && r.hv) || [];
+  if (hv.some((x) => x.indexOf('haiku-5-5') >= 0)) return 'Haiku 5.5';
+  if (hv.some((x) => x.indexOf('haiku-4-5') >= 0)) return 'Haiku 4.5';
+  return r && r.bench && r.bench !== 'orig' ? 'Haiku 5.5' : 'Haiku 4.5';
+}
+
+/** n, mean, sample variance and sd, Student-t 95% CI bounds. */
+function stats(xs) {
+  const n = xs.length, m = mean(xs);
+  const v = n > 1 ? xs.reduce((a, b) => a + (b - m) * (b - m), 0) / (n - 1) : 0;
+  const sd = Math.sqrt(v);
+  const h = n > 1 ? (TCRIT[n - 1] || 2.0) * sd / Math.sqrt(n) : 0;
+  return { n, m, v, sd, lo: m - h, hi: m + h };
+}
+
+/** Log-gamma (Lanczos), used by the incomplete beta. */
+function lgamma(x) {
+  const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let y = x, t = x + 5.5; t -= (x + 0.5) * Math.log(t);
+  let s = 1.000000000190015; for (let j = 0; j < 6; j++) s += c[j] / ++y;
+  return -t + Math.log(2.5066282746310005 * s / x);
+}
+
+/** Continued fraction for the regularized incomplete beta. */
+function betacf(a, b, x) {
+  let qab = a + b, qap = a + 1, qam = a - 1, c = 1, d = 1 - qab * x / qap;
+  if (Math.abs(d) < 1e-30) d = 1e-30; d = 1 / d; let h = d;
+  for (let m = 1; m <= 200; m++) {
+    const m2 = 2 * m; let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+    d = 1 + aa * d; if (Math.abs(d) < 1e-30) d = 1e-30; c = 1 + aa / c; if (Math.abs(c) < 1e-30) c = 1e-30; d = 1 / d; h *= d * c;
+    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+    d = 1 + aa * d; if (Math.abs(d) < 1e-30) d = 1e-30; c = 1 + aa / c; if (Math.abs(c) < 1e-30) c = 1e-30; d = 1 / d;
+    const del = d * c; h *= del; if (Math.abs(del - 1) < 3e-12) break;
+  }
+  return h;
+}
+
+/** Regularized incomplete beta I_x(a, b). */
+function ibeta(x, a, b) {
+  if (x <= 0) return 0; if (x >= 1) return 1;
+  const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+  return x < (a + 1) / (a + b + 2) ? bt * betacf(a, b, x) / a : 1 - bt * betacf(b, a, 1 - x) / b;
+}
+
+/** Two-sided Welch t-test p-value between two stats objects. */
+function welch(s1, s2) {
+  if (s1.n < 2 || s2.n < 2) return null;
+  const se2 = s1.v / s1.n + s2.v / s2.n; if (se2 <= 0) return null;
+  const t = (s1.m - s2.m) / Math.sqrt(se2);
+  const df = se2 * se2 / ((s1.v / s1.n) ** 2 / (s1.n - 1) + (s2.v / s2.n) ** 2 / (s2.n - 1));
+  return ibeta(df / (df + t * t), df / 2, 0.5);
+}
+
+/** Clamp to a 0-100 percentage of max. */
+function pct(x, max) { return max > 0 ? Math.max(0, Math.min(100, x / max * 100)) : 0; }
+
+/** Round axis maximum and step with at most 6 ticks. */
+function niceScale(x) {
+  const steps = [0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100];
+  for (const s of steps) { if (x / s <= 6) return { max: Math.max(s, Math.ceil(x / s) * s), step: s }; }
+  return { max: x, step: x / 5 };
+}
+
+/** Per-model field of a run (0 when unused). */
+function mv(r, k, f) { return r.m[k] ? r.m[k][f] || 0 : 0; }
+
+class Component extends DCLogic {
+  /** Initial lab state: Rule Zero built, Full Stack vs Rule Zero on T4. */
+  constructor(props) {
+    super(props);
+    this.state = { lang: null, runs: null, err: false, task: 't4', bench: 'all', left: 'A', right: 'F', run: null, pieces: { rule: true, soft: false, pre: true, gate: false, router: false, nudge: false } };
+  }
+
+  /** Load the per-run dataset published with the canvas. */
+  componentDidMount() {
+    fetch(DATA_URL).then((r) => r.json()).then((runs) => this.setState({ runs })).catch(() => this.setState({ err: true }));
+  }
+
+  /** Current language code. */
+  lang() { return this.state.lang || this.props.lang || 'fr'; }
+
+  /** Locale number. */
+  num(x, d) { const s = (x == null ? 0 : x).toFixed(d); return this.lang() === 'fr' ? s.replace('.', ',').replace('-', '−') : s.replace('-', '−'); }
+
+  /** Locale dollars. */
+  usd(x) { return this.lang() === 'fr' ? this.num(x, 2) + ' $' : (x < 0 ? '−$' + this.num(-x, 2) : '$' + this.num(x, 2)); }
+
+  /** Signed locale number with a unit formatter. */
+  signed(x, f) { return (x >= 0 ? '+' : '−') + f(Math.abs(x)); }
+
+  /** Runs of one task and variant. */
+  rs(task, v) { return (this.state.runs || []).filter((r) => r.task === task && r.v === v); }
+
+  /** Runs of one task and variant inside the current bench filter (duel and leaderboards). */
+  rb(task, v) { const b = this.state.bench; return this.rs(task, v).filter((r) => b === 'all' || r.bench === b); }
+
+  /** Runs of one task and variant restricted to a single bench (act tables, verdict figures). */
+  rx(task, v, bench) { return this.rs(task, v).filter((r) => r.bench === bench); }
+
+  /** Sorted set of the benches a run list comes from, joined with '+', used to spot cross-bench duels. */
+  benchKey(runs) { return Array.from(new Set(runs.map((r) => r.bench))).sort().join('+'); }
+
+  /** Variant whose piece set matches the current toggles, or null. */
+  matched() {
+    const sig = PIECE_KEYS.filter((k) => this.state.pieces[k]).join(',');
+    const v = ORDER.find((x) => SIG[x] === sig);
+    return v || null;
+  }
+
+  /** Set the toggles to a tested variant's pieces. */
+  loadPreset(v) {
+    const on = SIG[v] ? SIG[v].split(',') : [];
+    const p = {}; PIECE_KEYS.forEach((k) => { p[k] = on.indexOf(k) >= 0; });
+    this.setState({ pieces: p });
+  }
+
+  /** Scroll a section into view (used when a button sends a setup to the duel further down). */
+  scrollTo(id) {
+    try {
+      const el = typeof document !== 'undefined' ? document.getElementById(id) : null;
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) { /* no DOM (preview or test): ignore */ }
+  }
+
+  /** Copy a command to the clipboard and flag which one was copied, so its button can say so. */
+  copy(key, text) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(text).then(() => this.setState({ copied: key }), () => this.setState({ copied: null }));
+    } catch (e) { /* clipboard unavailable: the block stays selectable */ }
+  }
+
+  /** Everything the template reads. */
+  renderVals() {
+    const fr = this.lang() === 'fr';
+    const L = (a, b) => (fr ? a : b);
+    const st = this.state;
+    const task = st.task;
+    const tf = (x) => (x ? 'true' : 'false');
+    const TASKHINT = { t4: L('T4 · session longue sur click', 'T4 · long session on click'), t5: L('T5 · debug et refactor sur marshmallow', 'T5 · debug and refactor on marshmallow') };
+    const VDESC = {
+      V: L('Claude Code tel qu\'installé, rien d\'ajouté. Le témoin.', 'Pristine Claude Code, nothing installed. The control.'),
+      X: L('cheap-orchestration complet dans une install vierge : skill, hooks et Rule #0.', 'Full cheap-orchestration in a pristine install: skill, hooks and Rule #0.'),
+      Z: L('Seulement la section Rule #0 du CLAUDE.md et le preload SessionStart.', 'Only the Rule #0 CLAUDE.md section and the SessionStart preload.'),
+      W: L('Deuxième témoin vanilla, même config que Vanilla, lancé dans la fenêtre du test 2.', 'Second vanilla control, same setup as Vanilla, run in test 2\'s time window.'),
+      Y: L('Rule #0 qui nomme trois agents maison à modèle fixe : scout et editor sur Haiku, worker sur Sonnet. Les agents intégrés qui héritent d\'Opus sont interdits. Aucun hook.', 'Rule #0 naming three custom agents with pinned models: scout and editor on Haiku, worker on Sonnet. Built-in agents that inherit Opus are denied. No hooks.'),
+      Q: L('Pinned Crew plus trois règles : respecter l\'ordre des tâches, un test par exigence, revérifier les références fichier:ligne à la fin.', 'Pinned Crew plus three rules: respect task order, one test per requirement, re-check path:line references at the end.'),
+      O: L('Guarded Crew avec le worker épinglé sur Opus au lieu de Sonnet. Seules cette ligne et sa mention dans le CLAUDE.md changent.', 'Guarded Crew with the worker pinned to Opus instead of Sonnet. Only that line and its mention in CLAUDE.md differ.'),
+      S: L('La v2 de cheap-orchestration écrite à partir des résultats : agents épinglés dans leur propre définition (scout et editor sur Haiku, worker sur Sonnet), règle de décision selon la taille et l\'enjeu, ordre des parties obligatoire, garde-fous sur les tests et les références, aucun hook.', 'cheap-orchestration v2, written from the evidence: agents pinned in their own definition (scout and editor on Haiku, worker on Sonnet), a decision rule by size and stakes, binding part order, test and reference guards, no hooks.'),
+      R: L('Sized Crew plus une passe finale de relecture par Opus, qui corrige directement la finition.', 'Sized Crew plus one final Opus reviewer pass that fixes polish directly.'),
+    };
+
+    /* ---------- builder ---------- */
+    const PIECES = [
+      ['rule', '#0', 'Rule #0', L('Règle catégorique dans le CLAUDE.md : déléguer avant de faire soi-même.', 'Categorical CLAUDE.md rule: delegate before doing it yourself.')],
+      ['soft', '~', L('Note douce', 'Soft note'), L('Une phrase : déléguer quand c\'est gros, Haiku pour chercher, Sonnet pour coder.', 'One sentence: delegate big work, Haiku to look up, Sonnet to code.')],
+      ['pre', '⇣', 'Preload', L('Le skill et sa routing matrix injectés au démarrage.', 'The skill and its routing matrix injected at start.')],
+      ['gate', '⊘', 'Label gate', L('Refuse tout sous-agent sans étiquette de modèle.', 'Denies any subagent without a model label.')],
+      ['router', '⇢', 'Router', L('Classe chaque prompt et rappelle de déléguer.', 'Classifies each prompt and reminds to delegate.')],
+      ['nudge', '!', L('Relances', 'Nudges'), L('[DELEGATION NOTICE] et « Delegation check » en cours de session.', '[DELEGATION NOTICE] and "Delegation check" mid-session.')],
+    ];
+    const pieces = PIECES.map((p) => {
+      const on = !!st.pieces[p[0]];
+      return {
+        glyph: p[1], name: p[2], desc: p[3], pressed: tf(on),
+        bg: on ? '#16213A' : '#0E131D', border: on ? '#4A6BB5' : '#1C2433',
+        iconBg: on ? '#9DB8FF' : '#1A2232', iconFg: on ? '#0A0E15' : '#8593AA',
+        trackBg: on ? '#9DB8FF' : '#2A3447', knobL: on ? '23px' : '3px',
+        toggle: () => this.setState({ pieces: Object.assign({}, st.pieces, { [p[0]]: !on }) }),
+      };
+    });
+    const mv0 = this.matched();
+    const DESC = {
+      A: L('Ma config réelle : tout est activé, hooks OMC compris.', 'My real setup: everything on, OMC hooks included.'),
+      B: L('Une note de délégation douce, aucun hook.', 'A soft delegation note, no hooks.'),
+      C: L('Aucune consigne de délégation : le témoin.', 'No delegation guidance: the control.'),
+      D: L('Note douce + router de prompts.', 'Soft note + prompt router.'),
+      E: L('Note douce + skill préchargé au démarrage.', 'Soft note + skill preloaded at start.'),
+      F: L('Rule #0 + skill préchargé. La config recommandée.', 'Rule #0 + preloaded skill. The recommended setup.'),
+      G: L('Preload + label gate.', 'Preload + label gate.'),
+      H: L('Preload + relances de délégation.', 'Preload + delegation nudges.'),
+      I: L('Rule Zero + label gate.', 'Rule Zero + label gate.'),
+    };
+    const presets = ORDER.map((v) => ({ label: NAME[v], hint: DESC[v], pick: () => this.loadPreset(v), bg: v === mv0 ? '#E8EDF5' : 'transparent', fg: v === mv0 ? '#0A0E15' : '#C6CFDD', border: v === mv0 ? '#E8EDF5' : '#2A3447' }));
+    let res;
+    const base = stats(this.rs(task, 'C').map((r) => r.cost));
+    const full = stats(this.rs(task, 'A').map((r) => r.cost));
+    const baseCtx = stats(this.rs(task, 'C').map((r) => r.ctx / 1000));
+    if (mv0 && this.rs(task, mv0).length) {
+      const runs = this.rs(task, mv0);
+      const c = stats(runs.map((r) => r.cost)), x = stats(runs.map((r) => r.ctx / 1000)), j = stats(runs.map((r) => r.judge || 0));
+      const parts = MODELS.map((md) => ({ md, val: mean(runs.map((r) => mv(r, md[0], 'cost'))) })).filter((p) => p.val > 0.004);
+      const tot = parts.reduce((a, p) => a + p.val, 0) || 1;
+      const pc = (a, b) => (b ? this.signed((a / b - 1) * 100, (y) => this.num(y, 0) + ' %') : '');
+      res = {
+        tested: true, untested: false, border: mv0 === 'F' ? '#9DB8FF' : '#2A3447',
+        kicker: L('Variante ', 'Variant ') + mv0 + ' · n = ' + c.n + ' · ' + task.toUpperCase(),
+        name: NAME[mv0], desc: DESC[mv0],
+        kpis: [
+          { label: L('Coût / run', 'Cost / run'), value: this.usd(c.m), delta: mv0 === 'C' ? L('référence', 'baseline') : pc(c.m, base.m) + L(' vs Bare', ' vs Bare'), deltaColor: c.m <= base.m ? '#3CCB7F' : '#FF7A6B' },
+          { label: L('vs Full Stack', 'vs Full Stack'), value: mv0 === 'A' ? '·' : pc(c.m, full.m), delta: L('coût moyen', 'mean cost'), deltaColor: '#8593AA' },
+          { label: L('Pic de contexte', 'Peak context'), value: this.num(x.m, 1) + 'k', delta: mv0 === 'C' ? L('référence', 'baseline') : pc(x.m, baseCtx.m) + L(' vs Bare', ' vs Bare'), deltaColor: x.m <= baseCtx.m ? '#3CCB7F' : '#FF7A6B' },
+          { label: L('Juge', 'Judge'), value: this.num(j.m, 2) + ' / 5', delta: L('IC coût ', 'cost CI ') + this.num(c.lo, 2) + '…' + this.num(c.hi, 2), deltaColor: '#8593AA' },
+        ],
+        splitLabel: L('Où part l\'argent', 'Where the money goes'),
+        split: parts.map((p) => ({ w: (p.val / tot * 100).toFixed(1), color: p.md[2], label: modelName(p.md, runs[0]) + ' ' + this.usd(p.val) + ' · ' + this.num(p.val / tot * 100, 0) + ' %' })),
+        note: c.n <= 3 ? L('Attention : seulement ' + c.n + ' runs sur cette tâche, l\'intervalle est large.', 'Careful: only ' + c.n + ' runs on this task, the interval is wide.') : L('Le bouton ci-dessous la met en duel contre Full Stack, run par run.', 'The button below puts it in a duel against Full Stack, run by run.'),
+        duelLabel: L('Mettre en duel →', 'Send to the duel →'),
+        toDuel: () => { this.setState({ right: mv0, left: mv0 === 'A' ? 'C' : 'A', run: null, bench: 'orig' }); this.scrollTo('duel'); },
+        near: [],
+      };
+    } else {
+      const on = PIECE_KEYS.filter((k) => st.pieces[k]);
+      const scored = ORDER.filter((v) => this.rs(task, v).length).map((v) => {
+        const s = SIG[v] ? SIG[v].split(',') : [];
+        const dist = PIECE_KEYS.filter((k) => (on.indexOf(k) >= 0) !== (s.indexOf(k) >= 0)).length;
+        return { v, dist };
+      }).sort((a, b) => a.dist - b.dist).slice(0, 3);
+      res = {
+        tested: false, untested: true, border: '#5A3A3A',
+        kicker: L('Combinaison non testée', 'Untested combination') + ' · ' + task.toUpperCase(),
+        name: L('Terra incognita', 'Terra incognita'),
+        desc: mv0 ? L('Cette variante n\'a pas tourné sur ' + task.toUpperCase() + '.', 'This variant did not run on ' + task.toUpperCase() + '.') : L('Personne n\'a mesuré ce mélange de pièces.', 'Nobody measured this mix of pieces.'),
+        untestedText: L('Les configurations mesurées les plus proches :', 'The closest measured configurations:'),
+        near: scored.map((s) => ({ label: NAME[s.v] + ' · ' + s.dist + L(' pièce', ' piece') + (s.dist > 1 ? 's' : '') + L(' d\'écart', ' away'), pick: () => this.loadPreset(s.v) })),
+        kpis: [], split: [],
+      };
+    }
+
+    /* ---------- duel ---------- */
+    const BL = { all: L('Tous', 'All'), orig: L('Origine', 'Original'), clean: L('Salle blanche', 'Clean room'), ideal: L('Idéal', 'Ideal'), guarded: L('Gardé', 'Guarded'), opuscrew: L('Opus Crew', 'Opus Crew'), v2: L('v2', 'v2') };
+    const BS = { orig: L('origine', 'orig'), clean: L('propre', 'clean'), ideal: L('idéal', 'ideal'), guarded: L('gardé', 'guarded'), opuscrew: L('opus crew', 'opus crew'), v2: L('v2', 'v2') };
+    const BHINT = {
+      all: L('Tous les bancs mélangés', 'Every bench mixed'),
+      orig: L('Acte 1 · mon environnement réel', 'Act 1 · my real environment'),
+      clean: L('Acte 2 · install vierge', 'Act 2 · pristine install'),
+      ideal: L('Acte 3 · harnais idéal', 'Act 3 · ideal harness'),
+      guarded: L('Acte 4 · qualité gardée', 'Act 4 · guarding quality'),
+      opuscrew: L('Acte 5 · Opus Crew', 'Act 5 · Opus Crew'),
+      v2: L('Acte 6 · la réécriture', 'Act 6 · the rewrite'),
+    };
+    const bkText = (k) => k.split('+').map((b) => BS[b] || b).join('+');
+    const benchOpts = BENCHES.map((b) => {
+      const on = st.bench === b;
+      const has = b === 'all' || (st.runs || []).some((r) => r.bench === b);
+      return {
+        label: BL[b], hint: BHINT[b], pressed: tf(on), op: has ? '1' : '0.35',
+        bg: on ? '#E8EDF5' : 'transparent', fg: on ? '#0A0E15' : '#C6CFDD', border: on ? '#E8EDF5' : '#2A3447',
+        pick: () => { if (has) this.setState({ bench: b, run: null }); },
+      };
+    });
+    /* Variants offered in the duel and leaderboards: those with runs in the bench filter (the original nine before data loads). */
+    const inBench = ALL.filter((v) => (st.runs || []).some((r) => r.v === v && (st.bench === 'all' || r.bench === st.bench)));
+    const shownV = inBench.length ? inBench : ORDER;
+    const avail = (v) => this.rb(task, v).length > 0;
+    const okV = shownV.filter(avail);
+    const left = avail(st.left) ? st.left : (okV[0] || 'A');
+    const right = avail(st.right) ? st.right : (okV.find((v) => v !== left) || okV[0] || 'F');
+    const VHINT = (v) => NAME[v] + ' · ' + (DESC[v] || VDESC[v] || '') + ' · ' + bkText(this.benchKey((st.runs || []).filter((r) => r.v === v))) + (avail(v) ? '' : L(' · pas de run sur ', ' · no run on ') + task.toUpperCase());
+    const opt = (side, cur, other) => shownV.map((v) => {
+      const ok = avail(v), on = v === cur;
+      return {
+        label: NAME[v], hint: VHINT(v), pressed: tf(on), op: ok ? '1' : '0.35',
+        bg: on ? (side === 'l' ? '#E8EDF5' : '#9DB8FF') : 'transparent', fg: on ? '#0A0E15' : '#C6CFDD', border: on ? 'transparent' : '#2A3447',
+        pick: () => { if (ok) this.setState(side === 'l' ? { left: v, run: null } : { right: v, run: null }); },
+      };
+    });
+    const lr = this.rb(task, left), rr = this.rb(task, right);
+    const P_TIP = L('p (test de Welch) : la probabilité d\'observer un écart au moins aussi grand si les deux configs étaient en réalité identiques. Sous 0,05, l\'écart est dit statistiquement net. La fourchette est l\'intervalle de confiance à 95 % de la moyenne.', 'p (Welch test): the probability of seeing a gap at least this large if the two setups were actually identical. Below 0.05 the gap is called statistically clear. The range is the 95% confidence interval of the mean.');
+    const lk = this.benchKey(lr), rk = this.benchKey(rr);
+    /* Warn when the two sides do not come from exactly the same set of benches (different environment or time window). */
+    const benchWarn = left !== right && lr.length > 0 && rr.length > 0 && lk !== rk;
+    const metrics = [
+      ['cost', L('Coût par run', 'Cost per run'), (r) => r.cost, (x) => this.usd(x)],
+      ['ctx', L('Pic de contexte de la boucle principale', 'Main-loop peak context'), (r) => r.ctx / 1000, (x) => this.num(x, 1) + 'k'],
+    ];
+    const duel = metrics.map((mt) => {
+      const a = stats(lr.map(mt[2])), b = stats(rr.map(mt[2]));
+      const p = left === right ? null : welch(a, b);
+      const top = Math.max(a.hi, b.hi, ...lr.map(mt[2]), ...rr.map(mt[2]), 0.01);
+      const sc = niceScale(top);
+      const ticks = []; for (let t = 0; t <= sc.max + 1e-9; t += sc.step) ticks.push({ left: pct(t, sc.max).toFixed(2), label: mt[3](t).replace(/[,.]00(?= \$|$)/, '').replace(/,0k$|\.0k$/, 'k') });
+      const sig = p != null && p < 0.05;
+      const d = b.m - a.m;
+      const dot = (r, lane) => {
+        const sel = st.run === r.id;
+        return {
+          left: pct(mt[2](r), sc.max).toFixed(2), top: lane ? 53 : 23, size: sel ? 16 : 12,
+          fill: lane ? (sel ? '#9DB8FF' : '#0A0E15') : (sel ? '#FFFFFF' : '#E8EDF5'), stroke: lane ? '#9DB8FF' : (sel ? '#9DB8FF' : '#E8EDF5'),
+          aria: r.id + ' · ' + mt[3](mt[2](r)), pick: () => this.setState({ run: r.id }),
+        };
+      };
+      return {
+        title: mt[1],
+        lName: NAME[left] + (lk ? ' · ' + bkText(lk) : ''), rName: NAME[right] + (rk ? ' · ' + bkText(rk) : ''),
+        lMean: mt[3](a.m), rMean: mt[3](b.m),
+        lCi: 'n = ' + a.n + ' · ' + L('fourchette ', 'range ') + mt[3](a.lo) + '…' + mt[3](b.n ? a.hi : a.hi),
+        rCi: 'n = ' + b.n + ' · ' + L('fourchette ', 'range ') + mt[3](b.lo) + '…' + mt[3](b.hi),
+        deltaLabel: NAME[right] + ' − ' + NAME[left],
+        delta: this.signed(d, mt[3]) + (a.m ? ' (' + this.signed(d / a.m * 100, (y) => this.num(y, 0) + ' %') + ')' : ''),
+        deltaColor: p == null ? '#8593AA' : sig ? (d < 0 ? '#3CCB7F' : '#FF7A6B') : '#8593AA',
+        pText: p == null ? L('même variante', 'same variant') : 'p (Welch) = ' + (p < 0.001 ? '< 0' + (fr ? ',' : '.') + '001' : this.num(p, 3)),
+        verdict: p == null ? '·' : sig ? L('statistiquement net', 'statistically clear') : L('peut-être du bruit', 'could be noise'),
+        pTip: P_TIP,
+        chipBg: p == null ? '#1A2232' : sig ? '#123A26' : '#1A2232', chipFg: p == null ? '#8593AA' : sig ? '#3CCB7F' : '#A9B4C6',
+        ticks,
+        lLo: pct(a.lo, sc.max).toFixed(2), lCiW: Math.max(0, pct(a.hi, sc.max) - pct(a.lo, sc.max)).toFixed(2), lM: pct(a.m, sc.max).toFixed(2),
+        rLo: pct(b.lo, sc.max).toFixed(2), rCiW: Math.max(0, pct(b.hi, sc.max) - pct(b.lo, sc.max)).toFixed(2), rM: pct(b.m, sc.max).toFixed(2),
+        dots: lr.map((r) => dot(r, 0)).concat(left === right ? [] : rr.map((r) => dot(r, 1))),
+      };
+    });
+    const runObj = (st.runs || []).find((r) => r.id === st.run);
+    let run = null;
+    if (runObj) {
+      const k = (x) => this.num(x / 1000, 1) + 'k';
+      run = {
+        title: runObj.id,
+        meta: NAME[runObj.v] + ' · ' + runObj.task.toUpperCase() + ' · rep ' + runObj.rep + ' · ' + (BS[runObj.bench] || runObj.bench || ''),
+        kpis: [
+          { label: L('Coût', 'Cost'), value: this.usd(runObj.cost) },
+          { label: L('Contexte max', 'Peak context'), value: this.num(runObj.ctx / 1000, 1) + 'k' },
+          { label: L('Tours', 'Turns'), value: String(turnsOf(runObj)) },
+          { label: L('Sous-agents', 'Subagents'), value: String(runObj.sub || 0) },
+          { label: L('Juge', 'Judge'), value: runObj.judge3 != null ? this.num(runObj.judge3, 2) + L(' / 5 (moy. de 3)', ' / 5 (mean of 3)') : runObj.judge == null ? '·' : runObj.judge + ' / 5' },
+          { label: 'Check', value: runObj.passed2 != null ? (passOf(runObj) ? L('ok (re-noté)', 'ok (re-scored)') : L('échec', 'fail')) : runObj.passed ? (runObj.manual ? L('ok (manuel)', 'ok (manual)') : 'ok') : L('échec', 'fail') },
+        ],
+        head: [L('Modèle', 'Model'), 'Input', 'Output', 'Cache read', 'Cache write', L('Coût', 'Cost')].map((label) => ({ label })),
+        models: MODELS.filter((md) => runObj.m[md[0]]).map((md) => ({ cells: [
+          { t: modelName(md, runObj), color: md[2] === '#3987e5' ? '#7FB0F0' : md[2] === '#d95926' ? '#F08A5D' : '#3CCB9A' },
+          { t: k(mv(runObj, md[0], 'in')), color: '#E8EDF5' }, { t: k(mv(runObj, md[0], 'out')), color: '#E8EDF5' },
+          { t: k(mv(runObj, md[0], 'cr')), color: '#E8EDF5' }, { t: k(mv(runObj, md[0], 'cw')), color: '#E8EDF5' },
+          { t: this.usd(mv(runObj, md[0], 'cost')), color: '#E8EDF5' },
+        ] })),
+      };
+    }
+
+    /* ---------- leaderboards ---------- */
+    const board = (tk, metric, title, sub) => {
+      const vs = shownV.filter((v) => this.rb(tk, v).length);
+      const get = metric === 'cost' ? (r) => r.cost : (r) => r.ctx / 1000;
+      const fmt = metric === 'cost' ? (x) => this.usd(x) : (x) => this.num(x, 1) + 'k';
+      const groups = vs.map((v) => ({ v, rs: this.rb(tk, v), s: stats(this.rb(tk, v).map(get)) })).sort((a, b) => a.s.m - b.s.m);
+      const sc = niceScale(Math.max(...groups.map((g) => g.s.hi), 0.01));
+      const ticks = []; for (let t = 0; t <= sc.max + 1e-9; t += sc.step) ticks.push({ left: pct(t, sc.max).toFixed(2), label: fmt(t).replace(/[,.]00(?= \$|$)/, '').replace(/,0k$|\.0k$/, 'k') });
+      const rows = groups.map((g) => {
+        let segs;
+        if (metric === 'cost') {
+          let l = 0; const parts = MODELS.map((md) => ({ md, val: mean(g.rs.map((r) => mv(r, md[0], 'cost'))) })).filter((p) => p.val > 0);
+          segs = parts.map((p, i) => { const w = pct(p.val, sc.max); const o = { left: l.toFixed(2), width: w.toFixed(2), color: p.md[2], radius: parts.length === 1 ? '4px' : i === 0 ? '4px 0 0 4px' : i === parts.length - 1 ? '0 4px 4px 0' : '0', gap: i < parts.length - 1 ? '2px solid #111723' : '0' }; l += w; return o; });
+        } else {
+          segs = [{ left: '0', width: pct(g.s.m, sc.max).toFixed(2), color: DELEG.indexOf(g.v) >= 0 ? '#9DB8FF' : '#4A5A78', radius: '4px', gap: '0' }];
+        }
+        const on = g.v === left || g.v === right;
+        return {
+          name: NAME[g.v], code: g.v + ' · ' + bkText(this.benchKey(g.rs)) + ' · n = ' + g.s.n, weight: g.v === 'F' ? '700' : '500', segs, valText: fmt(g.s.m),
+          loL: pct(g.s.lo, sc.max).toFixed(2), ciW: Math.max(0, pct(g.s.hi, sc.max) - pct(g.s.lo, sc.max)).toFixed(2),
+          hl: on ? '#1A2438' : 'transparent', hint: NAME[g.v] + ' · ' + (DESC[g.v] || VDESC[g.v] || '') + L(' Clic : envoyer dans le duel.', ' Click: send to the duel.'),
+          pick: () => { this.setState({ task: tk, right: g.v, run: null }); this.scrollTo('duel'); },
+        };
+      });
+      return { title, sub, rows, ticks };
+    };
+
+    /* ---------- acts 2 and 3: per-bench result tables ---------- */
+    const ready = !!(st.runs && st.runs.length);
+    const pTxt = (p) => (p == null ? '·' : p < 0.001 ? '< 0' + (fr ? ',' : '.') + '001' : '= ' + this.num(p, 3));
+    /** Rows for one bench: T4 then T5, each variant against the bench's own control, with a Welch test on cost. */
+    /** Give every table cell a tooltip field (empty unless set). */
+    const withTip = (cells) => cells.map((c) => Object.assign({ tip: '' }, c));
+    const HEAD_TIP = {
+      [L('vs témoin', 'vs control')]: L('Écart de coût contre le témoin sans délégation du même banc. « net » = test de Welch p < 0,05, « bruit ? » sinon. Survol de la cellule : la valeur de p.', 'Cost gap against the same bench\'s control without delegation. "clear" = Welch test p < 0.05, "noise?" otherwise. Hover the cell for the p value.'),
+      [L('Juge', 'Judge')]: L('Moyenne des 3 notes du juge en aveugle, de 1 à 5.', 'Mean of the 3 blind judge ratings, 1 to 5.'),
+      [L('Pic contexte', 'Peak ctx')]: L('Plus grand contexte de la boucle principale pendant la session, en milliers de tokens.', 'Largest main-loop context during the session, in thousands of tokens.'),
+    };
+    /* 'POOL' = every vanilla run of the pristine installs (no drift between windows), used as Act 5's control. */
+    const POOL = [['V', 'clean'], ['W', 'ideal'], ['W', 'guarded'], ['W', 'opuscrew'], ['W', 'v2']];
+    const poolRuns = (t) => [].concat(...POOL.map((pv) => this.rx(t, pv[0], pv[1])));
+    const actTable = (bench, ctrl, vs) => {
+      const head = [L('Tâche', 'Task'), 'Config', 'n', L('Coût / run', 'Cost / run'), L('vs témoin', 'vs control'), 'Opus', 'Sonnet', 'Haiku', L('Pic contexte', 'Peak ctx'), L('Juge', 'Judge'), L('Tours', 'Turns'), 'Check'].map((label) => ({ label, tip: HEAD_TIP[label] || '' }));
+      const rows = [];
+      ['t4', 't5'].forEach((t) => {
+        const base = stats((ctrl === 'POOL' ? poolRuns(t) : this.rx(t, ctrl, bench)).map((r) => r.cost));
+        vs.forEach((spec) => {
+          const v = spec.split('@')[0], vb = spec.split('@')[1] || bench;
+          const rr = v === 'POOL' ? poolRuns(t) : this.rx(t, v, vb);
+          if (!rr.length) return;
+          const c = stats(rr.map((r) => r.cost));
+          const p = v === ctrl ? null : welch(c, base);
+          const d = base.m ? (c.m / base.m - 1) * 100 : 0;
+          const sig = p != null && p < 0.05;
+          const per = (k) => this.usd(mean(rr.map((r) => mv(r, k, 'cost'))));
+          const judged = rr.filter((r) => judgeOf(r) != null);
+          const pass = rr.filter(passOf).length;
+          rows.push({ cells: withTip([
+            { t: t.toUpperCase(), color: '#8593AA', w: '400' },
+            { t: v === 'POOL' ? L('Vanilla, regroupé', 'Vanilla, pooled') : NAME[v] + (vb !== bench ? ' (' + (BS[vb] || vb) + ')' : ''), color: '#E8EDF5', w: '600', tip: v === 'POOL' ? L('Vanilla et Vanilla Twin, tous les runs des installs vierges', 'Vanilla and Vanilla Twin, every pristine-install run') : VDESC[v] || '' },
+            { t: String(c.n), color: '#A9B4C6', w: '400' },
+            { t: this.usd(c.m), color: '#E8EDF5', w: '600' },
+            { tip: p == null ? '' : 'p ' + pTxt(p), t: v === ctrl ? L('témoin', 'control') : this.signed(d, (y) => this.num(y, 0) + ' %') + ' · ' + (sig ? L('net', 'clear') : L('bruit ?', 'noise?')), color: v === ctrl ? '#8593AA' : sig ? (d < 0 ? '#3CCB7F' : '#FF7A6B') : '#A9B4C6', w: '400' },
+            { t: per('opus'), color: '#7FB0F0', w: '400' },
+            { t: per('sonnet'), color: '#F08A5D', w: '400' },
+            { t: per('haiku'), color: '#3CCB9A', w: '400' },
+            { t: this.num(mean(rr.map((r) => r.ctx / 1000)), 0) + 'k', color: '#E8EDF5', w: '400' },
+            { t: judged.length ? this.num(mean(judged.map(judgeOf)), 2) : '·', color: '#E8EDF5', w: '400' },
+            { t: this.num(mean(rr.map(turnsOf)), 1), color: '#E8EDF5', w: '400' },
+            { t: pass + ' / ' + rr.length, color: pass === rr.length ? '#3CCB7F' : '#FF7A6B', w: '400' },
+          ]) });
+        });
+      });
+      return { head, rows };
+    };
+    const vItem = (v) => ({ code: v, name: NAME[v], desc: VDESC[v], bg: v === 'V' || v === 'W' ? '#8593AA' : '#9DB8FF' });
+    const actFoot = ready
+      ? L('Moyennes par run. Coût en équivalent API, découpé par modèle. Tours = tous les tours de la session, reprises après sous-agent asynchrone comprises. Juge = moyenne des 3 notes en aveugle de chaque run (une seule note dans le premier banc). Check = checks cachés (T4 re-noté avec le check docstrings corrigé). Welch bilatéral contre le témoin du même banc.', 'Means per run. API-equivalent cost, split by model. Turns = every turn of the session, resumes after async subagents included. Judge = mean of the 3 blind ratings of each run (a single rating in the first bench). Check = hidden checks (T4 re-scored with the fixed docstring check). Two-sided Welch test against the control of the same bench.')
+      : (st.err ? L('Données indisponibles, recharge la page.', 'Data unavailable, reload the page.') : L('Chargement des runs…', 'Loading the runs…'));
+    const act2 = actTable('clean', 'V', ['V', 'X', 'Z']);
+    const act3 = actTable('ideal', 'W', ['W', 'Y']);
+    const act4 = actTable('guarded', 'W', ['W', 'Y', 'Q']);
+    const act5 = actTable('opuscrew', 'POOL', ['POOL', 'Q@guarded', 'O']);
+    const act6 = actTable('v2', 'POOL', ['POOL', 'S', 'R']);
+    const acts = [
+      {
+        id: 'act-2', kicker: '~/act-2 · ' + L('salle blanche', 'clean room'),
+        title: L('Acte 2 : la salle blanche', 'Act 2: clean room'),
+        intro: L('Le premier banc tournait dans mon environnement : mon CLAUDE.md, mes plugins, mes serveurs MCP. Le témoin « Bare » n\'avait donc rien de nu. Pour savoir ce que vaut le skill chez quelqu\'un d\'autre, j\'ai refait le test depuis une installation de Claude Code qui ne contient rien d\'autre que la variante testée.', 'The first bench ran in my environment: my CLAUDE.md, my plugins, my MCP servers. So the "Bare" control was not bare at all. To find out what the skill is worth on someone else\'s machine, I redid the test from a Claude Code install that contains nothing but the variant under test.'),
+        protoLabel: L('ce qui change dans le protocole, et pourquoi', 'what changed in the protocol, and why'),
+        proto: [
+          { k: L('Un CLAUDE.md ancêtre fuyait.', 'An ancestor CLAUDE.md leaked.'), v: L('Même avec une config vierge, Claude Code remonte les dossiers parents du worktree et chargeait ~/.claude/CLAUDE.md, puisque mon home en fait partie. Les worktrees ont déménagé dans /private/tmp, hors de mon home.', 'Even with a pristine config, Claude Code walks up the worktree\'s parent directories and was loading ~/.claude/CLAUDE.md, since my home is one of them. The worktrees moved to /private/tmp, outside my home.') },
+          { k: L('Une config vierge par variante.', 'A pristine config per variant.'), v: L('Chaque variante a son propre CLAUDE_CONFIG_DIR, créé vide : aucun plugin, aucun serveur MCP, aucun hook en dehors de ceux qu\'elle installe elle-même.', 'Each variant gets its own CLAUDE_CONFIG_DIR, created empty: no plugin, no MCP server, no hook beyond the ones it installs itself.') },
+          { k: L('Token OAuth.', 'OAuth token.'), v: L('Un dossier de config vide n\'a pas de session, donc l\'authentification passe par un token OAuth, le même pour toutes les variantes.', 'An empty config directory has no login session, so authentication goes through an OAuth token, the same for every variant.') },
+          { k: L('8 runs par case.', '8 runs per cell.'), v: L('8 répétitions par tâche et par variante sur T4 et T5, notées par le même juge Opus en aveugle que dans le premier banc. L\'effort de raisonnement est medium ici, contre high dans le premier banc.', '8 repetitions per task and variant on T4 and T5, scored by the same blind Opus judge as in the first bench. Reasoning effort is medium here, versus high in the first bench.') },
+        ],
+        varLabel: L('les trois variantes', 'the three variants'),
+        variants: ['V', 'X', 'Z'].map(vItem),
+        head: act2.head, rows: act2.rows, foot: actFoot,
+        takeLabel: L('ce que j\'en retiens', 'what I take from it'),
+        take: [
+          L('Clean Stack n\'a jamais trouvé les agents OMC que vise sa routing matrix : ils n\'existent pas dans une install vierge. Toutes ses délégations sont parties vers general-purpose avec un modèle explicite, et le label gate n\'a jamais rien refusé.', 'Clean Stack never found the OMC agents its routing matrix targets, because they do not exist in a pristine install. Every delegation went to general-purpose with an explicit model, and the label gate never denied anything.'),
+          L('Vanilla délègue tout seul sur T4, vers des agents general-purpose qui héritent d\'Opus. Sur T5, il ne délègue jamais.', 'Vanilla delegates on its own on T4, to general-purpose agents that inherit Opus. On T5 it never delegates.'),
+        ].map((t, i) => ({ n: '0' + (i + 1), t })),
+        hasNext: false, nextLabel: '', next: '',
+      },
+      {
+        id: 'act-3', kicker: '~/act-3 · ' + L('banc idéal', 'ideal bench'),
+        title: L('Acte 3 : le harnais idéal', 'Act 3: the ideal harness'),
+        intro: L('Les transcripts de l\'acte 2 montraient où partait l\'argent : la boucle principale et des sous-agents qui tournaient encore sur Opus. J\'ai donc conçu le harnais le plus simple possible qui interdit ça, et je l\'ai testé contre un nouveau témoin vanilla lancé dans la même fenêtre.', 'The act 2 transcripts showed where the money went: the main loop, plus subagents still running on Opus. So I designed the simplest harness I could that forbids that, and tested it against a fresh vanilla control run in the same time window.'),
+        protoLabel: L('ce qui change dans le protocole, et pourquoi', 'what changed in the protocol, and why'),
+        proto: [
+          { k: L('Trois agents épinglés.', 'Three pinned agents.'), v: L('La Rule #0 nomme trois agents maison dont le modèle est fixé dans leur définition : scout et editor sur Haiku, worker sur Sonnet. La boucle n\'a plus de modèle à choisir.', 'Rule #0 names three custom agents whose model is fixed in their definition: scout and editor on Haiku, worker on Sonnet. The loop no longer has a model to pick.') },
+          { k: L('Pas d\'héritage d\'Opus.', 'No Opus inheritance.'), v: L('Les agents intégrés, qui héritent du modèle de la boucle principale, sont interdits. Aucun hook.', 'Built-in agents, which inherit the main loop\'s model, are denied. No hooks.') },
+          { k: 'Vanilla Twin.', v: L('Un deuxième témoin vanilla, config identique à Vanilla, lancé en même temps que Pinned Crew. Le test 2 a démarré pendant la fin du test 1, donc avec plus de sessions en parallèle : Vanilla Twin sert à vérifier que ça ne change rien.', 'A second vanilla control, same setup as Vanilla, run alongside Pinned Crew. Test 2 started while test 1 was finishing, so with more sessions in parallel: Vanilla Twin is there to check that this changes nothing.') },
+          { k: L('Le reste à l\'identique.', 'Everything else unchanged.'), v: L('Config vierge par variante, worktrees dans /private/tmp, token OAuth, 8 runs par tâche et par variante, même juge en aveugle.', 'Pristine config per variant, worktrees in /private/tmp, OAuth token, 8 runs per task and variant, same blind judge.') },
+        ],
+        varLabel: L('les deux variantes', 'the two variants'),
+        variants: ['W', 'Y'].map(vItem),
+        head: act3.head, rows: act3.rows, foot: actFoot,
+        takeLabel: L('ce que j\'en retiens', 'what I take from it'),
+        take: [
+          L('Vanilla et Vanilla Twin sont statistiquement identiques sur toutes les mesures, malgré une autre fenêtre et une autre charge. Comparer Pinned Crew à Clean Stack ou Clean Zero reste donc crédible, même sans randomisation.', 'Vanilla and Vanilla Twin are statistically identical on every metric, despite a different window and load. Comparing Pinned Crew with Clean Stack or Clean Zero is therefore credible, even though it is not randomized.'),
+          L('Haiku ne pèse que 2 % du coût de Pinned Crew, et le scout n\'a jamais été appelé. Sur la session longue, l\'acte 5 montre que l\'isolation du contexte fait plus que le passage à Sonnet.', 'Haiku is only 2% of Pinned Crew\'s cost, and the scout was never called. On the long session, act 5 shows that context isolation does more than moving to Sonnet.'),
+          L('Les editors Haiku ont écrit environ 2,4 fois plus de tokens de sortie par docstring que les workers Sonnet.', 'The Haiku editors wrote about 2.4x more output tokens per docstring than the Sonnet workers.'),
+          L('J\'ai conçu Pinned Crew après avoir lu les transcripts de T4. C\'est un assemblage réglé sur cette tâche, et je n\'ai pas encore vérifié qu\'il tient ailleurs.', 'I designed Pinned Crew after reading the T4 transcripts. It is a bundle tuned on that task, and I have not checked yet that it holds elsewhere.'),
+        ].map((t, i) => ({ n: '0' + (i + 1), t })),
+        hasNext: false, nextLabel: '', next: '',
+      },
+      {
+        id: 'act-4', kicker: '~/act-4 · ' + L('banc gardé', 'guarded bench'),
+        title: L('Acte 4 : garder la qualité', 'Act 4: guarding quality'),
+        intro: L('La critique laissait une question ouverte : les runs qui délèguent sont moins bien notés, et le juge ne notait qu\'une fois par run. J\'ai d\'abord vérifié le juge, puis testé si trois règles simples suffisent à refermer l\'écart.', 'The critique left one question open: delegating runs score lower, and the judge only rated each run once. I first checked the judge, then tested whether three simple rules are enough to close the gap.'),
+        protoLabel: L('ce qui change dans le protocole, et pourquoi', 'what changed in the protocol, and why'),
+        proto: [
+          { k: L('Le juge re-testé.', 'The judge, retested.'), v: L('160 notes de plus sur les 80 runs des tests 1 et 2, puis 64 sur le test 3, toujours en aveugle. Même note 80 % du temps, jamais plus d\'un point d\'écart, ICC 0,61 (0,73 sur T4, 0,42 sur T5). Une note seule est bruitée : l\'unité devient la moyenne de 3.', '160 extra ratings on the 80 runs of tests 1 and 2, then 64 on test 3, still blind. Same score 80% of the time, never more than 1 point apart, ICC 0.61 (0.73 on T4, 0.42 on T5). A single rating is noisy: the unit is now the mean of 3.') },
+          { k: 'Guarded Crew.', v: L('Pinned Crew plus trois règles génériques : faire les parties ordonnées l\'une après l\'autre, un test par exigence, revérifier les références fichier:ligne à la fin.', 'Pinned Crew plus three generic rules: run ordered parts one after another, one test per requirement, re-check path:line references at the end.') },
+          { k: L('Des témoins dans la même fenêtre.', 'Controls in the same window.'), v: L('4 runs de plus de Vanilla Twin et de Pinned Crew (reps 9 à 12), lancés avec Guarded Crew. Aucune dérive par rapport aux reps 1 à 8, donc les chiffres ci-dessous regroupent les 12 runs de chaque témoin. Le tableau, lui, ne montre que les 4 de la même fenêtre.', '4 more runs of Vanilla Twin and Pinned Crew (reps 9 to 12), launched alongside Guarded Crew. No drift against reps 1 to 8, so the figures below pool the 12 runs of each control. The table only shows the 4 from the same window.') },
+          { k: L('Un incident.', 'One incident.'), v: L('La matrice a été tuée une fois par un reaper mémoire à 6 jobs en parallèle. Les 6 runs partiels sont en quarantaine (pas supprimés) et ont été refaits à 3 jobs.', 'The matrix was killed once by a memory reaper at 6 parallel jobs. The 6 partial runs were quarantined (not deleted) and redone at 3 parallel jobs.') },
+        ],
+        varLabel: L('les trois variantes', 'the three variants'),
+        variants: [
+          { code: 'W', name: NAME.W, desc: L('Vanilla Twin, reps 9 à 12, dans la même fenêtre que Guarded Crew.', 'Vanilla Twin, reps 9 to 12, in the same window as Guarded Crew.'), bg: '#8593AA' },
+          { code: 'Y', name: NAME.Y, desc: L('Pinned Crew, reps 9 à 12, dans la même fenêtre.', 'Pinned Crew, reps 9 to 12, in the same window.'), bg: '#9DB8FF' },
+          vItem('Q'),
+        ],
+        head: act4.head, rows: act4.rows, foot: actFoot,
+        takeLabel: L('ce que j\'en retiens', 'what I take from it'),
+        take: [
+          L('Les règles ne coûtent rien de mesurable. Sur T4, Guarded Crew coûte 1,06 $ contre 1,21 $ pour Pinned Crew et 3,21 $ pour Vanilla Twin. Sur T5, 0,52 $ contre 0,50 $ et 0,84 $.', 'The rules cost nothing measurable. On T4, Guarded Crew costs $1.06 versus $1.21 for Pinned Crew and $3.21 for Vanilla Twin. On T5, $0.52 versus $0.50 and $0.84.'),
+          L('La note ne remonte pas. Guarded Crew a 4,00 sur T4 (les 8 runs exactement à 4,0) contre 3,86 pour Pinned Crew et 4,30 pour vanilla, et 4,21 sur T5 contre 4,19 et environ 4,52. Il reste à peu près 0,3 point sous vanilla sur les deux tâches (p = 0,0009 et 0,016), sans être significativement au-dessus de Pinned Crew.', 'The score does not come back. Guarded Crew gets 4.00 on T4 (all 8 runs exactly 4.0) versus 3.86 for Pinned Crew and 4.30 for vanilla, and 4.21 on T5 versus 4.19 and about 4.52. It stays roughly 0.3 below vanilla on both tasks (p = 0.0009 and 0.016), and is not significantly above Pinned Crew.'),
+          L('Les règles n\'ont été suivies qu\'en partie. Parties 1 puis 2 dans l\'ordre dans 5 runs sur 8 seulement, le modèle a ignoré la consigne dans les 3 autres. Les 8 runs ont revérifié leurs références à la fin (2 sur 4 pour Pinned Crew). Sur T4, Guarded Crew ajoute 154 lignes de test, contre 97 pour Pinned Crew et 140 pour Vanilla Twin.', 'The rules were only partly followed. Parts 1 then 2 in order in just 5 of 8 runs, the model ignored the instruction in the other 3. All 8 runs re-checked their references at the end (2 of 4 for Pinned Crew). On T4, Guarded Crew adds 154 test lines, versus 97 for Pinned Crew and 140 for Vanilla Twin.'),
+          L('Tests et références sont revenus au niveau vanilla, et l\'écart de note est resté. Mon explication de l\'acte 3 (tests minces, références périmées, parties en parallèle) n\'était donc au mieux que partielle : je la retire comme cause principale et la garde comme facteur parmi d\'autres. Le juge semble aussi saturé à 4,0 sur les runs délégués de T4, donc il distingue mal à cet endroit.', 'Tests and references came back to vanilla level, and the score gap stayed. My act 3 explanation (thin tests, stale references, parallel parts) was therefore partial at best: I withdraw it as the main cause and keep it as one factor among others. The judge also looks saturated at 4.0 for delegated T4 runs, so it tells them apart poorly there.'),
+        ].map((t, i) => ({ n: '0' + (i + 1), t })),
+        hasNext: false, nextLabel: '', next: '',
+      },
+      {
+        id: 'act-5', kicker: '~/act-5 · opus crew',
+        title: L('Acte 5 : la délégation ou Sonnet ?', 'Act 5: delegation or Sonnet?'),
+        intro: L('L\'acte 4 laissait une question : la note baisse-t-elle parce qu\'on délègue, ou parce que Sonnet écrit le code ? Opus Crew reprend Guarded Crew à l\'identique, sauf le worker, épinglé sur Opus au lieu de Sonnet.', 'Act 4 left one question: does the score drop because of delegation, or because Sonnet writes the code? Opus Crew is Guarded Crew unchanged, except for the worker, pinned to Opus instead of Sonnet.'),
+        protoLabel: L('ce qui change dans le protocole, et pourquoi', 'what changed in the protocol, and why'),
+        proto: [
+          { k: 'Opus Crew.', v: L('Le worker passe sur Opus. Seules cette ligne et sa mention dans le CLAUDE.md changent, pour isoler l\'effet du modèle.', 'The worker moves to Opus. Only that line and its mention in CLAUDE.md change, to isolate the effect of the model.') },
+          { k: L('Un témoin de dérive.', 'A drift control.'), v: L('2 runs de plus de Vanilla Twin (reps 13 et 14) dans la même fenêtre, cohérents avec les précédents. Les chiffres ci-dessous comparent donc à tous les runs vanilla des installs vierges.', '2 more Vanilla Twin runs (reps 13 and 14) in the same window, consistent with the earlier ones. The figures below therefore compare with every vanilla run of the pristine installs.') },
+          { k: L('Un échec qui venait de l\'outillage.', 'One failure that came from the tooling.'), v: L('Le check mypy de t5-O-r2 a échoué parce que uv n\'a pas pu résoudre l\'environnement de l\'outil. Le même check relancé sur le même worktree passe, et le fichier du premier échec est conservé.', 'The mypy check of t5-O-r2 failed because uv could not resolve the tool environment. The same check rerun on the same worktree passes, and the original failed check file is kept.') },
+          { k: L('Le reste à l\'identique.', 'Everything else unchanged.'), v: L('8 runs par tâche, même juge en aveugle, 3 notes par run.', '8 runs per task, same blind judge, 3 ratings per run.') },
+        ],
+        varLabel: L('les variantes comparées', 'the variants compared'),
+        variants: [
+          { code: 'W', name: NAME.W, desc: L('Vanilla Twin, reps 13 et 14, témoin de dérive dans la même fenêtre.', 'Vanilla Twin, reps 13 and 14, drift control in the same window.'), bg: '#8593AA' },
+          { code: 'Q', name: NAME.Q, desc: L('La référence de l\'acte 4, worker sur Sonnet.', 'The act 4 reference, worker on Sonnet.'), bg: '#9DB8FF' },
+          vItem('O'),
+        ],
+        head: act5.head, rows: act5.rows, foot: actFoot,
+        takeLabel: L('ce que j\'en retiens', 'what I take from it'),
+        take: [
+          L('Sur la session longue, la baisse de note ne vient pas de Sonnet. Opus Crew a exactement la note de Guarded Crew, 4,00, avec chaque note à 4, soit 0,33 sous vanilla (p = 0,0003). C\'est le découpage du travail entre agents qui coûte la finition.', 'On the long session, the score drop does not come from Sonnet. Opus Crew gets exactly Guarded Crew\'s score, 4.00, with every rating a 4, which is 0.33 below vanilla (p = 0.0003). Splitting the work across agents is what costs the polish.'),
+          L('Sur la session longue, l\'essentiel de l\'économie vient de l\'isolation du contexte : chaque sous-agent part d\'un contexte neuf et petit au lieu de traîner les 100k tokens de la boucle principale. Une équipe tout Opus économise déjà 53 %, et épingler Sonnet ajoute le reste.', 'On the long session, most of the saving comes from context isolation: each subagent starts from a small fresh context instead of dragging the main loop\'s 100k tokens. An all-Opus crew already saves 53%, and pinning Sonnet adds the rest.'),
+          L('Sur la tâche courte, déléguer à Opus ne change rien : 0,90 $ contre 0,87 $, et une note de 4,42 contre 4,52 qui peut être du bruit (p = 0,46).', 'On the short task, delegating to Opus changes nothing: $0.90 versus $0.87, and a score of 4.42 versus 4.52 that could be noise (p = 0.46).'),
+        ].map((t, i) => ({ n: '0' + (i + 1), t })),
+        hasNext: false, nextLabel: '', next: '',
+      },
+      {
+        id: 'act-6', kicker: '~/act-6 · v2',
+        title: L('Acte 6 : la réécriture', 'Act 6: the rewrite'),
+        intro: L('Après cinq actes, j\'ai réécrit cheap-orchestration à partir des résultats, puis testé deux versions de cette v2 : telle quelle, et suivie d\'une relecture finale par Opus.', 'After five acts, I rewrote cheap-orchestration from the evidence, then tested two versions of this v2: as written, and followed by one final Opus review.'),
+        protoLabel: L('ce qui change dans le protocole, et pourquoi', 'what changed in the protocol, and why'),
+        proto: [
+          { k: 'Sized Crew.', v: L('La v2 telle qu\'écrite : agents épinglés dans leur propre définition, règle de décision selon la taille et l\'enjeu, ordre des parties obligatoire, garde-fous sur les tests et les références, aucun hook.', 'The v2 as written: agents pinned in their own definition, a decision rule by size and stakes, binding part order, test and reference guards, no hooks.') },
+          { k: 'Reviewed Crew.', v: L('La même chose, plus une passe finale de relecture par Opus qui corrige directement la finition.', 'The same, plus one final Opus reviewer pass that fixes polish directly.') },
+          { k: L('Un check caché en échec.', 'One hidden check failed.'), v: L('Dans t4-R-r3, l\'editor Haiku a cassé la restriction « docstrings seulement » : un remplacement de texte à l\'aveugle sur un stub d\'une ligne (def arity(self) -> int: ...) a supprimé son corps « ... ». Le relecteur Opus avait la ligne dans son diff et ne l\'a pas vue. La v2 demande maintenant au relecteur de vérifier d\'abord les fichiers restreints et d\'y annuler toute violation, et à l\'editor de garder les corps de stubs sans jamais remplacer du code à l\'aveugle. Ces deux changements ne sont pas encore benchmarkés.', 'In t4-R-r3, the Haiku editor broke the docstring-only restriction: a blind string replacement on a one-line stub (def arity(self) -> int: ...) dropped its "..." body. The Opus reviewer had the line in its diff and missed it. v2 now has the reviewer check restricted files first and restore any violation, and tells the editor to keep stub bodies and never use blind string replacement on code. Neither change is benchmarked yet.') },
+          { k: L('Le reste à l\'identique.', 'Everything else unchanged.'), v: L('8 runs par tâche et par variante, 2 runs de plus de Vanilla Twin comme témoin de dérive, et la comparaison avec tous les runs vanilla regroupés.', '8 runs per task and variant, 2 more Vanilla Twin runs as a drift control, and the comparison against every pooled vanilla run.') },
+        ],
+        varLabel: L('les variantes comparées', 'the variants compared'),
+        variants: [
+          vItem('S'), vItem('R'),
+          { code: 'W', name: NAME.W, desc: L('Vanilla Twin, reps 15 et 16, témoin de dérive dans la même fenêtre.', 'Vanilla Twin, reps 15 and 16, drift control in the same window.'), bg: '#8593AA' },
+        ],
+        head: act6.head, rows: act6.rows, foot: actFoot,
+        takeLabel: L('ce que j\'en retiens', 'what I take from it'),
+        take: [
+          L('Sur la session longue, la relecture finale divise l\'écart de qualité par deux : 0,26 point sous vanilla au lieu de 0,47, pour environ 0,20 $ de plus par run. L\'écart entre les deux versions reste à la limite (p = 0,06). Reviewed Crew a aussi obtenu la première note de 5 d\'une session longue déléguée.', 'On the long session, the final review halves the quality gap: 0.26 below vanilla instead of 0.47, for about $0.20 more per run. The gap between the two versions is borderline (p = 0.06). Reviewed Crew also got the first 5/5 of any delegated long session.'),
+          L('Sur la tâche courte, la relecture coûte 49 % de plus (0,74 $ contre 0,50 $) et n\'apporte rien : la note ne bouge pas.', 'On the short task, the review costs 49% more ($0.74 versus $0.50) and adds nothing: the score does not move.'),
+          L('La règle v2 ne lance donc le relecteur que sur les longues sessions en plusieurs parties, et le cantonne à la finition : aucun changement de comportement, respect des restrictions de la tâche, tests relancés.', 'The v2 rule therefore runs the reviewer only on long multi-part sessions, and keeps it to polish: no behaviour change, task restrictions respected, tests rerun.'),
+        ].map((t, i) => ({ n: '0' + (i + 1), t })),
+        hasNext: false, nextLabel: '', next: '',
+      },
+      /* Further acts: append an entry here with actTable(...), then set its result and strip next to the acts[...] assignments. */
+    ];
+
+    /* ---------- verdict figures, recomputed from the data (fallbacks shown while loading) ---------- */
+    const cm = (t, v, b, f) => mean(this.rx(t, v, b).map(f || ((r) => r.cost)));
+    const rel = (a, b) => (b ? (a / b - 1) * 100 : 0);
+    const pc0 = (x) => this.signed(x, (y) => this.num(y, 0) + ' %');
+    const V4 = cm('t4', 'V', 'clean'), X4 = cm('t4', 'X', 'clean'), Z4 = cm('t4', 'Z', 'clean');
+    const W4 = cm('t4', 'W', 'ideal'), Y4 = cm('t4', 'Y', 'ideal');
+    const V5 = cm('t5', 'V', 'clean'), X5 = cm('t5', 'X', 'clean'), Z5 = cm('t5', 'Z', 'clean'), W5 = cm('t5', 'W', 'ideal'), Y5 = cm('t5', 'Y', 'ideal');
+    const ctxOf = (r) => r.ctx;
+    const zCost = V4 - X4 ? (V4 - Z4) / (V4 - X4) * 100 : 0;
+    const zCtx = (() => { const v = cm('t4', 'V', 'clean', ctxOf), x = cm('t4', 'X', 'clean', ctxOf), z = cm('t4', 'Z', 'clean', ctxOf); return v - x ? (v - z) / (v - x) * 100 : 0; })();
+    /* Quality: mean of 3 blind ratings (judge3); delegated = X, Z (clean) and Y (ideal), vanilla = V (clean) and W (ideal). */
+    const jq = (t, pairs) => [].concat(...pairs.map((pv) => this.rx(t, pv[0], pv[1]))).filter((r) => judgeOf(r) != null);
+    const DLG = [['X', 'clean'], ['Z', 'clean'], ['Y', 'ideal']], VAN = [['V', 'clean'], ['W', 'ideal']];
+    const sj = (rs) => stats(rs.map(judgeOf));
+    const jd4 = sj(jq('t4', DLG)), jv4 = sj(jq('t4', VAN)), jd5 = sj(jq('t5', DLG)), jv5 = sj(jq('t5', VAN));
+    const pj4 = welch(jd4, jv4), pj5 = welch(jd5, jv5);
+    /* Guarded Crew against every vanilla run of the new benches (V, plus W in ideal and guarded: no drift was found). */
+    const VAN_ALL = VAN.concat([['W', 'guarded'], ['W', 'opuscrew'], ['W', 'v2']]);
+    const q4 = sj(jq('t4', [['Q', 'guarded']])), va4 = sj(jq('t4', VAN_ALL)), q5 = sj(jq('t5', [['Q', 'guarded']])), va5 = sj(jq('t5', VAN_ALL));
+    const Q4c = cm('t4', 'Q', 'guarded'), Y4c = mean(this.rx('t4', 'Y', 'ideal').concat(this.rx('t4', 'Y', 'guarded')).map((r) => r.cost));
+    const hasQ = ready && this.rx('t4', 'Q', 'guarded').length > 0;
+    const O4 = cm('t4', 'O', 'opuscrew') || W4;
+    /* Recommended setup: Reviewed Crew (worker on Sonnet plus one Opus review), against every pooled vanilla run. */
+    const pool4 = mean([].concat(...VAN_ALL.map((pv) => this.rx('t4', pv[0], pv[1]))).map((r) => r.cost)) || W4;
+    const R4 = cm('t4', 'R', 'v2'), S4 = cm('t4', 'S', 'v2');
+    const hasR = ready && this.rx('t4', 'R', 'v2').length > 0;
+    const vq4 = sj(jq('t4', VAN_ALL)).m;
+    const rq4 = hasR ? sj(jq('t4', [['R', 'v2']])).m - vq4 : -0.26, sq4 = hasR ? sj(jq('t4', [['S', 'v2']])).m - vq4 : -0.47;
+    const rFails = (st.runs || []).filter((r) => ['clean', 'ideal', 'guarded', 'opuscrew', 'v2'].indexOf(r.bench) >= 0 && !passOf(r)).length;
+    const d2 = (x) => this.signed(x, (y) => this.num(y, 2));
+    const T_NEW = { bg: '#16213A', fg: '#9DB8FF' }, T_OLD = { bg: '#1A2232', fg: '#A9B4C6' }, T_CONF = { bg: '#3A2E1A', fg: '#F2B66D' }, T_Q = { bg: '#3A1F1C', fg: '#FF9A8B' };
+    const card = (tg, tag, big, title, body, color, border) => ({ tag, tagBg: tg.bg, tagFg: tg.fg, big, title, body, color, border: border || '#2A3447' });
+
+    /* ---------- hero, quality explainer and act summaries ---------- */
+    const DL = ['X', 'Z', 'Y', 'Q', 'O', 'S', 'R'], VN = ['V', 'W'];
+    const NEWB = ['clean', 'ideal', 'guarded', 'opuscrew', 'v2'];
+    const qGap = ready ? Math.abs((jd4.m - jv4.m + jd5.m - jv5.m) / 2) : 0.4;
+    const q04 = this.num(qGap, 1);
+    const n62 = ready ? this.num(-rel(Y4, W4), 0) : '62';
+    /** Runs of the pristine-install benches for one task and a set of variants. */
+    const newRuns = (t, vs) => (st.runs || []).filter((r) => r.task === t && NEWB.indexOf(r.bench) >= 0 && vs.indexOf(r.v) >= 0);
+    /** Every individual blind rating (judges) of those runs. */
+    const ratings = (t, vs) => [].concat(...newRuns(t, vs).map((r) => r.judges || []));
+    /** Share (0-100, rounded) of ratings equal to g. */
+    const pctR = (t, vs, g) => { const js = ratings(t, vs); return js.length ? Math.round(js.filter((x) => x === g).length / js.length * 100) : 0; };
+    const QCOL = { 1: '#FF7A6B', 2: '#FF7A6B', 3: '#F2B66D', 4: '#9DB8FF', 5: '#3CCB7F' };
+    const QNAME = { 1: '1', 2: '2', 3: L('3 acceptable', '3 acceptable'), 4: L('4 bon', '4 good'), 5: L('5 excellent', '5 excellent') };
+    /** One stacked bar of the rating distribution for a group of runs. */
+    const qBar = (label, t, vs) => {
+      const js = ratings(t, vs), n = js.length || 1;
+      const segs = [1, 2, 3, 4, 5].map((g) => ({ g, k: js.filter((x) => x === g).length })).filter((x) => x.k > 0).map((x) => {
+        const w = x.k / n * 100;
+        return { w: w.toFixed(1), color: QCOL[x.g], text: w >= 12 ? this.num(w, 0) + ' %' : '', tip: QNAME[x.g] + ' · ' + this.num(w, 0) + ' %' };
+      });
+      return { label: label + ' · ' + newRuns(t, vs).length + ' runs', segs };
+    };
+    const never = (x) => (x === 0 ? L('jamais', 'never') : L('presque jamais', 'almost never'));
+    /** Collapsed-accordion strip for one act: cost and quality of a variant against the act's own control, in plain words. */
+    const actStrip = (bench, ctrl, v) => {
+      const out = [];
+      const word = (pv) => (pv != null && pv < 0.05 ? L('net', 'clear') : L('bruit ?', 'noise?'));
+      ['t4', 't5'].forEach((t) => {
+        const a = this.rx(t, v, bench), b = this.rx(t, ctrl, bench);
+        if (!a.length || !b.length) return;
+        const sa = stats(a.map((r) => r.cost)), sb = stats(b.map((r) => r.cost)), pc = welch(sa, sb);
+        const ja = stats(a.filter((r) => judgeOf(r) != null).map(judgeOf)), jb = stats(b.filter((r) => judgeOf(r) != null).map(judgeOf)), pq = welch(ja, jb);
+        const tip = NAME[v] + ' vs ' + NAME[ctrl] + ' · ' + t.toUpperCase() + ' · p ';
+        out.push({ label: t.toUpperCase() + L(' coût', ' cost'), value: pc0(rel(sa.m, sb.m)) + ' · ' + word(pc), color: pc != null && pc < 0.05 ? (sa.m < sb.m ? '#3CCB7F' : '#FF7A6B') : '#A9B4C6', tip: tip + pTxt(pc) });
+        out.push({ label: t.toUpperCase() + L(' qualité', ' quality'), value: d2(ja.m - jb.m) + ' · ' + word(pq), color: pq != null && pq < 0.05 ? (ja.m < jb.m ? '#F2B66D' : '#3CCB7F') : '#A9B4C6', tip: tip + pTxt(pq) });
+      });
+      return out;
+    };
+    Object.assign(acts[0], {
+      result: L('Rule #0 seule, avec le preload, coupe ' + (ready ? this.num(-rel(Z4, V4), 0) : '38') + ' % du coût sur la session longue et rien sur la tâche courte. Le skill complet ne fait pas mieux.', 'Rule #0 alone, with the preload, cuts ' + (ready ? this.num(-rel(Z4, V4), 0) : '38') + '% of the cost on the long session and nothing on the short task. The full skill does no better.'),
+      strip: actStrip('clean', 'V', 'Z'),
+    });
+    Object.assign(acts[1], {
+      result: L('Des agents épinglés sur Sonnet et Haiku coupent ' + n62 + ' % sur la session longue et ' + (ready ? this.num(-rel(Y5, W5), 0) : '42') + ' % sur la tâche courte.', 'Agents pinned to Sonnet and Haiku cut ' + n62 + '% on the long session and ' + (ready ? this.num(-rel(Y5, W5), 0) : '42') + '% on the short task.'),
+      strip: actStrip('ideal', 'W', 'Y'),
+    });
+    Object.assign(acts[2], {
+      result: L('Trois règles de garde ne coûtent rien et ne remontent pas la note : Guarded Crew reste environ 0,3 point sous les runs sans délégation.', 'Three guard rules cost nothing and do not lift the score: Guarded Crew stays about 0.3 below the runs without delegation.'),
+      strip: actStrip('guarded', 'W', 'Q'),
+    });
+    /* Act 5 and 6 summaries: a variant against every pooled vanilla run (cost and quality), as in their takeaways. */
+    const poolStrip = (v, bench) => {
+      const poolCost = (t) => stats([].concat(...VAN_ALL.map((pv) => this.rx(t, pv[0], pv[1]))).map((r) => r.cost));
+      const word = (pv) => (pv != null && pv < 0.05 ? L('net', 'clear') : L('bruit ?', 'noise?'));
+      const name = NAME[v];
+      const out = [];
+      ['t4', 't5'].forEach((t) => {
+        const oc = stats(this.rx(t, v, bench).map((r) => r.cost)), vc = poolCost(t), pc = welch(oc, vc);
+        const oq = sj(jq(t, [[v, bench]])), vq = sj(jq(t, VAN_ALL)), pq = welch(oq, vq);
+        if (!oc.n) return;
+        const tip = L(name + ' contre tous les runs vanilla regroupés · p ', name + ' versus every pooled vanilla run · p ');
+        out.push({ label: t.toUpperCase() + L(' coût', ' cost'), value: pc0(rel(oc.m, vc.m)) + ' · ' + word(pc), color: pc != null && pc < 0.05 ? (oc.m < vc.m ? '#3CCB7F' : '#FF7A6B') : '#A9B4C6', tip: tip + pTxt(pc) });
+        out.push({ label: t.toUpperCase() + L(' qualité', ' quality'), value: d2(oq.m - vq.m) + ' · ' + word(pq), color: pq != null && pq < 0.05 && oq.m < vq.m ? '#F2B66D' : '#A9B4C6', tip: tip + pTxt(pq) });
+      });
+      return out;
+    };
+    {
+      const strip5 = poolStrip('O', 'opuscrew');
+      Object.assign(acts[3], {
+        result: L('Avec le worker sur Opus, la note est la même qu\'avec Sonnet : la finition se perd dans la délégation elle-même, et l\'isolation du contexte fait déjà l\'essentiel de l\'économie.', 'With the worker on Opus, the score is the same as with Sonnet: the polish is lost in delegation itself, and context isolation already does most of the saving.'),
+        strip: strip5,
+      });
+    }
+    if (acts[4]) Object.assign(acts[4], {
+      result: L('Une relecture finale par Opus divise par deux la perte de qualité des longues sessions pour environ 0,20 $, et ne sert à rien sur les tâches courtes.', 'One final Opus review halves the quality loss on long sessions for about $0.20, and is useless on short tasks.'),
+      strip: poolStrip('R', 'v2'),
+    });
+    /* Act 4 quality chips: Guarded Crew against every vanilla run of the pristine benches (20 runs, no drift found), as in its result line. */
+    if (hasQ && acts[2].strip.length === 4) {
+      const qw = (a, b) => welch(a, b);
+      const chip = (t, a, b) => ({ label: t + L(' qualité', ' quality'), value: d2(a.m - b.m) + ' · ' + (qw(a, b) != null && qw(a, b) < 0.05 ? L('net', 'clear') : L('bruit ?', 'noise?')), color: qw(a, b) != null && qw(a, b) < 0.05 && a.m < b.m ? '#F2B66D' : '#A9B4C6', tip: L('Guarded Crew contre les 20 runs sans délégation des installs vierges · p ', 'Guarded Crew versus the 20 pristine-install runs without delegation · p ') + pTxt(qw(a, b)) });
+      acts[2].strip[1] = chip('T4', q4, va4);
+      acts[2].strip[3] = chip('T5', q5, va5);
+    }
+    const RUN_CMD = 'source config/env-$VARIANT.sh\nclaude -p "$(cat tasks/$TASK.md)" \\\n    --model claude-opus-5-5 --permission-mode bypassPermissions \\\n    --setting-sources project,local --settings config/settings-$VARIANT.json \\\n    --append-system-prompt-file config/prompt-$VARIANT.md \\\n    --max-budget-usd 30 --output-format stream-json --verbose';
+
+    /* ---------- verdict table: trusted benches only ---------- */
+    const VT = [
+      ['Z', 'clean', 'V', L('Rule #0 et le preload, rien d\'autre', 'Rule #0 and the preload, nothing else')],
+      ['X', 'clean', 'V', L('Le skill complet (règle, preload, hooks)', 'The full skill (rule, preload, hooks)')],
+      ['Y', 'ideal', 'W', L('Agents épinglés sur Sonnet et Haiku', 'Agents pinned to Sonnet and Haiku')],
+      ['Q', 'guarded', 'W', L('Agents épinglés, plus 3 règles de garde', 'Pinned agents, plus 3 guard rules')],
+      ['O', 'opuscrew', 'POOL', L('La même équipe, worker sur Opus', 'The same crew, worker on Opus')],
+      ['S', 'v2', 'POOL', L('La v2 : agents épinglés, règle de taille, garde-fous', 'The v2: pinned agents, size rule, guards')],
+      ['R', 'v2', 'POOL', L('La v2 plus une relecture finale par Opus', 'The v2 plus one final Opus review')],
+    ];
+    const CLEAR = L('net', 'clear'), NOISE = L('bruit ?', 'noise?');
+    /** One verdict cell: a delta, its plain-word verdict and colour; good = the direction that helps the reader. */
+    const vCell = (delta, p, fmt, goodIfNeg) => {
+      const sig = p != null && p < 0.05;
+      return { t: fmt(delta) + ' · ' + (sig ? CLEAR : NOISE), tip: (sig ? '' : L('peut-être du bruit · ', 'could be noise · ')) + 'p ' + pTxt(p), color: !sig ? '#A9B4C6' : (delta < 0) === goodIfNeg ? '#3CCB7F' : goodIfNeg ? '#FF7A6B' : '#F2B66D' };
+    };
+    const vanQ = { t4: sj(jq('t4', VAN_ALL)), t5: sj(jq('t5', VAN_ALL)) };
+    const vtRows = VT.filter((x) => this.rx('t4', x[0], x[1]).length).map((x) => {
+      const cells = [];
+      ['t4', 't5'].forEach((t) => {
+        const a = stats(this.rx(t, x[0], x[1]).map((r) => r.cost));
+        const b = stats((x[2] === 'POOL' ? [].concat(...VAN_ALL.map((pv) => this.rx(t, pv[0], pv[1]))) : this.rx(t, x[2], x[1])).map((r) => r.cost));
+        cells.push(vCell(rel(a.m, b.m), welch(a, b), pc0, true));
+      });
+      ['t4', 't5'].forEach((t) => {
+        const a = sj(jq(t, [[x[0], x[1]]]));
+        cells.push(vCell(a.m - vanQ[t].m, welch(a, vanQ[t]), d2, false));
+      });
+      return { plain: x[3], name: NAME[x[0]], tip: VDESC[x[0]] || '', cells };
+    });
+
+    const k1 = (x) => (fr ? String(x).replace('.', ',') : String(x));
+    const fixKind =(x) => ({ kind: x, chipBg: x === L('Retiré', 'Withdrawn') || x === L('Chiffre corrigé', 'Figure fixed') ? '#3A1F1C' : '#1A2438', chipFg: x === L('Retiré', 'Withdrawn') || x === L('Chiffre corrigé', 'Figure fixed') ? '#FF9A8B' : '#9DB8FF' });
+
+    return {
+      fr, en: !fr,
+      setFr: () => this.setState({ lang: 'fr' }), setEn: () => this.setState({ lang: 'en' }),
+      frPressed: tf(fr), enPressed: tf(!fr),
+      frBg: fr ? '#E8EDF5' : 'transparent', frFg: fr ? '#0A0E15' : '#C6CFDD', enBg: fr ? 'transparent' : '#E8EDF5', enFg: fr ? '#C6CFDD' : '#0A0E15',
+      exploreLabel: L('Toutes les données', 'All the data'),
+      moreTitle: L('Critique, limites et historique', 'Critique, limits and history'),
+      moreIntro: L('Ce que les relectures ont confirmé, nuancé ou retiré, les limites du banc, puis le premier banc dans mon environnement avec la méthode, la chronologie et les corrections.', 'What the reviews confirmed, qualified or retracted, the bench\'s limits, then the first bench in my environment with the method, timeline and corrections.'),
+      moreLabel: L('Lire la critique', 'Read the critique'),
+      backLabel: L('Retour au Lab', 'Back to the Lab'),
+      critPageIntro: L('La suite du Lab : la critique du benchmark, ses limites, et l\'historique du premier banc, fait dans mon environnement réel.', 'The rest of the Lab: the benchmark critique, its limits, and the history of the first bench, run in my real environment.'),
+      heroKicker: 'benchmark · cheap-orchestration · ' + (ready ? st.runs.length + ' sessions · ' + this.usd(st.runs.reduce((acc, r) => acc + (r.cost || 0), 0)) : 'Claude Code'),
+      question: L('Confier le code à des modèles moins chers, ça vaut le coup ?', 'Is handing the code to cheaper models worth it?'),
+      head1: L('Moins de la moitié du prix.', 'Under half the cost.'),
+      head2: L('Un peu moins de finition.', 'A little less polish.'),
+      lede: L('Mesuré sur ' + (ready ? st.runs.length + ' ' : 'des centaines de ') + 'sessions Claude Code : un sous-agent Sonnet suivi d\'une relecture Opus coupe ' + (hasR ? this.num(-rel(R4, pool4), 0) : '58') + ' % du coût d\'une longue session, surtout parce que chaque sous-agent part d\'un petit contexte neuf au lieu de traîner toute la session. La note de qualité perd alors environ ' + this.num(Math.abs(rq4), 1) + ' point sur 5, deux fois moins que sans relecture.', 'Measured over ' + (ready ? st.runs.length + ' ' : 'hundreds of ') + 'Claude Code sessions: a Sonnet subagent followed by one Opus review pass cuts a long session\'s cost by ' + (hasR ? this.num(-rel(R4, pool4), 0) : '58') + '%, mostly because each subagent starts from a small fresh context instead of dragging the whole session. The quality score then loses about ' + this.num(Math.abs(rq4), 1) + ' points out of 5, half as much as without the review.'),
+      glossLink: L('glossaire', 'glossary'),
+      heroNums: [
+        { value: hasR ? pc0(rel(R4, pool4)) : '−58 %', color: '#3CCB7F', hasSub: false, sub: '', hasBars: hasR,
+          plain: L('Longue session, config recommandée', 'Long session, recommended setup'),
+          tip: NAME.R + ' · ' + VDESC.R + ' T4 · ' + L('session longue en plusieurs parties sur click.', 'long multi-part session on click.'),
+          bars: hasR ? [
+            { label: L('sans délégation · ', 'no delegation · ') + this.usd(pool4), w: '100', color: '#3987e5', tip: L('Vanilla et Vanilla Twin regroupés', 'Vanilla and Vanilla Twin pooled') },
+            { label: L('worker Sonnet + relecture Opus · ', 'Sonnet worker + Opus review · ') + this.usd(R4), w: (R4 / pool4 * 100).toFixed(1), color: '#3CCB7F', tip: NAME.R },
+            { label: L('worker Sonnet seul · ', 'Sonnet worker alone · ') + this.usd(S4), w: (S4 / pool4 * 100).toFixed(1), color: '#7FB0F0', tip: NAME.S },
+          ] : [] },
+        { value: this.signed(rq4, (y) => this.num(y, 1)) + ' / 5', color: '#F2B66D', hasSub: true, hasBars: false, bars: [],
+          plain: L('Note de qualité', 'Quality score'),
+          sub: L('Sans la relecture : ' + this.signed(sq4, (y) => this.num(y, 1)) + '. Les tests passent dans tous les runs sauf ' + rFails + '.', 'Without the review: ' + this.signed(sq4, (y) => this.num(y, 1)) + '. Tests pass in every run but ' + rFails + '.'),
+          tip: L('Juge Opus en aveugle, moyenne de 3 notes par run. 5 excellent, 4 bon, 3 acceptable.', 'Blind Opus judge, mean of 3 ratings per run. 5 excellent, 4 good, 3 acceptable.') },
+        { value: '≈ 0 %', color: '#E8EDF5', hasSub: true, hasBars: false, bars: [],
+          plain: L('Tâche courte, règle seule', 'Short task, rule alone'),
+          sub: L('Seuls les agents épinglés y économisent (' + (ready ? pc0(rel(Y5, W5)) : '−42 %') + ').', 'Only pinned agents save there (' + (ready ? pc0(rel(Y5, W5)) : '−42 %') + ').'),
+          tip: 'T5 · ' + L('debug, refactor et notes sur marshmallow. Rule #0 : ', 'debug, refactor and notes on marshmallow. Rule #0: ') + (ready ? pc0(rel(Z5, V5)) : '+4 %') },
+      ],
+      doTitle: L('En pratique', 'In practice'),
+      doList: [
+        L('Session longue : déléguer à un worker Sonnet et finir par une relecture Opus. Environ 58 % moins cher, et la moitié de l\'écart de qualité.', 'Long session: delegate to a Sonnet worker and finish with one Opus review pass. About 58% cheaper, half the quality gap.'),
+        L('Tâche courte : déléguer seulement à des agents sur des modèles moins chers, sans relecture. Environ 43 % moins cher, 0,4 point de qualité en moins sur 5.', 'Short task: delegate only to agents on cheaper models, no review. About 43% cheaper, 0.4 quality points less out of 5.'),
+        L('Code public ou de bibliothèque : une seule session Opus.', 'Public or library code: one Opus session.'),
+      ].map((t) => ({ t })),
+      doCmdLabel: L('Pour installer la v2, depuis le dépôt du benchmark : d\'abord un essai à blanc, puis --apply.', 'To install v2, from the benchmark repo: dry run first, then --apply.'),
+      doCmdDry: L('affiche ce qui change', 'shows what changes'), doCmdApply: L('applique', 'applies'),
+      copyV2: () => this.copy('v2', 'python3 apply-v2.py'), copyV2Label: st.copied === 'v2' ? L('Copié', 'Copied') : L('Copier', 'Copy'),
+      gTitle: L('Les mots de cette page', 'The words on this page'),
+      gHint: L('9 termes, l\'échelle de qualité et les 18 variantes', '9 terms, the quality scale and the 18 variants'),
+      glossary: [
+        ['cheap-orchestration', L('Mon skill pour Claude Code. Il pousse la boucle principale à confier le travail à des sous-agents sur des modèles moins chers.', 'My Claude Code skill. It pushes the main loop to hand work to subagents running on cheaper models.')],
+        ['Rule #0', L('Une règle dans le CLAUDE.md : « délègue avant de faire toi-même ». Le preload est le hook qui charge le skill au démarrage.', 'A rule in CLAUDE.md: "delegate before doing it yourself". The preload is the hook that loads the skill at startup.')],
+        ['Opus, Sonnet, Haiku', L('Opus 5.5 tient la boucle principale et coûte le plus cher. Sonnet 5.5 et Haiku sont les modèles moins chers des sous-agents.', 'Opus 5.5 runs the main loop and costs the most. Sonnet 5.5 and Haiku are the cheaper subagent models.')],
+        ['T4', L('Session longue en plusieurs parties sur la bibliothèque Python click : explorer le code, ajouter une feature avec ses tests, écrire des docstrings.', 'Long multi-part session on the click Python library: explore the code, add a feature with its tests, write docstrings.')],
+        ['T5', L('Tâche plus courte sur marshmallow : trouver 3 bugs, refactorer, typer, écrire des notes.', 'Shorter task on marshmallow: find 3 bugs, refactor, add types, write notes.')],
+        [L('Le juge', 'The judge'), L('Un modèle lui aussi : Opus en aveugle, qui lit la tâche et le diff puis note de 1 à 5. Il est bruité (un diff renoté garde la même note 80 % du temps, jamais plus d\'un point d\'écart), d\'où 3 notes par run.', 'A model too: blind Opus, which reads the task and the diff and scores from 1 to 5. It is noisy (a re-rated diff keeps the same score 80% of the time, never more than 1 point apart), hence 3 ratings per run.')],
+        [L('Les checks', 'The checks'), L('Tests cachés et vérifications objectives par tâche. Tous les runs des installs vierges les passent sauf un (t4-R-r3, acte 6) : le code marche dans toutes les variantes.', 'Hidden tests and objective checks per task. Every pristine-install run passes them but one (t4-R-r3, act 6): the code works in every variant.')],
+        [L('Les bancs', 'The benches'), L('Origine = mon environnement réel, gardé comme historique. Salle blanche, Idéal, Gardé, Opus Crew et v2 = installs vierges de Claude Code, les chiffres de référence.', 'Original = my real environment, kept as history. Clean room, Ideal, Guarded, Opus Crew and v2 = pristine Claude Code installs, the reference numbers.')],
+        [L('Net ou bruit', 'Clear or noise'), L('« Statistiquement net » : le test de Welch donne p < 0,05, l\'écart a peu de chances d\'être du hasard. Sinon, « peut-être du bruit ». La fourchette à 95 % encadre la moyenne.', '"Statistically clear": the Welch test gives p < 0.05, so the gap is unlikely to be chance. Otherwise, "could be noise". The 95% range brackets the mean.')],
+      ].map((g) => ({ k: g[0], v: g[1] })),
+      qxTitle: L('Que veut dire « −' + q04 + ' de qualité » ?', 'What does "−' + q04 + ' quality" mean?'),
+      qxText: [
+        L('Le code marche dans tous les runs sauf un : tous passent les tests et les checks cachés, sauf t4-R-r3 (acte 6), et aucune note n\'est sous 3. Ce qui baisse, c\'est la finition. L\'échelle du juge : 5 = excellent, rien à reprendre ; 4 = bon, petits défauts ; 3 = acceptable, manques nets.', 'The code works in every run but one: they all pass the tests and hidden checks, except t4-R-r3 (act 6), and no rating is below 3. What drops is the polish. The judge\'s scale: 5 = excellent, nothing to fix; 4 = good, minor issues; 3 = acceptable, clear gaps.'),
+        L('Sur la session longue, les runs sans délégation ont ' + pctR('t4', VN, 5) + ' % de 5 et ' + pctR('t4', VN, 4) + ' % de 4. Les runs délégués ont ' + pctR('t4', DL, 4) + ' % de 4, ' + pctR('t4', DL, 3) + ' % de 3 et ' + pctR('t4', DL, 5) + ' % de 5. Sur la tâche courte, ' + pctR('t5', VN, 5) + ' % de 5 sans délégation contre ' + pctR('t5', DL, 5) + ' % avec.', 'On the long session, runs without delegation get ' + pctR('t4', VN, 5) + '% 5s and ' + pctR('t4', VN, 4) + '% 4s. Delegated runs get ' + pctR('t4', DL, 4) + '% 4s, ' + pctR('t4', DL, 3) + '% 3s and ' + pctR('t4', DL, 5) + '% 5s. On the short task, ' + pctR('t5', VN, 5) + '% 5s without delegation versus ' + pctR('t5', DL, 5) + '% with it.'),
+        L('Ce que le juge reproche le plus souvent aux runs délégués : des docstrings au mauvais format dans le nouveau code (style Sphinx :param au lieu du style NumPy demandé), des tests plus minces, et des références fichier:ligne dans les notes qui pointent sur la mauvaise ligne.', 'What the judge most often holds against delegated runs: docstrings in the wrong format in the new code (Sphinx :param style instead of the NumPy style the task asked for), thinner tests, and file:line references in the notes that point to the wrong line.'),
+      ].map((t) => ({ t })),
+      qxBars: [
+        qBar(L('T4 sans délégation', 'T4 no delegation'), 't4', VN), qBar(L('T4 délégué', 'T4 delegated'), 't4', DL),
+        qBar(L('T5 sans délégation', 'T5 no delegation'), 't5', VN), qBar(L('T5 délégué', 'T5 delegated'), 't5', DL),
+      ],
+      qxLegend: [3, 4, 5].map((g) => ({ color: QCOL[g], label: QNAME[g] })),
+      qxNote: L('toutes les notes des installs vierges (3 par run) ; sans délégation = Vanilla et Vanilla Twin, délégué = Clean Stack, Clean Zero, Pinned Crew, Guarded Crew, Opus Crew, Sized Crew, Reviewed Crew', 'every pristine-install rating (3 per run); no delegation = Vanilla and Vanilla Twin, delegated = Clean Stack, Clean Zero, Pinned Crew, Guarded Crew, Opus Crew, Sized Crew, Reviewed Crew'),
+      gVarTitle: L('Les 18 variantes', 'The 18 variants'),
+      gVarGroups: [
+        { label: L('installs vierges · les chiffres de référence', 'pristine installs · the reference numbers'), items: ['V', 'X', 'Z', 'W', 'Y', 'Q', 'O', 'S', 'R'].map((v) => ({ code: v, name: NAME[v], desc: VDESC[v], bg: v === 'V' || v === 'W' ? '#8593AA' : '#9DB8FF' })) },
+        { label: L('banc d\'origine · historique, mon environnement', 'original bench · history, my environment'), items: ORDER.map((v) => ({ code: v, name: NAME[v], desc: DESC[v], bg: '#4A5A78' })) },
+      ],
+      trustTitle: L('Quels chiffres croire :', 'Which numbers to trust:'),
+      trustBody: L('ceux des installs vierges (salle blanche, idéal, gardé, opus crew, v2) ; le banc d\'origine, fait dans mon environnement (effort high, mon CLAUDE.md de 17 Ko, 10 plugins, Haiku 4.5), est de l\'historique et ne se compare pas.', 'the pristine installs (clean room, ideal, guarded, opus crew, v2); the original bench, run in my own environment (effort high, my 17 KB CLAUDE.md, 10 plugins, Haiku 4.5), is history and does not compare.'),
+      vTitle: L('Le détail', 'The detail'),
+      vHead: L('Sur une longue session, l\'économie vient d\'abord de la délégation elle-même, parce que chaque sous-agent part d\'un contexte neuf, puis du passage à Sonnet. La finition se perd dans la délégation, et une relecture finale par Opus en rattrape la moitié.', 'On a long session, the saving comes first from delegation itself, because each subagent starts from a fresh context, then from moving to Sonnet. The polish is lost in delegation, and one final Opus review wins back half of it.'),
+      vtHead: [
+        [L('Config', 'Setup'), ''],
+        [L('Coût, session longue', 'Cost, long session'), L('T4, contre le témoin vanilla du même banc', 'T4, against the vanilla control of the same bench')],
+        [L('Coût, tâche courte', 'Cost, short task'), L('T5, contre le témoin vanilla du même banc', 'T5, against the vanilla control of the same bench')],
+        [L('Qualité, session longue', 'Quality, long session'), L('T4, moyenne de 3 notes, contre tous les runs vanilla des installs vierges', 'T4, mean of 3 ratings, against every vanilla run of the pristine installs')],
+        [L('Qualité, tâche courte', 'Quality, short task'), L('T5, moyenne de 3 notes, contre tous les runs vanilla des installs vierges', 'T5, mean of 3 ratings, against every vanilla run of the pristine installs')],
+      ].map((h) => ({ label: h[0], tip: h[1] })),
+      vtRows,
+      vtLegendClear: L('net :', 'clear:'), vtLegendClearText: L('l\'écart a peu de chances d\'être du hasard.', 'the gap is unlikely to be chance.'),
+      vtLegendNoise: L('bruit ? :', 'noise?:'), vtLegendNoiseText: L('le hasard peut l\'expliquer, à ne pas lire comme un effet.', 'chance could explain it, do not read it as an effect.'),
+      vtNotes: [
+        L('Coût : contre le témoin vanilla lancé dans la même fenêtre (Opus Crew, Sized Crew, Reviewed Crew : contre tous les runs vanilla regroupés). Qualité : contre tous les runs vanilla des installs vierges, en points sur 5. « net » = test de Welch p < 0,05 ; survol d\'une cellule pour la valeur de p.', 'Cost: against the vanilla control run in the same window (Opus Crew, Sized Crew, Reviewed Crew: against every pooled vanilla run). Quality: against every vanilla run of the pristine installs, in points out of 5. "clear" = Welch test p < 0.05; hover a cell for the p value.'),
+        L('Moins de contexte ne veut pas dire moins cher : sur la tâche courte, le skill complet et la règle seule coupent environ 39 % de contexte sans rien économiser, parce que leurs sous-agents tournaient sur Opus.', 'Less context does not mean cheaper: on the short task, the full skill and the rule alone cut about 39% of context and save nothing, because their subagents ran on Opus.'),
+        L('Le banc d\'origine n\'apparaît pas ici : ses chiffres sont confondus avec mon environnement (voir la critique). Guarded Crew n\'a que 4 témoins vanilla dans sa fenêtre.', 'The original bench is left out: its numbers are confounded with my environment (see the critique). Guarded Crew has only 4 vanilla controls in its window.'),
+      ].map((t) => ({ t })),
+      mhTitle: L('Comment c\'est testé', 'How it was tested'),
+      mhText: [
+        L('Chaque run est une session Claude Code sans interface (claude -p), avec Opus 5.5 en boucle principale, dans son propre worktree git, sur T4 ou T5. Les tokens et les dollars sont comptés par modèle, et chaque écart passe un test statistique.', 'Every run is a headless Claude Code session (claude -p), with Opus 5.5 as the main loop, in its own git worktree, on T4 or T5. Tokens and dollars are counted per model, and every gap goes through a statistical test.'),
+        L('J\'ai commencé par 145 runs dans mon environnement réel, puis j\'ai tout refait dans des installs vierges de Claude Code (actes 2 à 6) et fait critiquer le résultat par des agents relecteurs indépendants. Claude (Opus 5.5) a construit le harnais, lancé les runs et fait l\'analyse. De mon côté, j\'ai posé les questions et contesté les conclusions qui allaient trop vite.', 'I started with 145 runs in my real environment, then redid everything in pristine Claude Code installs (acts 2 to 6) and had the result critiqued by independent reviewer agents. Claude (Opus 5.5) built the harness, ran the sessions and did the analysis. I asked the questions and pushed back on conclusions that came too fast.'),
+      ].map((t) => ({ t })),
+      flowLabel: L('le test en 4 étapes', 'the test in 4 steps'),
+      flow: [
+        { tag: '1', bg: '#9DB8FF', title: L('Une config par variante', 'One setup per variant'), body: L('Une install vierge de Claude Code par variante, qui n\'installe que ses propres règles et hooks.', 'A pristine Claude Code install per variant, which only installs its own rules and hooks.') },
+        { tag: '2', bg: '#9DB8FF', title: L('Une session headless par run', 'One headless session per run'), body: L('claude -p, Opus 5.5 en boucle principale, un git worktree neuf, budget plafonné.', 'claude -p, Opus 5.5 as main loop, a fresh git worktree, capped budget.') },
+        { tag: '3', bg: '#9DB8FF', title: L('Tokens et dollars par modèle', 'Tokens and dollars per model'), body: L('Lus dans modelUsage, recoupés avec les transcripts des sous-agents.', 'Read from modelUsage, cross-checked against subagent transcripts.') },
+        { tag: '4', bg: '#9DB8FF', title: L('Qualité et statistiques', 'Quality and statistics'), body: L('Checks cachés par tâche, 3 notes du juge en aveugle par run, test de Welch.', 'Hidden checks per task, 3 blind judge ratings per run, Welch test.') },
+      ],
+      flowNote: L('Le premier banc n\'avait qu\'une config de départ, la mienne. Les actes 2 à 6 repartent d\'une install vierge, avec un dossier de config vide par variante.', 'The first bench had a single starting setup, mine. Acts 2 to 6 start from a pristine install, with an empty config directory per variant.'),
+      actsTitle: L('Les tests en install vierge', 'The pristine-install tests'),
+      actsIntro: L('Cinq séries de runs, 8 par tâche et par variante, chacune contre son propre témoin sans délégation.', 'Five series of runs, 8 per task and variant, each against its own control without delegation.'),
+      exTitle: L('Explorer les données', 'Explore the data'),
+      exIntro: L('Le duel met deux configs face à face, run par run. Le classement les range par coût. L\'Explorer ajoute le contexte, la durée et chaque run.', 'The duel puts two setups head to head, run by run. The leaderboard ranks them by cost. The Explorer adds context, time and every single run.'),
+      bKicker: L('historique · banc d\'origine', 'history · original bench'),
+      bTitle: L('Composer une config (banc d\'origine)', 'Build a setup (original bench)'),
+      bIntro: L('Historique. Chaque interrupteur active une pièce du skill, et la page retrouve la variante mesurée dans mon environnement réel (145 runs). Ces chiffres ne se comparent pas aux installs vierges.', 'History. Each switch turns on one piece of the skill, and the page finds the matching variant measured in my real environment (145 runs). These numbers do not compare with the pristine installs.'),
+      presetLabel: L('Configs mesurées :', 'Measured setups:'),
+      pieces, presets, res,
+      taskOpts: ['t4', 't5'].map((t) => ({ label: t.toUpperCase(), hint: TASKHINT[t], pressed: tf(t === task), bg: t === task ? '#9DB8FF' : 'transparent', fg: t === task ? '#0A0E15' : '#C6CFDD', pick: () => this.setState({ task: t, run: null }) })),
+      dTitle: L('Le duel', 'The duel'),
+      dIntro: L('Deux configs face à face. Chaque point est un run réel : plein pour la première, cerclé pour la seconde. Le test de Welch tourne en direct et dit si l\'écart est réel ou dans le bruit. Un clic sur un point ouvre le run. Le filtre de banc limite les choix, et un badge prévient quand les deux configs ne viennent pas du même environnement.', 'Two setups head to head. Every dot is a real run: filled for the first, ringed for the second. Welch\'s test runs live and says whether the gap is real or noise. Click a dot to open the run. The bench filter narrows the choices, and a badge warns you when the two setups do not come from the same environment.'),
+      leftLabel: L('Config 1', 'Setup 1'), rightLabel: L('Config 2', 'Setup 2'),
+      benchLabel: L('banc', 'bench'), benchOpts,
+      benchWarn, benchWarnText: L('environnements différents : à comparer avec prudence', 'different environment: compare with care'),
+      leftOpts: opt('l', left, right), rightOpts: opt('r', right, left),
+      swap: () => this.setState({ left: right, right: left, run: null }), swapLabel: L('Inverser', 'Swap'),
+      duel, hasRun: !!run, run: run || { title: '', meta: '', kpis: [], head: [], models: [] },
+      dFoot: st.runs ? L('« Statistiquement net » : test de Welch bilatéral, p < 0,05. Les barres fines sont les fourchettes à 95 %. Les configs grisées n\'ont pas tourné sur cette tâche.', '"Statistically clear": two-sided Welch test, p < 0.05. The thin bars are 95% ranges. Greyed setups did not run on this task.') : (st.err ? L('Données indisponibles, recharge la page.', 'Data unavailable, reload the page.') : L('Chargement des runs…', 'Loading the runs…')),
+      rTitle: L('Le classement', 'The leaderboard'),
+      rIntro: L('Du moins cher au plus cher, par tâche ; le pic de contexte est dans l\'Explorer. Un clic sur une ligne l\'envoie dans le duel. Avec « Tous », les bancs se mélangent dans un même classement : un écart entre deux bancs mélange aussi deux environnements.', 'From cheapest to most expensive, per task; peak context is in the Explorer. Click a row to send it to the duel. With "All", the benches share one ranking: a gap between two benches also mixes two environments.'),
+      ciLabel: L('fourchette à 95 %', '95% range'), ciTip: L('Intervalle de confiance à 95 % de la moyenne : la vraie moyenne a de bonnes chances d\'être dans cette barre.', '95% confidence interval of the mean: the true mean is likely to sit inside this bar.'),
+      boards: [
+        board('t4', 'cost', L('T4 · coût par run', 'T4 · cost per run'), L('Session longue, découpé par modèle', 'Long session, split by model')),
+        board('t5', 'cost', L('T5 · coût par run', 'T5 · cost per run'), L('Tâche moyenne, découpé par modèle', 'Medium task, split by model')),
+      ],
+      acts,
+      cTitle: L('Ce que la critique a trouvé', 'What the critique found'),
+      cIntro: L('Une fois les actes 2 et 3 terminés, puis à nouveau après l\'acte 4, j\'ai demandé à des agents relecteurs indépendants de reprendre les données et mes conclusions, et de chercher ce qui ne tient pas. Voici ce qui reste debout, ce qui doit être nuancé, et ce que je retire.', 'Once acts 2 and 3 were done, and again after act 4, I asked independent reviewer agents to go back over the data and my conclusions and look for what does not hold. Here is what still stands, what needs qualifying, and what I withdraw.'),
+      critique: [
+        { sign: '+', label: L('confirmé', 'confirmed'), color: '#3CCB7F', items: [
+          L('Les baisses de coût sur T4 : −39 % pour Clean Stack, −38 % pour Clean Zero, −62 % pour Pinned Crew, et −42 % pour Pinned Crew sur T5. Elles survivent à la correction de Holm et aux moyennes tronquées, et les fourchettes de coût ne se recoupent jamais.', 'The T4 cost cuts: −39% for Clean Stack, −38% for Clean Zero, −62% for Pinned Crew, plus −42% for Pinned Crew on T5. They survive Holm correction and trimmed means, and the cost ranges never overlap.'),
+          L('La baisse du pic de contexte de la boucle principale, dans chaque variante qui délègue et sur les deux tâches.', 'The drop in main-loop peak context, in every delegating variant and on both tasks.'),
+          L('Vanilla et Vanilla Twin sont identiques sur toutes les mesures : pas de dérive entre les deux fenêtres de test.', 'Vanilla and Vanilla Twin match on every metric: no drift between the two test windows.'),
+          L('Clean Zero fait presque aussi bien que Clean Stack : les hooks et le corps du skill pèsent 3 à 6 % du gain.', 'Clean Zero does nearly as well as Clean Stack: the hooks and the skill body account for 3 to 6% of the gain.'),
+          L('Sur la session longue, la baisse de note vient de la délégation elle-même : Opus Crew, worker sur Opus, a exactement la note de Guarded Crew (4,00, 0,33 sous vanilla, p = 0,0003). Sur la tâche courte, Opus Crew n\'est pas nettement sous vanilla (p = 0,46).', 'On the long session, the score drop comes from delegation itself: Opus Crew, worker on Opus, gets exactly Guarded Crew\'s score (4.00, 0.33 below vanilla, p = 0.0003). On the short task, Opus Crew is not clearly below vanilla (p = 0.46).'),
+          L('Haiku ne compte presque pas dans les coûts (2 % de Pinned Crew).', 'Haiku barely counts in the costs (2% of Pinned Crew).'),
+          L('Une relecture finale par Opus divise par deux l\'écart de qualité sur la session longue (0,26 point sous vanilla au lieu de 0,47) pour environ 0,20 $ par run ; sur la tâche courte, elle coûte 49 % de plus et n\'apporte rien.', 'One final Opus review halves the quality gap on the long session (0.26 below vanilla instead of 0.47) for about $0.20 per run; on the short task it costs 49% more and adds nothing.'),
+          L('Le coût en qualité de la délégation, une fois le juge moyenné sur 3 notes : runs délégués contre vanilla, −0,44 sur T4 (p = 0,0008) et −0,35 sur T5 (p = 0,003). Il est significatif sur les deux tâches.', 'The quality cost of delegation, once the judge is averaged over 3 ratings: delegated versus vanilla runs, −0.44 on T4 (p = 0.0008) and −0.35 on T5 (p = 0.003). It is significant on both tasks.'),
+          L('Les trois règles de Guarded Crew ne coûtent rien de mesurable, et elles ne referment pas l\'écart : environ 0,3 point sous vanilla sur les deux tâches (p = 0,0009 et 0,016).', 'Guarded Crew\'s three rules cost nothing measurable, and they do not close the gap: about 0.3 below vanilla on both tasks (p = 0.0009 and 0.016).'),
+        ].map((t) => ({ t })) },
+        { sign: '~', label: L('nuancé', 'qualified'), color: '#F2B66D', items: [
+          L('Toute comparaison entre bancs. Le premier tournait en effort high, les suivants en medium. Mon « Bare » n\'était pas nu : environ 18k tokens de plus au premier tour, mon CLAUDE.md de 17 Ko, 10 plugins et 3 serveurs MCP. Haiku 4.5 à l\'époque, Haiku 5.5 aujourd\'hui, environ 10 fois moins cher. Et d\'autres jours, d\'autres versions du CLI (2.1.291 à 294, puis 2.1.295 à 296). Vanilla coûte 38 % de moins que Bare sur T4 (Bare n = 3) et 36 % de moins sur T5, mais cet écart mélange tout ça.', 'Every cross-bench comparison. The first bench ran at effort high, the later ones at medium. My "Bare" was not bare: about 18k extra first-turn tokens, my 17 KB CLAUDE.md, 10 plugins and 3 MCP servers. Haiku 4.5 back then, Haiku 5.5 now, priced about 10x lower. Plus different days and CLI versions (2.1.291 to 294, then 2.1.295 to 296). Vanilla is 38% cheaper than Bare on T4 (Bare n = 3) and 36% cheaper on T5, but that gap mixes all of the above.'),
+          L('La qualité repose sur le juge, parce que les checks cachés sont saturés : tous les runs des installs vierges passent sauf un (t4-R-r3), et tous les runs T4 des premiers bancs passent depuis la correction du check docstrings. Une note seule est bruitée : sur 224 notes de plus, même note 80 % du temps, jamais plus d\'un point d\'écart, ICC 0,61 (0,73 sur T4, 0,42 sur T5). La page affiche donc la moyenne de 3 notes pour ces bancs, et la note unique pour le banc d\'origine.', 'Quality rests on the judge, because the hidden checks are saturated: every pristine-install run passes but one (t4-R-r3), and every T4 run of the earlier benches passes since the docstring check was fixed. A single rating is noisy: across 224 extra ratings, same score 80% of the time, never more than 1 point apart, ICC 0.61 (0.73 on T4, 0.42 on T5). So the page shows the mean of 3 ratings for those benches, and the single rating for the original bench.'),
+          L('Sur T4, le juge semble saturé à 4,0 pour les runs délégués : les 8 runs de Guarded Crew ont exactement 4,0. Il distingue mal les variantes à cet endroit.', 'On T4 the judge looks saturated at 4.0 for delegated runs: all 8 Guarded Crew runs got exactly 4.0. It tells variants apart poorly there.'),
+          L('Les résultats du banc d\'origine : contexte −41 % pour Full Stack sur T4 (p = 0,0001), même coût que Preload sur T4 (p = 0,78), et +18 % sur T5. Vrais dans mon environnement, mais confondus avec tout le reste.', 'The original bench results: −41% context for Full Stack on T4 (p = 0.0001), same cost as Preload on T4 (p = 0.78), and +18% on T5. True in my environment, but confounded with everything else.'),
+          L('Avec relecture contre sans relecture, l\'écart de note sur la session longue reste à la limite (p = 0,06, 8 runs chacun). Et dans un run avec relecture (t4-R-r3), l\'editor Haiku a modifié du code là où la tâche n\'autorisait que des docstrings, sans que le relecteur le voie ; la correction de la v2 n\'est pas encore benchmarkée.', 'With versus without the review, the long-session score gap is borderline (p = 0.06, 8 runs each). And in one reviewed run (t4-R-r3), the Haiku editor changed code where the task allowed docstrings only, and the reviewer missed it; the v2 fix is not benchmarked yet.'),
+          L('Pinned Crew est réglé sur T4, et sa comparaison avec Clean Stack et Clean Zero n\'est pas randomisée.', 'Pinned Crew is tuned on T4, and its comparison with Clean Stack and Clean Zero is not randomized.'),
+          L('La durée : sur T4, l\'horloge mesure surtout un minuteur de secours ScheduleWakeup de 1800 s. Elle ne dit rien de la vitesse.', 'Wall time: on T4 the clock mostly measures a 1800 s ScheduleWakeup fallback timer. It says nothing about speed.'),
+        ].map((t) => ({ t })) },
+        { sign: '−', label: L('retiré', 'retracted'), color: '#FF7A6B', items: [
+          L('« Rule Zero fait 59 % du gain. » Le chiffre ne se reproduit pas : il venait d\'un calcul fait dans la conversation, et aucun rapport ne le contient.', '"Rule Zero is 59% of the gain." The figure does not reproduce: it came from arithmetic done in the chat, and no report contains it.'),
+          L('Traiter la baisse de contexte comme une baisse de coût. Sur T5, Clean Stack et Clean Zero coupent environ 39 % de contexte et coûtent autant que Vanilla.', 'Treating context reduction as cost reduction. On T5, Clean Stack and Clean Zero cut about 39% of context and cost as much as Vanilla.'),
+          L('« Toutes les économies viennent du travail qui passe d\'Opus à Sonnet. » Faux pour la session longue : une équipe tout Opus économise déjà 53 %. Sur les longues sessions, l\'isolation du contexte donne l\'essentiel de l\'économie et le modèle moins cher le reste ; sur les tâches courtes, seul le modèle moins cher économise.', '"All savings come from moving Opus work to Sonnet." Wrong for the long session: an all-Opus crew already saves 53%. On long sessions, context isolation gives most of the saving and the cheaper model the rest; on short tasks, only the cheaper model saves.'),
+          L('Tests minces, références périmées et parties lancées en parallèle comme cause principale de la baisse de note. Guarded Crew a ramené les tests au niveau vanilla (154 lignes contre 140) et revérifié ses références dans 8 runs sur 8, et l\'écart est resté. Je les garde comme facteurs parmi d\'autres.', 'Thin tests, stale references and parallel parts as the main cause of the score drop. Guarded Crew brought tests back to vanilla level (154 lines versus 140) and re-checked its references in 8 of 8 runs, and the gap stayed. I keep them as factors among others.'),
+        ].map((t) => ({ t })) },
+      ],
+      sTitle: L('Historique et coulisses', 'History and behind the scenes'),
+      sIntro: L('Le premier banc, la méthode en détail, la chronologie, les statistiques et les erreurs corrigées en route.', 'The first bench, the method in detail, the timeline, the statistics and the mistakes fixed along the way.'),
+      copyRun: () => this.copy('run', RUN_CMD), copyRunLabel: st.copied === 'run' ? L('Copié', 'Copied') : L('Copier', 'Copy'),
+      copyApply: () => this.copy('apply', 'python3 apply-config-F.py'), copyApplyLabel: st.copied === 'apply' ? L('Copié', 'Copied') : L('Copier', 'Copy'),
+      qTitle: L('La question', 'The question'),
+      mTitle: L('Méthode : comment chaque token a été compté', 'Method: how every token was counted'),
+      method: [
+        { k: L('Une session, un processus.', 'One session, one process.'), v: L('Chaque run est un claude -p headless, Opus 5.5 en boucle principale, dans son propre git worktree, environnement préchauffé. Plafond de 15 $ (courts) ou 30 $ (longs).', 'Every run is a headless claude -p, Opus 5.5 as main loop, in its own git worktree, environment warmed up. Cap of $15 (short) or $30 (long).') },
+        { k: L('Isolation.', 'Isolation.'), v: L('CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 coupe le CLAUDE.md global ; chaque variante reçoit son texte par --append-system-prompt-file et ses hooks par --settings. Les plugins restent identiques.', 'CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 turns off the global CLAUDE.md; each variant gets its text through --append-system-prompt-file and its hooks through --settings. Plugins stay identical.') },
+        { k: L('Mesure.', 'Measurement.'), v: L('modelUsage du dernier événement result, par modèle. Recoupé avec les transcripts, sous-agents compris : 1,000 sur 142 runs, 0,975 à 0,994 sur 3.', 'modelUsage from the last result event, per model. Cross-checked against transcripts, subagents included: 1.000 on 142 runs, 0.975 to 0.994 on 3.') },
+        { k: L('Qualité.', 'Quality.'), v: L('Un check caché par tâche et un juge Opus en aveugle qui note chaque diff de 1 à 5 : une note par run dans le premier banc, la moyenne de 3 à partir de l\'acte 2.', 'A hidden check per task and a blind Opus judge scoring each diff from 1 to 5: one rating per run in the first bench, the mean of 3 from act 2 on.') },
+        { k: L('Statistiques.', 'Statistics.'), v: L('IC de Student à 95 %, test de Welch, bootstrap de 10 000 tirages, validés contre scipy.', '95% Student CI, Welch test, 10,000-sample bootstrap, validated against scipy.') },
+        { k: L('Coût.', 'Cost.'), v: L('Prix équivalent API calculé par Claude Code. Sur abonnement, c\'est du quota.', 'API-equivalent price computed by Claude Code. On a subscription it is quota.') },
+      ],
+      tTitle: L('Les 5 tâches', 'The 5 tasks'),
+      tasks: [
+        { id: 'T1', repo: 'click 8.5.0', title: L('Exploration', 'Exploration'), body: L('Expliquer dans NOTES.md comment click résout la valeur d\'un paramètre, avec des références fichier:ligne.', 'Explain in NOTES.md how click resolves a parameter value, with file:line references.'), check: L('Références valides et symboles clés cités.', 'Valid references and key symbols cited.'), size: L('2 à 4 min · ~1,20 $', '2 to 4 min · ~$1.20') },
+        { id: 'T2', repo: 'click 8.5.0', title: L('Feature click.Duration', 'click.Duration feature'), body: L('Nouveau type qui parse « 1h30m », bornes, docs, tests. Piège caché sur les imports légers.', 'New type parsing "1h30m", bounds, docs, tests. Hidden trap on light imports.'), check: L('39 tests cachés + suite complète.', '39 hidden tests + full suite.'), size: L('2 à 4 min · ~0,90 $', '2 to 4 min · ~$0.90') },
+        { id: 'T3', repo: 'click 8.5.0', title: L('Docstrings en masse', 'Bulk docstrings'), body: L('113 docstrings NumPy à ajouter dans types.py et _compat.py, sans changer le comportement.', '113 NumPy docstrings to add in types.py and _compat.py, behaviour unchanged.'), check: L('Couverture, AST inchangé, suite verte.', 'Coverage, AST unchanged, suite green.'), size: L('2 à 5 min · ~1,10 $', '2 to 5 min · ~$1.10') },
+        { id: 'T4', repo: 'click 8.5.0', title: L('Session longue', 'Long session'), body: L('T1, T2 puis T3 étendue à core.py, enchaînées dans une seule session.', 'T1, T2 then T3 extended to core.py, chained in one session.'), check: L('T1 et T2 automatiques, docstrings comptées à la main.', 'T1 and T2 automated, docstrings counted by hand.'), size: L('8 à 25 min · ~4,20 $', '8 to 25 min · ~$4.20') },
+        { id: 'T5', repo: 'marshmallow 4.3.1', title: L('Debug, refactor, notes', 'Debug, refactor, notes'), body: L('3 bugs injectés à trouver, extraction de SchemaMeta, typage sous mypy, notes de refactor.', '3 injected bugs to find, SchemaMeta extraction, typing under mypy, refactor notes.'), check: L('Test caché par bug, surface d\'API, mypy, notes.', 'Hidden test per bug, API surface, mypy, notes.'), size: L('4 à 5 min · ~1,45 $', '4 to 5 min · ~$1.45') },
+      ],
+      tlTitle: L('Chronologie de l\'enquête', 'Investigation timeline'),
+      timeline: [
+        { n: '01', title: L('Sondes d\'isolation', 'Isolation probes'), meta: '0,20 $', body: L('--setting-sources ne retire pas le CLAUDE.md global. Découverte de CLAUDE_CODE_DISABLE_CLAUDE_MDS.', '--setting-sources does not remove the global CLAUDE.md. Found CLAUDE_CODE_DISABLE_CLAUDE_MDS.') },
+        { n: '02', title: L('Bench court', 'Short bench'), meta: 'T1-T3 · Full Stack, Soft Note, Bare × 2', body: L('Aucune différence de coût. Deux hooks ignoraient les kill switches : runs refaits.', 'No cost difference. Two hooks ignored the kill switches: runs redone.') },
+        { n: '03', title: L('Session longue', 'Long session'), meta: 'T4 · Full Stack, Bare × 3', body: L('Premier signal : Full Stack −18 % de coût, −41 % de contexte.', 'First signal: Full Stack −18% cost, −41% context.') },
+        { n: '04', title: L('« Il y a peut-être un entre-deux »', '"There may be a middle ground"'), meta: 'T4 · Soft Note × 3', body: L('J\'ai contesté la conclusion « light ne sert à rien », tirée des seules tâches courtes. Sur la session longue, Soft Note sort la moins chère.', 'I challenged the "light is useless" conclusion, drawn from short tasks only. On the long session, Soft Note comes out cheapest.') },
+        { n: '05', title: L('Router et preload', 'Router and preload'), meta: 'T4 · Router, Preload × 3', body: L('Le router ne change rien. Le preload semble faire baisser le coût.', 'The router changes nothing. The preload seems to lower cost.') },
+        { n: '06', title: L('Nouvelle tâche', 'New task'), meta: 'T5 · 4 configs × 8', body: L('Sur tâche moyenne, Full Stack est significativement plus cher.', 'On a medium task, Full Stack is significantly more expensive.') },
+        { n: '07', title: L('Confirmation', 'Confirmation'), meta: 'T4 · Full Stack, Preload × 11', body: L('Même coût (p = 0,78), contexte 1,7 fois plus petit pour Full Stack. L\'avance de Preload à n = 3 était du bruit.', 'Same cost (p = 0.78), 1.7x smaller context for Full Stack. Preload\'s lead at n = 3 was noise.') },
+        { n: '08', title: L('Pièce par pièce', 'Piece by piece'), meta: 'T4 + T5 · Rule Zero, Gatekeeper, Nudger × 8', body: L('Rule #0 est la pièce qui réduit le contexte. Le gate et les relances seuls ne font rien.', 'Rule #0 is the piece that cuts context. The gate and nudges alone do nothing.') },
+        { n: '09', title: 'Zero Gate', meta: 'T4 + T5 · × 8', body: L('Le gate n\'ajoute rien à Rule Zero (p = 0,74).', 'The gate adds nothing to Rule Zero (p = 0.74).') },
+        { n: '10', title: L('Mise en prod', 'Rollout'), meta: 'apply-config-F.py', body: L('Le classifieur refuse que Claude modifie ses propres hooks : script fourni, avec dry run.', 'The classifier refuses to let Claude edit its own hooks: script provided, with dry run.') },
+        { n: '11', title: L('Salle blanche', 'Clean room'), meta: 'T4 + T5 · Vanilla, Clean Stack, Clean Zero × 8', body: L('Install vierge par variante, worktrees dans /private/tmp. Rule #0 coupe 38 à 39 % du coût sur T4, rien sur T5.', 'Pristine install per variant, worktrees in /private/tmp. Rule #0 cuts T4 cost by 38 to 39%, nothing on T5.') },
+        { n: '12', title: L('Harnais idéal', 'Ideal harness'), meta: 'T4 + T5 · Vanilla Twin, Pinned Crew × 8', body: L('Trois agents à modèle épinglé, aucun hook : −62 % sur T4, −42 % sur T5.', 'Three agents with pinned models, no hooks: −62% on T4, −42% on T5.') },
+        { n: '13', title: L('Critique', 'Critique'), meta: L('agents relecteurs', 'reviewer agents'), body: L('Les baisses de coût tiennent. Les comparaisons entre bancs sont confondues, deux affirmations sont retirées, et le check docstrings de T4 est corrigé puis relancé sur tous les runs.', 'The cost cuts hold. Cross-bench comparisons are confounded, two claims are retracted, and the T4 docstring check is fixed and rerun on every run.') },
+        { n: '14', title: L('Le juge re-testé', 'Judge retest'), meta: L('224 notes en plus', '224 extra ratings'), body: L('Même note 80 % du temps, ICC 0,61. Avec la moyenne de 3, la baisse de qualité devient significative sur T5 aussi.', 'Same score 80% of the time, ICC 0.61. With the mean of 3, the quality drop becomes significant on T5 too.') },
+        { n: '15', title: L('Garde-fous', 'Guard rules'), meta: 'T4 + T5 · Guarded Crew × 8, Vanilla Twin + Pinned Crew × 4', body: L('Trois règles qui ne coûtent rien et ne referment pas l\'écart de note. Matrice tuée une fois par un reaper mémoire, relancée à 3 jobs.', 'Three rules that cost nothing and do not close the score gap. Matrix killed once by a memory reaper, rerun at 3 jobs.') },
+        { n: '16', title: 'Opus Crew', meta: 'T4 + T5 · Opus Crew × 8, Vanilla Twin × 2', body: L('Même note que Guarded Crew sur la session longue : la finition se perd dans la délégation. Une équipe tout Opus économise déjà 53 %.', 'Same score as Guarded Crew on the long session: the polish is lost in delegation. An all-Opus crew already saves 53%.') },
+        { n: '17', title: L('La v2', 'The v2'), meta: 'T4 + T5 · Sized Crew, Reviewed Crew × 8, Vanilla Twin × 2', body: L('Une relecture finale par Opus divise par deux l\'écart de qualité des longues sessions pour environ 0,20 $, et ne sert à rien sur les tâches courtes.', 'One final Opus review halves the long-session quality gap for about $0.20, and is useless on short tasks.') },
+      ],
+      stTitle: L('Les comparaisons qui tranchent', 'The comparisons that decide'),
+      statHead: [L('Tâche', 'Task'), L('Paire', 'Pair'), L('Mesure', 'Metric'), L('Écart', 'Difference'), 'p (Welch)', L('Lecture', 'Reading')].map((label) => ({ label, tip: label === 'p (Welch)' ? P_TIP : '' })),
+      statRows: [
+        ['T4', 'Full Stack − Preload', 0, '+0,10 $', '+$0.10', 0.78, 'Même coût', 'Same cost'],
+        ['T4', 'Full Stack − Preload', 1, '−61,5k', '−61.5k', 0.0001, 'Contexte divisé par 1,7', 'Context cut by 1.7x'],
+        ['T4', 'Preload − Rule Zero', 1, '+36,1k', '+36.1k', 0.015, 'Rule #0 réduit le contexte', 'Rule #0 cuts context'],
+        ['T4', 'Preload − Gatekeeper', 1, '+5,8k', '+5.8k', 0.62, 'Gate seul : rien', 'Gate alone: nothing'],
+        ['T4', 'Preload − Nudger', 1, '−6,8k', '−6.8k', 0.59, 'Relances seules : rien', 'Nudges alone: nothing'],
+        ['T4', 'Rule Zero − Zero Gate', 1, '+4,6k', '+4.6k', 0.74, 'Le gate n\'ajoute rien', 'The gate adds nothing'],
+        ['T4', 'Full Stack − Zero Gate', 1, '−20,7k', '−20.7k', 0.085, 'Petit reste propre à Full Stack', 'Small remainder specific to Full Stack'],
+        ['T5', 'Full Stack − Preload', 0, '+0,24 $', '+$0.24', 0.0022, 'Full Stack +18 %', 'Full Stack +18%'],
+        ['T5', 'Preload − Rule Zero', 0, '−0,13 $', '−$0.13', 0.21, 'Rule Zero sans surcoût significatif', 'Rule Zero: no significant overhead'],
+        ['T5', 'Preload − Nudger', 0, '−0,16 $', '−$0.16', 0.013, 'Les relances coûtent', 'Nudges cost money'],
+        ['T5', 'Preload − Zero Gate', 0, '−0,15 $', '−$0.15', 0.048, 'Léger surcoût du gate', 'Slight gate overhead'],
+        ['T5', 'Preload − Nudger', 1, '−9,7k', '−9.7k', 0.0002, 'Les relances gonflent le contexte', 'Nudges inflate context'],
+        ['T4', 'Clean Zero − Vanilla', 0, '−1,18 $', '−$1.18', 0.00001, 'Banc propre : Rule #0 et preload, −38 %', 'Clean bench: Rule #0 plus preload, −38%'],
+        ['T4', 'Pinned Crew − Vanilla Twin', 0, '−1,99 $', '−$1.99', 0.00001, 'Banc idéal : −62 %', 'Ideal bench: −62%'],
+        ['T4', 'Vanilla Twin − Vanilla', 0, '+0,08 $', '+$0.08', 0.59, 'Pas de dérive entre les fenêtres', 'No drift between windows'],
+        ['T5', 'Clean Stack − Vanilla', 0, '−0,01 $', '−$0.01', 0.88, 'Aucune économie', 'No saving'],
+        ['T5', 'Clean Stack − Vanilla', 1, '−21,9k', '−21.9k', 0.00001, 'Contexte −39 %, coût inchangé', 'Context −39%, cost unchanged'],
+      ].map((r) => ({ task: r[0], pair: r[1], metric: r[2] ? L('Contexte', 'Context') : L('Coût / run', 'Cost / run'), diff: fr ? r[3] : r[4], p: (r[5] < 0.001 ? '< ' + k1(0.001) : k1(r[5])) + (r[5] < 0.05 ? L(' · significatif', ' · significant') : ''), dot: r[5] < 0.05 ? '#3CCB7F' : '#4A5A78', read: fr ? r[6] : r[7] })),
+      fxTitle: L('Ce qui a été corrigé en route', 'What was corrected along the way'),
+      fixes: [
+        [L('Isolation', 'Isolation'), L('Le CLAUDE.md global restait chargé', 'The global CLAUDE.md stayed loaded'), L('--setting-sources ne le retire pas. Remplacé par CLAUDE_CODE_DISABLE_CLAUDE_MDS=1, trouvé dans le binaire.', '--setting-sources does not remove it. Replaced by CLAUDE_CODE_DISABLE_CLAUDE_MDS=1, found in the binary.')],
+        [L('Isolation', 'Isolation'), L('Deux hooks ignoraient les kill switches', 'Two hooks ignored the kill switches'), L('pre-tool-use.mjs et delegation-nudge.sh relançaient les témoins. Runs jetés et refaits avec des settings par variante.', 'pre-tool-use.mjs and delegation-nudge.sh kept nudging the controls. Runs thrown away and redone with per-variant settings.')],
+        ['Check', L('Check T3 impossible à passer', 'T3 check impossible to pass'), L('Il comptait les docstrings d\'origine. Corrigé : 0/6 devient 6/6.', 'It counted the original docstrings. Fixed: 0/6 became 6/6.')],
+        ['Check', L('Partie docstrings de T4 cassée', 'T4 docstring part broken'), L('D\'abord remplacée par un comptage AST direct. La cause a été trouvée ensuite : le check retirait les docstrings en place avant de les compter, d\'où un score toujours à 0,023. Copie corrigée dans checks/check_t3_fixed.py, tous les runs T4 re-notés : ils passent tous.', 'First replaced by a direct AST count. The cause was found later: the check stripped docstrings in place before counting them, hence a score stuck at 0.023. Fixed copy in checks/check_t3_fixed.py, every T4 run re-scored: they all pass.')],
+        [L('Isolation', 'Isolation'), L('Un CLAUDE.md ancêtre fuyait dans l\'install vierge', 'An ancestor CLAUDE.md leaked into the pristine install'), L('Claude Code chargeait ~/.claude/CLAUDE.md en remontant les dossiers parents du worktree. Les worktrees ont déménagé dans /private/tmp.', 'Claude Code loaded ~/.claude/CLAUDE.md while walking up the worktree\'s parent directories. The worktrees moved to /private/tmp.')],
+        [L('Mesure', 'Measurement'), L('Une seule note de juge par run', 'A single judge rating per run'), L('Trop bruitée (ICC 0,61). Deux notes de plus pour chaque run des bancs propre, idéal et gardé, et la page affiche leur moyenne.', 'Too noisy (ICC 0.61). Two more ratings for every clean, ideal and guarded run, and the page shows their mean.')],
+        ['Check', L('Un échec mypy qui venait de uv', 'A mypy failure that came from uv'), L('Le check de t5-O-r2 a échoué parce que uv n\'a pas pu résoudre l\'environnement de l\'outil. Relancé sur le même worktree, il passe ; le fichier du premier échec est gardé.', 'The t5-O-r2 check failed because uv could not resolve the tool environment. Rerun on the same worktree, it passes; the original failed check file is kept.')],
+        [L('Incident', 'Incident'), L('Matrice du test 3 tuée en route', 'Test 3 matrix killed mid-run'), L('Un reaper mémoire l\'a arrêtée à 6 jobs en parallèle. Les 6 runs partiels sont en quarantaine, pas supprimés, et ont été refaits à 3 jobs.', 'A memory reaper stopped it at 6 parallel jobs. The 6 partial runs were quarantined, not deleted, and redone at 3 jobs.')],
+        [L('Mesure', 'Measurement'), L('Le nombre de tours était faux', 'The turn count was wrong'), L('turns ne comptait que le dernier segment repris de la session. turns_all additionne tous les événements result, et c\'est lui que la page affiche.', 'turns only counted the last resumed segment of the session. turns_all sums every result event, and it is what the page shows.')],
+        [L('Retiré', 'Withdrawn'), L('« La version light ne sert à rien »', '"The light version is useless"'), L('Tirée des tâches courtes. Démentie sur la session longue.', 'Drawn from short tasks. Disproved on the long session.')],
+        [L('Retiré', 'Withdrawn'), L('« Preload est la moins chère »', '"Preload is the cheapest"'), L('Vrai à n = 3, faux à n = 11 (p = 0,78).', 'True at n = 3, false at n = 11 (p = 0.78).')],
+        [L('Retiré', 'Withdrawn'), L('« Rule Zero capte 75 % du gain »', '"Rule Zero captures 75% of the gain"'), L('Corrigé une première fois en 59 %, puis retiré : ce calcul venait de la conversation et aucun rapport ne le reproduit.', 'First corrected to 59%, then withdrawn: the arithmetic came from the chat and no report reproduces it.')],
+        [L('Retiré', 'Withdrawn'), L('« Des tests trop minces expliquent la note »', '"Thin tests explain the score"'), L('Guarded Crew écrit autant de tests que vanilla et revérifie ses références, et l\'écart reste. Facteur possible, pas cause principale.', 'Guarded Crew writes as many tests as vanilla and re-checks its references, and the gap stays. A possible factor, not the main cause.')],
+        [L('Retiré', 'Withdrawn'), L('« Moins de contexte, donc moins cher »', '"Less context, so cheaper"'), L('Sur T5, Clean Stack et Clean Zero coupent environ 39 % de contexte et coûtent autant que Vanilla.', 'On T5, Clean Stack and Clean Zero cut about 39% of context and cost as much as Vanilla.')],
+        [L('Anomalie', 'Anomaly'), L('Plusieurs événements result par run', 'Several result events per run'), L('Normal : chaque sous-agent asynchrone qui revient relance la session. Le dernier est cumulatif.', 'Normal: each async subagent that returns resumes the session. The last one is cumulative.')],
+        [L('Écart au plan', 'Plan drift'), L('T5 devait être longue', 'T5 was meant to be long'), L('Elle a pris 4 à 5 minutes : elle mesure le régime « tâche moyenne ».', 'It took 4 to 5 minutes: it measures the medium-task regime.')],
+        ['Permission', L('Application bloquée', 'Rollout blocked'), L('Le classifieur refuse que Claude édite ses hooks. Aucun contournement : script fourni.', 'The classifier refuses to let Claude edit its hooks. No workaround: script provided.')],
+      ].map((f) => Object.assign(fixKind(f[0]), { title: f[1], body: f[2] })),
+      lTitle: L('Limites', 'Limits'),
+      limits: [
+        L('Aucune session n\'a atteint la compaction : le gain de contexte ne s\'est jamais transformé en dollars ici.', 'No session reached compaction: the context gain never turned into dollars here.'),
+        L('Soft Note, Bare et Router n\'ont que 3 runs sur la session longue.', 'Soft Note, Bare and Router only have 3 runs on the long session.'),
+        L('Haiku presque jamais choisi : 6 lancements sur 282 sous-agents.', 'Haiku almost never chosen: 6 launches out of 282 subagents.'),
+        L('Router et Preload ont duré ~25 min sur T4 contre 8 à 10 la veille ; cause non vérifiée, coût non affecté.', 'Router and Preload took ~25 min on T4 versus 8 to 10 the day before; cause not verified, cost unaffected.'),
+        L('Deux checks automatiques remplacés par des comptages directs.', 'Two automated checks replaced by direct counts.'),
+        L('Le code marche dans tous les runs sauf un : ce qui change, c\'est la finition, notée par un juge qui est lui aussi un modèle (Opus, pas un humain). Deux tâches Python seulement, sur deux dépôts.', 'The code works in every run but one: what changes is the polish, scored by a judge that is a model too (Opus, not a human). Two Python tasks only, on two repositories.'),
+        L('Les checks cachés sont saturés : la qualité repose sur le juge Opus, moyenne de 3 notes par run à partir de l\'acte 2, une seule note dans le premier banc. Sur les runs délégués de T4, il semble saturé à 4,0.', 'The hidden checks are saturated: quality rests on the Opus judge, mean of 3 ratings per run from act 2 on, a single rating in the first bench. On delegated T4 runs it looks saturated at 4.0.'),
+        L('La relecture finale n\'a été testée que sur deux tâches, avec 8 runs chacune.', 'The final review was tested on two tasks only, with 8 runs each.'),
+        L('Guarded Crew n\'a appliqué la règle d\'ordre que dans 5 runs sur 8 : l\'effet de cette règle n\'est mesuré qu\'en partie.', 'Guarded Crew applied the ordering rule in only 5 of 8 runs: the effect of that rule is only partly measured.'),
+        L('Les comparaisons entre bancs sont confondues : effort high contre medium, un « Bare » qui n\'était pas nu, Haiku 4.5 contre 5.5, d\'autres jours et d\'autres versions du CLI.', 'Cross-bench comparisons are confounded: effort high versus medium, a "Bare" that was not bare, Haiku 4.5 versus 5.5, different days and CLI versions.'),
+        L('Pinned Crew a été conçu après lecture des transcripts de T4 : rien ne dit encore qu\'il généralise à d\'autres tâches.', 'Pinned Crew was designed after reading the T4 transcripts: nothing shows yet that it generalises to other tasks.'),
+        L('Vanilla Twin et Pinned Crew ont tourné dans une autre fenêtre que l\'acte 2 : la comparaison avec Clean Stack et Clean Zero n\'est pas randomisée.', 'Vanilla Twin and Pinned Crew ran in a different window from act 2: the comparison with Clean Stack and Clean Zero is not randomized.'),
+        L('Sur T4, la durée mesure surtout un minuteur de secours ScheduleWakeup de 1800 s : elle ne dit rien de la vitesse.', 'On T4, wall time mostly measures a 1800 s ScheduleWakeup fallback timer: it says nothing about speed.'),
+      ].map((t) => ({ t })),
+      shipTitle: L('Ce que je recommandais après le premier banc (dépassé)', 'What I recommended after the first bench (superseded)'),
+      shipBody: L('Garder les deux pièces qui servent, retirer celles qui coûtent sans rien rapporter. Pour des sessions de plusieurs heures qui finissent en compaction, Full Stack garde le plus petit contexte, au prix d\'environ 18 % de plus sur les tâches moyennes. Les actes 2 et 3 vont dans le même sens : dans une install vierge, Rule #0 et le preload font presque tout le gain, et des agents à modèle épinglé vont plus loin.', 'Keep the two pieces that work, drop the ones that cost without paying back. For multi-hour sessions that end up compacting, Full Stack keeps the smallest context, at about 18% more on medium tasks. Acts 2 and 3 point the same way: in a pristine install, Rule #0 plus the preload deliver nearly all of the gain, and agents with pinned models go further.'),
+      keepLabel: L('garder', 'keep'), dropLabel: L('retirer', 'remove'),
+      keep: [L('Rule #0 dans le CLAUDE.md global', 'Rule #0 in the global CLAUDE.md'), L('Preload SessionStart (agent-model-label.py)', 'SessionStart preload (agent-model-label.py)')].map((t) => ({ t })),
+      drop: [L('Label gate (PreToolUse, PostToolUse, UserPromptSubmit)', 'Label gate (PreToolUse, PostToolUse, UserPromptSubmit)'), 'delegation-router.py', 'delegation-nudge.sh', L('[DELEGATION NOTICE] de pre-tool-use.mjs', '[DELEGATION NOTICE] in pre-tool-use.mjs')].map((t) => ({ t })),
+      shipNote: L('Le script affiche le diff par défaut et n\'écrit qu\'avec --apply, après sauvegarde. OMC_DELEGATION_NOTICES=1 rétablit les relances.', 'The script shows the diff by default and only writes with --apply, after a backup. OMC_DELEGATION_NOTICES=1 brings the nudges back.'),
+      footerLine: L('Harnais, données brutes et rapports Markdown (REPORT*.md) : dans le dépôt du bench, dossier results.', 'Harness, raw data and Markdown reports (REPORT*.md): in the bench repository, results folder.'),
+    };
+  }
+}
+</script>
+</body>
+</html>
