@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Bench Explorer</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#0A0E15;color:#E8EDF5;font-family:"Geist","IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.55}
+a{color:#9DB8FF}a:hover{color:#C9D8FF}
+p{margin:0}
+button{font:inherit}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.tbl .th{text-align:left;font-weight:500;color:#8593AA;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:10px;border-bottom:1px solid #2A3447;white-space:nowrap}
+.tbl .td{padding:0;border-bottom:1px solid #1C2433;white-space:nowrap;font-family:"Geist Mono",ui-monospace,Menlo,monospace}
+button:focus-visible,a:focus-visible{outline:2px solid #9DB8FF;outline-offset:2px}
+</style>
+</helmet>
+<div style="background-color: #0A0E15; background-image: linear-gradient(rgba(157,184,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(157,184,255,0.045) 1px, transparent 1px); background-size: 56px 56px; color: #E8EDF5; padding-block: 40px 80px; padding-inline: 24px;">
+<div style="max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px;">
+
+<header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px;">
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0;">
+<a href="Main.dc.html" style="font-family: 'Geist Mono', monospace; font-size: 13px;">← {{backLabel}}</a>
+<h1 style="margin: 0; font-family: 'Unbounded', 'Geist', sans-serif; font-weight: 700; font-size: 44px; line-height: 1.05; letter-spacing: -0.03em;">Bench Explorer</h1>
+<p style="color: #A9B4C6; max-width: 66ch;">{{intro}}</p>
+</div>
+<div style="display: flex; gap: 2px; padding: 3px; background: #111723; border: 1px solid #2A3447; border-radius: 999px;" role="group" aria-label="Langue / Language">
+<button type="button" onClick="{{setFr}}" aria-pressed="{{frPressed}}" style="min-width: 48px; min-height: 36px; border: 0; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; background: {{frBg}}; color: {{frFg}};">FR</button>
+<button type="button" onClick="{{setEn}}" aria-pressed="{{enPressed}}" style="min-width: 48px; min-height: 36px; border: 0; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; background: {{enBg}}; color: {{enFg}};">EN</button>
+</div>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 14px; background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 18px 20px;">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA; min-width: 84px;">{{taskLabel}}</span>
+<sc-for list="{{taskOpts}}" as="o" hint-placeholder-count="5"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" title="{{o.hint}}" style="min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-family: 'Geist Mono', monospace; font-size: 13px; cursor: pointer;">{{o.label}}</button></sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA; min-width: 84px;">{{benchLabel}}</span>
+<sc-for list="{{benchOpts}}" as="o" hint-placeholder-count="7"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" title="{{o.hint}}" style="min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-size: 13px; cursor: pointer; opacity: {{o.op}};">{{o.label}}</button></sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA; min-width: 84px;">{{metricLabel}}</span>
+<sc-for list="{{metricOpts}}" as="o" hint-placeholder-count="8"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" style="min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-size: 13px; cursor: pointer;">{{o.label}}</button></sc-for>
+</div>
+<p style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9DB8FF;">{{taskDesc}}</p>
+</div>
+
+<figure style="margin: 0; background: #111723; border: 1px solid #2A3447; border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+<figcaption style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; align-items: baseline;">
+<strong style="font-size: 17px;">{{chartTitle}}</strong>
+<span style="display: flex; flex-wrap: wrap; gap: 14px; font-family: 'Geist Mono', monospace; font-size: 12px; color: #A9B4C6;">
+<sc-for list="{{legend}}" as="lg" hint-placeholder-count="3"><span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 11px; height: 11px; border-radius: 3px; background: {{lg.color}};"></span>{{lg.label}}</span></sc-for>
+<span title="{{ciTip}}" style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 2px; background: #E8EDF5;"></span>{{ciLabel}}</span>
+</span>
+</figcaption>
+<div style="display: flex; flex-direction: column;">
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="18">
+<button type="button" onClick="{{row.pick}}" onMouseEnter="{{row.enter}}" onFocus="{{row.enter}}" aria-pressed="{{row.pressed}}" title="{{row.tip}}" style="display: grid; grid-template-columns: 120px minmax(0, 1fr) 96px; gap: 12px; align-items: center; width: 100%; padding: 5px 6px; border: 0; border-radius: 8px; background: {{row.hl}}; color: inherit; text-align: left; cursor: pointer;">
+<span style="display: flex; flex-direction: column; line-height: 1.2; min-width: 0;"><span style="font-size: 13px; font-weight: {{row.weight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{row.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #6F7C92;">{{row.code}}</span></span>
+<span style="position: relative; display: block; height: 28px;">
+<sc-for list="{{ticks}}" as="tk"><span style="position: absolute; top: 0; bottom: 0; left: {{tk.left}}%; width: 1px; background: #1C2433;"></span></sc-for>
+<sc-for list="{{row.segs}}" as="sg"><span style="position: absolute; top: 6px; height: 16px; left: {{sg.left}}%; width: {{sg.width}}%; background: {{sg.color}}; border-radius: {{sg.radius}}; box-sizing: border-box; border-right: {{sg.gap}};"></span></sc-for>
+<span style="position: absolute; top: 13px; height: 2px; left: {{row.loL}}%; width: {{row.ciW}}%; background: #E8EDF5;"></span>
+<sc-for list="{{row.dots}}" as="dt"><span style="position: absolute; top: 24px; left: {{dt.left}}%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: #9DB8FF; opacity: 0.8;"></span></sc-for>
+</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; text-align: right; white-space: nowrap;">{{row.valText}}</span>
+</button>
+</sc-for>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr) 96px; gap: 12px; padding: 0 6px;">
+<span></span>
+<span style="position: relative; display: block; height: 16px;"><sc-for list="{{ticks}}" as="tk"><span style="position: absolute; left: {{tk.left}}%; transform: translateX(-50%); font-family: 'Geist Mono', monospace; font-size: 10px; color: #6F7C92; white-space: nowrap;">{{tk.label}}</span></sc-for></span>
+<span></span>
+</div>
+</div>
+<p style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #C6CFDD; min-height: 36px; border-top: 1px solid #1C2433; padding-top: 10px;">{{readout}}</p>
+</figure>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px;">
+<section style="display: flex; flex-direction: column; gap: 10px; min-width: 0;">
+<h2 style="margin: 0; font-size: 17px;">{{statsTitle}}</h2>
+<div style="overflow: auto; max-height: 560px; background: #111723; border: 1px solid #2A3447; border-radius: 12px;">
+<div role="table" class="tbl" style="display: table; min-width: 520px;">
+<div role="rowgroup" style="display: table-header-group;"><div role="row" style="display: table-row;"><sc-for list="{{statHead}}" as="h" hint-placeholder-count="6"><div role="columnheader" class="th" title="{{h.tip}}" style="display: table-cell;">{{h.label}}</div></sc-for></div></div>
+<div role="rowgroup" style="display: table-row-group;"><sc-for list="{{statRows}}" as="r" hint-placeholder-count="8"><div role="row" style="display: table-row;"><sc-for list="{{r.cells}}" as="c" hint-placeholder-count="6"><div role="cell" class="td" style="display: table-cell; padding: 9px 10px;">{{c.t}}</div></sc-for></div></sc-for></div>
+</div>
+</div>
+</section>
+<section style="display: flex; flex-direction: column; gap: 10px; min-width: 0;">
+<h2 style="margin: 0; font-size: 17px;">{{tokTitle}}</h2>
+<div style="overflow: auto; max-height: 560px; background: #111723; border: 1px solid #2A3447; border-radius: 12px;">
+<div role="table" class="tbl" style="display: table; min-width: 520px;">
+<div role="rowgroup" style="display: table-header-group;"><div role="row" style="display: table-row;"><sc-for list="{{tokHead}}" as="h" hint-placeholder-count="6"><div role="columnheader" class="th" style="display: table-cell;">{{h.label}}</div></sc-for></div></div>
+<div role="rowgroup" style="display: table-row-group;"><sc-for list="{{tokRows}}" as="r" hint-placeholder-count="10"><div role="row" style="display: table-row;"><sc-for list="{{r.cells}}" as="c" hint-placeholder-count="6"><div role="cell" class="td" style="display: table-cell; padding: 9px 10px; color: {{c.color}};">{{c.t}}</div></sc-for></div></sc-for></div>
+</div>
+</div>
+<p style="font-size: 12px; color: #8593AA;">{{tokNote}}</p>
+</section>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 10px;">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
+<h2 style="margin: 0; font-size: 17px;">{{runsTitle}}</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+<sc-if value="{{hasFilter}}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{clearFilter}}" style="min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid #4A6BB5; background: #16213A; color: #C9D8FF; font-size: 12px; cursor: pointer;">{{filterLabel}} ×</button></sc-if>
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{sortLabel}}</span>
+<sc-for list="{{sortOpts}}" as="o" hint-placeholder-count="3"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" style="min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font-size: 12px; cursor: pointer;">{{o.label}}</button></sc-for>
+</div>
+</div>
+
+<sc-if value="{{hasRun}}" hint-placeholder-val="{{ false }}">
+<div style="background: #111723; border: 1px solid #9DB8FF; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline;"><strong style="font-family: 'Geist Mono', monospace;">{{run.title}}</strong><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #8593AA;">{{run.meta}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px;">
+<sc-for list="{{run.bars}}" as="b" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 150px; gap: 10px; align-items: center; font-family: 'Geist Mono', monospace; font-size: 12px;">
+<span style="color: {{b.ink}};">{{b.label}}</span>
+<span style="position: relative; display: block; height: 12px; background: #0A0E15; border-radius: 4px;"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{b.w}}%; background: {{b.color}}; border-radius: 4px;"></span></span>
+<span style="text-align: right;">{{b.text}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="overflow: auto; max-height: 1400px; background: #111723; border: 1px solid #2A3447; border-radius: 12px;">
+<div role="table" class="tbl" style="display: table; min-width: 1120px;">
+<div role="rowgroup" style="display: table-header-group;"><div role="row" style="display: table-row;"><sc-for list="{{runHead}}" as="h" hint-placeholder-count="13"><div role="columnheader" class="th" style="display: table-cell;">{{h.label}}</div></sc-for></div></div>
+<div role="rowgroup" style="display: table-row-group;">
+<sc-for list="{{runRows}}" as="r" hint-placeholder-count="16">
+<div role="row" style="display: table-row; background: {{r.bg}};"><sc-for list="{{r.cells}}" as="c" hint-placeholder-count="13"><div role="cell" class="td" style="display: table-cell;"><button type="button" onClick="{{r.pick}}" style="display: block; width: 100%; min-height: 36px; padding: 0 10px; border: 0; background: transparent; color: #E8EDF5; text-align: left; font-family: 'Geist Mono', monospace; font-size: 13px; cursor: pointer;">{{c.t}}</button></div></sc-for></div>
+</sc-for>
+</div>
+</div>
+</div>
+<p style="font-size: 12px; color: #8593AA; max-width: 80ch;">{{runsNote}}</p>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"lang":{"editor":"enum","options":["fr","en"],"default":"fr"},"$preview":{"width":1280,"height":4200}}'>
+const DATA_URL = './data/runs.json';
+const TCRIT = [0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131];
+/* Original bench (A to I), then clean (V X Z), ideal (W Y) and guarded (Q) variants. */
+const ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'V', 'X', 'Z', 'W', 'Y', 'Q', 'O', 'S', 'R'];
+const NAME = { A: 'Full Stack', B: 'Soft Note', C: 'Bare', D: 'Router', E: 'Preload', F: 'Rule Zero', G: 'Gatekeeper', H: 'Nudger', I: 'Zero Gate', V: 'Vanilla', X: 'Clean Stack', Z: 'Clean Zero', W: 'Vanilla Twin', Y: 'Pinned Crew', Q: 'Guarded Crew', O: 'Opus Crew', S: 'Sized Crew', R: 'Reviewed Crew' };
+const BENCHES = ['all', 'orig', 'clean', 'ideal', 'guarded', 'opuscrew', 'v2'];
+const MODELS = [['opus', 'Opus 5.5', '#3987e5', '#7FB0F0'], ['sonnet', 'Sonnet 5.5', '#d95926', '#F08A5D'], ['haiku', 'Haiku', '#199e70', '#3CCB9A']];
+
+/** Pass flag of a run: the re-scored T4 check (passed2) when present, else the original check. */
+function passOf(r) { return r.passed2 != null ? !!r.passed2 : !!r.passed; }
+
+/** Judge score of a run: judge3 (mean of up to 3 blind ratings) when present, else the single rating (original bench). */
+function judgeOf(r) { return r.judge3 != null ? r.judge3 : r.judge; }
+
+/** Correct turn count: turns_all sums every result event; the legacy turns only counts the last resumed segment. */
+function turnsOf(r) { return r.turns_all != null ? r.turns_all : (r.turns || 0); }
+
+/**
+ * Display name of a model family for one run.
+ * Haiku changed between benches (4.5 in the original bench, 5.5 afterwards), so its version
+ * comes from the run's exact model ids (hv), falling back on the bench.
+ */
+function modelName(md, r) {
+  if (md[0] !== 'haiku') return md[1];
+  const hv = (r && r.hv) || [];
+  if (hv.some((x) => x.indexOf('haiku-5-5') >= 0)) return 'Haiku 5.5';
+  if (hv.some((x) => x.indexOf('haiku-4-5') >= 0)) return 'Haiku 4.5';
+  return r && r.bench && r.bench !== 'orig' ? 'Haiku 5.5' : 'Haiku 4.5';
+}
+
+/** Arithmetic mean of a list (0 for an empty list). */
+function mean(xs) { return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; }
+
+/** n, mean, sample sd, Student-t 95% CI, min and max of a list. */
+function stats(xs) {
+  const n = xs.length, m = mean(xs);
+  const sd = n > 1 ? Math.sqrt(xs.reduce((a, b) => a + (b - m) * (b - m), 0) / (n - 1)) : 0;
+  const h = n > 1 ? (TCRIT[n - 1] || 2.0) * sd / Math.sqrt(n) : 0;
+  return { n, m, sd, lo: m - h, hi: m + h, min: n ? Math.min.apply(null, xs) : 0, max: n ? Math.max.apply(null, xs) : 0 };
+}
+
+/** Clamp to a 0-100 percentage of max. */
+function pct(x, max) { return max > 0 ? Math.max(0, Math.min(100, x / max * 100)) : 0; }
+
+/** Round axis maximum and step with at most 6 ticks. */
+function niceScale(x) {
+  const steps = [0.1, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100];
+  for (const s of steps) { if (x / s <= 6) return { max: Math.max(s, Math.ceil(x / s) * s), step: s }; }
+  return { max: x, step: x / 5 };
+}
+
+/** Per-model field of a run (0 when unused). */
+function mv(r, k, f) { return r.m[k] ? r.m[k][f] || 0 : 0; }
+
+class Component extends DCLogic {
+  /** Initial state: T4, every bench, total cost, sorted by setup, no filter. */
+  constructor(props) {
+    super(props);
+    this.state = { lang: null, runs: null, err: false, task: 't4', bench: 'all', metric: 'cost', sort: 'v', hover: null, filter: null, run: null };
+  }
+
+  /** Load the per-run dataset published with the canvas. */
+  componentDidMount() {
+    fetch(DATA_URL).then((r) => r.json()).then((runs) => this.setState({ runs })).catch(() => this.setState({ err: true }));
+  }
+
+  /** Current language code. */
+  lang() { return this.state.lang || this.props.lang || 'fr'; }
+
+  /** Locale number. */
+  num(x, d) { const s = (x == null ? 0 : x).toFixed(d); return this.lang() === 'fr' ? s.replace('.', ',') : s; }
+
+  /** Locale dollars. */
+  usd(x) { return this.lang() === 'fr' ? this.num(x, 2) + ' $' : '$' + this.num(x, 2); }
+
+  /** Pill styling, selected or not. */
+  pill(on) { return { bg: on ? '#E8EDF5' : 'transparent', fg: on ? '#0A0E15' : '#C6CFDD', border: on ? '#E8EDF5' : '#2A3447', pressed: on ? 'true' : 'false' }; }
+
+  /** Everything the template reads. */
+  renderVals() {
+    const fr = this.lang() === 'fr';
+    const L = (a, b) => (fr ? a : b);
+    const { task, bench, metric, sort, hover, filter } = this.state;
+    const all = this.state.runs || [];
+    const inB = (r) => bench === 'all' || r.bench === bench;
+    const runs = all.filter((r) => r.task === task && inB(r));
+    const BL = { all: L('Tous', 'All'), orig: L('Origine', 'Original'), clean: L('Salle blanche', 'Clean room'), ideal: L('Idéal', 'Ideal'), guarded: L('Gardé', 'Guarded'), opuscrew: L('Opus Crew', 'Opus Crew'), v2: L('v2', 'v2') };
+    const BS = { orig: L('origine', 'orig'), clean: L('propre', 'clean'), ideal: L('idéal', 'ideal'), guarded: L('gardé', 'guarded'), opuscrew: L('opus crew', 'opus crew'), v2: L('v2', 'v2') };
+    const BHINT = {
+      all: L('Tous les bancs mélangés', 'Every bench mixed'),
+      orig: L('Acte 1 · mon environnement réel', 'Act 1 · my real environment'),
+      clean: L('Acte 2 · install vierge', 'Act 2 · pristine install'),
+      ideal: L('Acte 3 · harnais idéal', 'Act 3 · ideal harness'),
+      guarded: L('Acte 4 · qualité gardée', 'Act 4 · guarding quality'),
+      opuscrew: L('Acte 5 · Opus Crew', 'Act 5 · Opus Crew'),
+      v2: L('Acte 6 · la réécriture', 'Act 6 · the rewrite'),
+    };
+    const DESC = {
+      A: L('Ma config réelle : tout est activé, hooks OMC compris.', 'My real setup: everything on, OMC hooks included.'),
+      B: L('Une note de délégation douce, aucun hook.', 'A soft delegation note, no hooks.'),
+      C: L('Aucune consigne de délégation : le témoin.', 'No delegation guidance: the control.'),
+      D: L('Note douce + router de prompts.', 'Soft note + prompt router.'),
+      E: L('Note douce + skill préchargé au démarrage.', 'Soft note + skill preloaded at start.'),
+      F: L('Rule #0 + skill préchargé. La config recommandée.', 'Rule #0 + preloaded skill. The recommended setup.'),
+      G: L('Preload + label gate.', 'Preload + label gate.'),
+      H: L('Preload + relances de délégation.', 'Preload + delegation nudges.'),
+      I: L('Rule Zero + label gate.', 'Rule Zero + label gate.'),
+    };
+    const VDESC = {
+      V: L('Claude Code tel qu\'installé, rien d\'ajouté. Le témoin.', 'Pristine Claude Code, nothing installed. The control.'),
+      X: L('cheap-orchestration complet dans une install vierge : skill, hooks et Rule #0.', 'Full cheap-orchestration in a pristine install: skill, hooks and Rule #0.'),
+      Z: L('Seulement la section Rule #0 du CLAUDE.md et le preload SessionStart.', 'Only the Rule #0 CLAUDE.md section and the SessionStart preload.'),
+      W: L('Deuxième témoin vanilla, même config que Vanilla, lancé dans la fenêtre du test 2.', 'Second vanilla control, same setup as Vanilla, run in test 2\'s time window.'),
+      Y: L('Rule #0 qui nomme trois agents maison à modèle fixe : scout et editor sur Haiku, worker sur Sonnet. Les agents intégrés qui héritent d\'Opus sont interdits. Aucun hook.', 'Rule #0 naming three custom agents with pinned models: scout and editor on Haiku, worker on Sonnet. Built-in agents that inherit Opus are denied. No hooks.'),
+      Q: L('Pinned Crew plus trois règles : respecter l\'ordre des tâches, un test par exigence, revérifier les références fichier:ligne à la fin.', 'Pinned Crew plus three rules: respect task order, one test per requirement, re-check path:line references at the end.'),
+      O: L('Guarded Crew avec le worker épinglé sur Opus au lieu de Sonnet. Seules cette ligne et sa mention dans le CLAUDE.md changent.', 'Guarded Crew with the worker pinned to Opus instead of Sonnet. Only that line and its mention in CLAUDE.md differ.'),
+      S: L('La v2 de cheap-orchestration écrite à partir des résultats : agents épinglés dans leur propre définition (scout et editor sur Haiku, worker sur Sonnet), règle de décision selon la taille et l\'enjeu, ordre des parties obligatoire, garde-fous sur les tests et les références, aucun hook.', 'cheap-orchestration v2, written from the evidence: agents pinned in their own definition (scout and editor on Haiku, worker on Sonnet), a decision rule by size and stakes, binding part order, test and reference guards, no hooks.'),
+      R: L('Sized Crew plus une passe finale de relecture par Opus, qui corrige directement la finition.', 'Sized Crew plus one final Opus reviewer pass that fixes polish directly.'),
+    };
+    /** Bench codes of a run list, deduplicated and localized, joined with '+'. */
+    const bk = (rs) => Array.from(new Set(rs.map((r) => r.bench))).sort().map((b) => BS[b] || b).join('+');
+
+    const METRICS = {
+      cost: { label: L('Coût total', 'Total cost'), get: (r) => r.cost, fmt: (x) => this.usd(x), stacked: true },
+      opus: { label: L('Coût Opus', 'Opus cost'), get: (r) => mv(r, 'opus', 'cost'), fmt: (x) => this.usd(x), color: '#3987e5' },
+      sonnet: { label: L('Coût Sonnet', 'Sonnet cost'), get: (r) => mv(r, 'sonnet', 'cost'), fmt: (x) => this.usd(x), color: '#d95926' },
+      ctx: { label: L('Pic de contexte', 'Peak context'), get: (r) => r.ctx / 1000, fmt: (x) => this.num(x, 1) + 'k', color: '#9DB8FF' },
+      turns: { label: L('Tours', 'Turns'), get: (r) => turnsOf(r), fmt: (x) => this.num(x, 1), color: '#9DB8FF' },
+      wall: { label: L('Durée (horloge)', 'Wall clock'), get: (r) => r.wall / 60, fmt: (x) => this.num(x, 1) + ' min', color: '#9DB8FF' },
+      sub: { label: L('Sous-agents', 'Subagents'), get: (r) => r.sub || 0, fmt: (x) => this.num(x, 1), color: '#9DB8FF' },
+      judge: { label: L('Juge (1 à 5)', 'Judge (1 to 5)'), get: (r) => judgeOf(r) || 0, fmt: (x) => this.num(x, 2), color: '#9DB8FF' },
+    };
+    const M = METRICS[metric];
+    /* Run counts follow the bench filter, so they stay right when new runs are added. */
+    const cnt = (t) => all.filter((r) => r.task === t && inB(r)).length + ' runs';
+    const TASKS = {
+      t1: L('T1 · click · exploration · ', 'T1 · click · exploration · ') + cnt('t1'),
+      t2: L('T2 · click · feature click.Duration · ', 'T2 · click · click.Duration feature · ') + cnt('t2'),
+      t3: L('T3 · click · docstrings en masse · ', 'T3 · click · bulk docstrings · ') + cnt('t3'),
+      t4: L('T4 · click · session longue · ', 'T4 · click · long session · ') + cnt('t4'),
+      t5: L('T5 · marshmallow · debug et refactor · ', 'T5 · marshmallow · debug and refactor · ') + cnt('t5'),
+    };
+
+    const groups = ORDER.filter((v) => runs.some((r) => r.v === v)).map((v) => { const rs = runs.filter((r) => r.v === v); return { v, rs, s: stats(rs.map(M.get)) }; });
+    const sc = niceScale(groups.reduce((a, g) => Math.max(a, g.s.hi, g.s.max), 0) || 1);
+    const ticks = []; for (let t = 0; t <= sc.max + 1e-9; t += sc.step) ticks.push({ left: pct(t, sc.max).toFixed(2), label: M.fmt(t).replace(/[,.]00(?= \$|$)/, '').replace(/[,.]0(?=k$| min$)/, '') });
+
+    let readout = L('Survol d\'une ligne : le détail. Clic : la table des runs se filtre sur cette config.', 'Hover a row for detail, click it to filter the run table.');
+    const rows = groups.map((g) => {
+      let segs = [];
+      if (M.stacked) {
+        let l = 0; const parts = MODELS.map((md) => ({ md, val: mean(g.rs.map((r) => mv(r, md[0], 'cost'))) })).filter((p) => p.val > 0);
+        segs = parts.map((p, i) => { const w = pct(p.val, sc.max); const o = { left: l.toFixed(2), width: w.toFixed(2), color: p.md[2], radius: parts.length === 1 ? '4px' : i === 0 ? '4px 0 0 4px' : i === parts.length - 1 ? '0 4px 4px 0' : '0', gap: i < parts.length - 1 ? '2px solid #111723' : '0' }; l += w; return o; });
+      } else {
+        segs = [{ left: '0', width: pct(g.s.m, sc.max).toFixed(2), color: M.color, radius: '4px', gap: '0' }];
+      }
+      if (hover === g.v) {
+        readout = NAME[g.v] + ' (' + g.v + ') · ' + bk(g.rs) + ' · n = ' + g.s.n + ' · ' + L('moyenne ', 'mean ') + M.fmt(g.s.m) + ' · ' + L('fourchette 95 % ', '95% range ') + M.fmt(g.s.lo) + '…' + M.fmt(g.s.hi) + ' · min ' + M.fmt(g.s.min) + ' · max ' + M.fmt(g.s.max);
+      }
+      const on = filter === g.v;
+      return {
+        name: NAME[g.v], tip: NAME[g.v] + ' · ' + (DESC[g.v] || VDESC[g.v] || ''), code: g.v + ' · ' + bk(g.rs) + ' · n = ' + g.s.n, segs, valText: M.fmt(g.s.m), weight: g.v === 'F' ? '700' : '500',
+        hl: on ? '#1A2438' : hover === g.v ? '#141C2B' : 'transparent', pressed: on ? 'true' : 'false',
+        loL: pct(g.s.lo, sc.max).toFixed(2), ciW: Math.max(0, pct(g.s.hi, sc.max) - pct(g.s.lo, sc.max)).toFixed(2),
+        dots: g.rs.map((r) => ({ left: pct(M.get(r), sc.max).toFixed(2) })),
+        enter: () => this.setState({ hover: g.v }),
+        pick: () => this.setState({ filter: on ? null : g.v, run: null }),
+      };
+    });
+
+    const statRows = groups.map((g) => ({ cells: [NAME[g.v], String(g.s.n), M.fmt(g.s.m), M.fmt(g.s.sd), M.fmt(g.s.lo) + '…' + M.fmt(g.s.hi), M.fmt(g.s.min) + ' / ' + M.fmt(g.s.max)].map((t) => ({ t })) }));
+
+    const k = (x) => this.num(x / 1000, 1) + 'k';
+    const tokRows = [];
+    groups.forEach((g) => MODELS.forEach((md) => {
+      if (!g.rs.some((r) => r.m[md[0]])) return;
+      tokRows.push({ cells: [
+        { t: NAME[g.v], color: '#E8EDF5' }, { t: modelName(md, g.rs.find((r) => r.m[md[0]])), color: md[3] },
+        { t: k(mean(g.rs.map((r) => mv(r, md[0], 'out')))), color: '#E8EDF5' },
+        { t: k(mean(g.rs.map((r) => mv(r, md[0], 'cr')))), color: '#E8EDF5' },
+        { t: k(mean(g.rs.map((r) => mv(r, md[0], 'cw')))), color: '#E8EDF5' },
+        { t: this.usd(mean(g.rs.map((r) => mv(r, md[0], 'cost')))), color: '#E8EDF5' },
+      ] });
+    }));
+
+    const shown = runs.filter((r) => !filter || r.v === filter);
+    const sorted = shown.slice().sort((a, b) => (sort === 'cost' ? b.cost - a.cost : sort === 'ctx' ? b.ctx - a.ctx : (a.v + String(a.rep).padStart(2, '0')).localeCompare(b.v + String(b.rep).padStart(2, '0'))));
+    const runRows = sorted.map((r) => ({
+      bg: this.state.run === r.id ? '#1A2438' : 'transparent',
+      pick: () => this.setState({ run: this.state.run === r.id ? null : r.id }),
+      cells: [r.id, NAME[r.v], BS[r.bench] || r.bench || '·', this.usd(r.cost), this.usd(mv(r, 'opus', 'cost')), this.usd(mv(r, 'sonnet', 'cost')), this.usd(mv(r, 'haiku', 'cost')), this.num(r.ctx / 1000, 1) + 'k', String(turnsOf(r)), this.num(r.wall / 60, 1) + ' min', String(r.sub || 0), judgeOf(r) == null ? '·' : (r.judge3 != null ? this.num(r.judge3, 2) : String(r.judge)), r.passed2 != null ? (passOf(r) ? L('ok · re-noté', 'ok · re-scored') : L('échec', 'fail')) : r.passed ? (r.manual ? L('ok · manuel', 'ok · manual') : 'ok') : L('échec', 'fail')].map((t) => ({ t })),
+    }));
+
+    const ro = (this.state.runs || []).find((r) => r.id === this.state.run);
+    let run = { title: '', meta: '', bars: [] };
+    if (ro) {
+      const maxC = Math.max(...MODELS.map((md) => mv(ro, md[0], 'cost')), 0.01);
+      run = {
+        title: ro.id, meta: NAME[ro.v] + ' · ' + (BS[ro.bench] || ro.bench || '') + ' · ' + this.num(ro.ctx / 1000, 1) + L('k de contexte max · ', 'k peak context · ') + turnsOf(ro) + L(' tours · ', ' turns · ') + (ro.sub || 0) + L(' sous-agents', ' subagents'),
+        bars: MODELS.filter((md) => ro.m[md[0]]).map((md) => ({ label: modelName(md, ro), ink: md[3], color: md[2], w: pct(mv(ro, md[0], 'cost'), maxC).toFixed(1), text: this.usd(mv(ro, md[0], 'cost')) + ' · ' + k(mv(ro, md[0], 'out')) + ' out · ' + k(mv(ro, md[0], 'cr')) + ' cr' })),
+      };
+    }
+
+    const tf = (x) => (x ? 'true' : 'false');
+    return {
+      setFr: () => this.setState({ lang: 'fr' }), setEn: () => this.setState({ lang: 'en' }),
+      frPressed: tf(fr), enPressed: tf(!fr),
+      frBg: fr ? '#E8EDF5' : 'transparent', frFg: fr ? '#0A0E15' : '#C6CFDD', enBg: fr ? 'transparent' : '#E8EDF5', enFg: fr ? '#C6CFDD' : '#0A0E15',
+      backLabel: L('Retour au Lab', 'Back to the Lab'),
+      intro: L((all.length ? 'Les ' + all.length + ' runs' : 'Tous les runs') + ', tâche par tâche et banc par banc. Une tâche, un banc et une métrique à choisir ; un clic sur une config filtre la table, un clic sur un run l\'ouvre. Les petits points sous chaque barre sont les runs individuels. Avec « Tous », les bancs se mélangent : comparer deux bancs, c\'est aussi comparer deux environnements. Les installs vierges (Salle blanche, Idéal, Gardé, Opus Crew, v2) sont la référence ; le banc d\'origine est de l\'historique. Survol d\'une config : sa description.', 'All ' + (all.length ? all.length + ' ' : '') + 'runs, task by task and bench by bench. Pick a task, a bench and a metric, click a setup to filter, click a run to open it. The small dots under each bar are the individual runs. With "All", the benches mix: comparing two benches also means comparing two environments. The pristine installs (Clean room, Ideal, Guarded, Opus Crew, v2) are the reference; the original bench is history. Hover a setup for its description.'),
+      taskLabel: L('tâche', 'task'), benchLabel: L('banc', 'bench'), metricLabel: L('métrique', 'metric'), sortLabel: L('trier', 'sort'),
+      taskOpts: ['t1', 't2', 't3', 't4', 't5'].map((t) => Object.assign({ label: t.toUpperCase(), hint: TASKS[t], pick: () => this.setState({ task: t, hover: null, filter: null, run: null }) }, this.pill(t === task))),
+      benchOpts: BENCHES.map((b) => {
+        const has = b === 'all' || all.some((r) => r.bench === b);
+        return Object.assign({ label: BL[b], hint: BHINT[b], op: has ? '1' : '0.35', pick: () => { if (has) this.setState({ bench: b, hover: null, filter: null, run: null }); } }, this.pill(b === bench));
+      }),
+      metricOpts: Object.keys(METRICS).map((m) => Object.assign({ label: METRICS[m].label, pick: () => this.setState({ metric: m, hover: null }) }, this.pill(m === metric))),
+      sortOpts: [['v', L('config', 'setup')], ['cost', L('coût', 'cost')], ['ctx', L('contexte', 'context')]].map((s) => Object.assign({ label: s[1], pick: () => this.setState({ sort: s[0] }) }, this.pill(s[0] === sort))),
+      taskDesc: this.state.runs ? TASKS[task] : (this.state.err ? L('Données indisponibles, recharge la page.', 'Data unavailable, reload the page.') : L('Chargement des runs…', 'Loading the runs…')),
+      chartTitle: M.label + ' · ' + task.toUpperCase(),
+      legend: M.stacked ? MODELS.map((md) => ({ label: md[0] === 'haiku' ? 'Haiku 4.5 / 5.5' : md[1], color: md[2] })) : [{ label: M.label, color: M.color }],
+      ciLabel: L('fourchette à 95 %', '95% range'), ciTip: L('Intervalle de confiance à 95 % de la moyenne : la vraie moyenne a de bonnes chances d\'être dans cette fourchette.', '95% confidence interval of the mean: the true mean is likely to sit inside this range.'),
+      rows, ticks, readout,
+      statsTitle: L('Statistiques', 'Statistics') + ' · ' + M.label,
+      statHead: ['Config', 'n', L('Moyenne', 'Mean'), L('Écart-type', 'Std dev'), L('Fourchette 95 %', '95% range'), 'Min / max'].map((label, i) => ({ label, tip: i === 4 ? L('Intervalle de confiance à 95 % de la moyenne : la vraie moyenne a de bonnes chances d\'être dans cette fourchette.', '95% confidence interval of the mean: the true mean is likely to sit inside this range.') : '' })),
+      statRows,
+      tokTitle: L('Tokens moyens par run et par modèle', 'Mean tokens per run and model'),
+      tokHead: ['Config', L('Modèle', 'Model'), 'Output', 'Cache read', 'Cache write', L('Coût', 'Cost')].map((label) => ({ label })),
+      tokRows,
+      tokNote: L('Cache read = relecture du contexte en cache : c\'est là que la taille du contexte se paie, à chaque tour.', 'Cache read = re-reading cached context: this is where context size gets paid for, on every turn.'),
+      runsTitle: L('Runs', 'Runs') + ' · ' + task.toUpperCase() + ' · ' + shown.length,
+      hasFilter: !!filter, filterLabel: filter ? NAME[filter] : '', clearFilter: () => this.setState({ filter: null }),
+      hasRun: !!ro, run,
+      runHead: ['Run', 'Config', L('Banc', 'Bench'), 'Total', 'Opus', 'Sonnet', 'Haiku', L('Contexte', 'Context'), L('Tours', 'Turns'), L('Horloge', 'Clock'), L('Sous-ag.', 'Subag.'), L('Juge', 'Judge'), 'Check'].map((label) => ({ label })),
+      runRows,
+      runsNote: L('« ok · re-noté » : sur T4, le check docstrings retirait les docstrings en place avant de les compter. Tous les runs T4 ont été re-notés avec la copie corrigée (checks/check_t3_fixed.py) et passent tous, sauf t4-R-r3 (acte 6). Tours = tous les tours de la session, reprises comprises. Horloge : sur T4 elle mesure surtout un minuteur de secours de 1800 s, pas la vitesse. Haiku = 4.5 dans le banc d\'origine, 5.5 ensuite. Juge = moyenne de 3 notes en aveugle pour les installs vierges, note unique pour le banc d\'origine.', '"ok · re-scored": on T4 the docstring check stripped docstrings in place before counting them. Every T4 run was re-scored with the fixed copy (checks/check_t3_fixed.py) and they all pass, except t4-R-r3 (act 6). Turns = every turn of the session, resumes included. Clock: on T4 it mostly measures a 1800 s fallback timer, not speed. Haiku = 4.5 in the original bench, 5.5 afterwards. Judge = mean of 3 blind ratings for the pristine installs, single rating for the original bench.'),
+    };
+  }
+}
+</script>
+</body>
+</html>
