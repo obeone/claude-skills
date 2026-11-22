@@ -202,6 +202,7 @@ Every skill follows the same layout, so an agent that knows one knows them all:
 - **Pinned crew**: scout, editor, worker and reviewer, each with a defined role
 - **Templates**: spec and return templates for delegation, plus the benchmark evidence behind each rule
 - **Not shipped**: the operative rules live in your own `CLAUDE.md` ("Delegation & cost") and the agent definitions in `~/.claude/agents/`; the skill carries neither
+- **Setup guide**: [skills/cheap-orchestration/README.md](./skills/cheap-orchestration/README.md) covers the crew definitions, the decision table and the benchmark numbers
 
 ---
 
