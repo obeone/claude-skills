@@ -30,7 +30,10 @@ Checked against Codex CLI 0.171.0, by Codex itself.
 
 - One TOML file per role, picked up without registration in `config.toml`.
   Required keys: `name`, `description`, `developer_instructions`. `model`
-  pins the model, `model_reasoning_effort` optionally pins the effort.
+  pins the model, `model_reasoning_effort` optionally pins the effort and
+  `model_verbosity` the verbosity. The script writes those two only when
+  asked (`--effort <agent>=<level>`, `--verbosity <level>`); a reinstall
+  with `--force` and without them drops them.
 - The parent calls `spawn_agent` with `agent_type="<name>"`. It may pass
   `model`, but the role is applied afterwards, so the pin in the role wins.
 - A role cannot have its own sandbox: the child inherits the parent's. For an

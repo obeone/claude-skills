@@ -30,6 +30,7 @@ Usage
     uv run setup_crew.py --provider claude              # dry run, user scope
     uv run setup_crew.py --provider codex --apply       # install
     uv run setup_crew.py --provider claude --check      # exit 1 if not ready
+    uv run setup_crew.py --provider codex --effort scout=low --verbosity low
 """
 
 from __future__ import annotations
@@ -270,7 +271,13 @@ def describe(agent: Agent, provider_name: str, model: str) -> str:
     return agent.description
 
 
-def render(agent: Agent, provider_name: str, models: dict[str, str]) -> str:
+def render(
+    agent: Agent,
+    provider_name: str,
+    models: dict[str, str],
+    effort: str | None = None,
+    verbosity: str | None = None,
+) -> str:
     """
     Render one agent definition in the format of a provider's harness.
 
@@ -282,6 +289,12 @@ def render(agent: Agent, provider_name: str, models: dict[str, str]) -> str:
         Key of ``PROVIDERS``.
     models : dict[str, str]
         Model identifier per tier, already merged with command-line overrides.
+    effort : str or None, optional
+        Reasoning effort pinned in the role, Codex only
+        (``model_reasoning_effort``). None leaves the harness default.
+    verbosity : str or None, optional
+        Output verbosity pinned in the role, Codex only
+        (``model_verbosity``). None leaves the harness default.
 
     Returns
     -------
@@ -315,6 +328,12 @@ def render(agent: Agent, provider_name: str, models: dict[str, str]) -> str:
             "developer_instructions": body,
             "model": model,
         }
+        # Written only when asked for: an absent key means the default of
+        # the harness, which is not the same as any value picked here.
+        if effort:
+            fields["model_reasoning_effort"] = effort
+        if verbosity:
+            fields["model_verbosity"] = verbosity
         return "".join(
             f"{key} = {json.dumps(value, ensure_ascii=False)}\n"
             for key, value in fields.items()
@@ -499,6 +518,8 @@ def install(
     models: dict[str, str],
     apply: bool,
     force: bool,
+    efforts: dict[str, str] | None = None,
+    verbosity: str | None = None,
 ) -> int:
     """
     Write the crew definitions, or report what would be written.
@@ -515,6 +536,11 @@ def install(
         Write the files. When false, only print the plan.
     force : bool
         Replace an existing file or symlink.
+    efforts : dict[str, str] or None, optional
+        Reasoning effort per agent name, Codex only. Agents left out keep
+        the harness default.
+    verbosity : str or None, optional
+        Output verbosity for every agent, Codex only.
 
     Returns
     -------
@@ -525,7 +551,13 @@ def install(
     kept = 0
     for agent in load_agents():
         path = target / f"{agent.name}{extension}"
-        content = render(agent, provider_name, models)
+        content = render(
+            agent,
+            provider_name,
+            models,
+            effort=(efforts or {}).get(agent.name),
+            verbosity=verbosity,
+        )
         tier = AGENT_TIERS[agent.name]
         # A symlink counts as an existing entry even when it dangles, and is
         # never "up to date": its content belongs to another location.
@@ -549,6 +581,39 @@ def install(
                 write_entry(path, content, replace=present)
         print(f"{agent.name:<9}{tier:<7}{models[tier]:<20}{path}: {action}")
     return kept
+
+
+def parse_efforts(pairs: list[str]) -> dict[str, str]:
+    """
+    Parse the ``--effort`` values into a level per agent.
+
+    Parameters
+    ----------
+    pairs : list[str]
+        ``AGENT=LEVEL`` strings, as given on the command line.
+
+    Returns
+    -------
+    dict[str, str]
+        Level per agent name. A later pair for the same agent wins.
+
+    Raises
+    ------
+    ValueError
+        If a pair is not ``AGENT=LEVEL`` or names an agent outside the crew.
+        The level itself is not checked: the accepted values belong to the
+        harness and change with its versions.
+    """
+    efforts: dict[str, str] = {}
+    for pair in pairs:
+        name, sep, level = pair.partition("=")
+        if not sep or not name or not level:
+            raise ValueError(f"--effort expects AGENT=LEVEL, got {pair!r}")
+        if name not in AGENT_TIERS:
+            known = ", ".join(AGENT_TIERS)
+            raise ValueError(f"--effort: unknown agent {name!r} (crew: {known})")
+        efforts[name] = level
+    return efforts
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -584,6 +649,18 @@ def build_parser() -> argparse.ArgumentParser:
         parser.add_argument(
             f"--{tier}", metavar="MODEL", help=f"model identifier for the {tier} tier"
         )
+    parser.add_argument(
+        "--effort",
+        action="append",
+        default=[],
+        metavar="AGENT=LEVEL",
+        help="codex only: reasoning effort pinned in one role, repeatable",
+    )
+    parser.add_argument(
+        "--verbosity",
+        metavar="LEVEL",
+        help="codex only: output verbosity pinned in every role",
+    )
     return parser
 
 
@@ -602,7 +679,16 @@ def main(argv: list[str] | None = None) -> int:
         0 on success, 1 when ``--check`` finds a missing or wrongly pinned
         agent, or when an existing entry was kept.
     """
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    # Only the Codex role format has these keys. Dropping them silently on
+    # another provider would report an install that ignored what was asked.
+    if (args.effort or args.verbosity) and args.provider != "codex":
+        parser.error("--effort and --verbosity apply to --provider codex only")
+    try:
+        efforts = parse_efforts(args.effort)
+    except ValueError as exc:
+        parser.error(str(exc))
     target = destination(args.provider, args.scope, args.dest)
 
     models = dict(PROVIDERS[args.provider].models)
@@ -621,7 +707,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"crew complete and pinned in {target}")
         return 0
 
-    kept = install(args.provider, target, models, args.apply, args.force)
+    kept = install(
+        args.provider,
+        target,
+        models,
+        args.apply,
+        args.force,
+        efforts=efforts,
+        verbosity=args.verbosity,
+    )
     if not args.apply:
         print("dry run: nothing written, add --apply to install")
     if args.provider == "gemini":
