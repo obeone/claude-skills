@@ -1,5 +1,5 @@
 ![Models](https://img.shields.io/badge/models-Claude_%7C_GPT_%7C_Gemini-5A67D8)
-![Skill](https://img.shields.io/badge/skill-2.3.2-blue)
+![Skill](https://img.shields.io/badge/skill-2.4.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 # cheap-orchestration
@@ -68,6 +68,8 @@ into your instruction file, and invoke the skill when planning a task:
 | `... --scope project` | Targets the current repository instead of the home directory |
 | `... --check` | Exits 1 if an agent is missing, comes from another provider or is not pinned to its tier's model |
 | `... --medium <model>` | Replaces a model identifier (`--small`, `--large` likewise) |
+| `... --effort scout=low` | Codex only: pins `model_reasoning_effort` in one role, repeatable |
+| `... --verbosity low` | Codex only: pins `model_verbosity` in every role |
 
 `<p>` is `claude`, `codex` or `gemini`.
 
@@ -98,7 +100,7 @@ from a source checkout are covered in the repository
 
 ```bash
 head -6 ~/.claude/skills/cheap-orchestration/SKILL.md
-# expect: name: cheap-orchestration, then metadata.version: 2.3.2 (or higher)
+# expect: name: cheap-orchestration, then metadata.version: 2.4.0 (or higher)
 ```
 
 ### Requirements

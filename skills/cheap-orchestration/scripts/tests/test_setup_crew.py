@@ -292,6 +292,66 @@ class SetupCrewTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             setup_crew.parse_agent(broken)
 
+    def test_codex_effort_and_verbosity_are_pinned_in_the_roles(self) -> None:
+        """--effort sets one role, --verbosity every role, and both survive --check."""
+        code, _ = run(
+            "--provider", "codex", "--dest", str(self.dest), "--apply",
+            "--effort", "scout=low", "--effort", "reviewer=high",
+            "--verbosity", "low",
+        )
+        self.assertEqual(code, 0)
+        roles = {
+            name: tomllib.loads((self.dest / f"{name}.toml").read_text("utf-8"))
+            for name in setup_crew.AGENT_TIERS
+        }
+        self.assertEqual(roles["scout"]["model_reasoning_effort"], "low")
+        self.assertEqual(roles["reviewer"]["model_reasoning_effort"], "high")
+        self.assertNotIn("model_reasoning_effort", roles["worker"])
+        for role in roles.values():
+            self.assertEqual(role["model_verbosity"], "low")
+        code, _ = run("--provider", "codex", "--dest", str(self.dest), "--check")
+        self.assertEqual(code, 0)
+
+    def test_codex_roles_have_no_effort_keys_unless_asked(self) -> None:
+        """Without the options the harness defaults stay in charge."""
+        run("--provider", "codex", "--dest", str(self.dest), "--apply")
+        worker = tomllib.loads((self.dest / "worker.toml").read_text("utf-8"))
+        self.assertNotIn("model_reasoning_effort", worker)
+        self.assertNotIn("model_verbosity", worker)
+
+    def test_effort_reinstall_is_idempotent(self) -> None:
+        """The same options twice give 'up to date', not a rewrite."""
+        args = ("--provider", "codex", "--dest", str(self.dest), "--apply",
+                "--effort", "editor=medium", "--verbosity", "low")
+        run(*args)
+        _, out = run(*args)
+        self.assertEqual(out.count("up to date"), len(setup_crew.AGENT_TIERS))
+
+    def test_effort_options_are_refused_outside_codex(self) -> None:
+        """Claude and Gemini have no such key: asking for one is an error."""
+        for provider, option in (
+            ("claude", ("--effort", "scout=low")),
+            ("gemini", ("--verbosity", "low")),
+        ):
+            with self.subTest(provider=provider):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as ctx:
+                        run("--provider", provider, "--dest", str(self.dest),
+                            *option)
+                self.assertEqual(ctx.exception.code, 2)
+        self.assertFalse(self.dest.exists())
+
+    def test_effort_rejects_unknown_agents_and_malformed_pairs(self) -> None:
+        """A typo in the agent name or a missing '=' stops before writing."""
+        for bad in ("sccout=low", "scout", "scout=", "=low"):
+            with self.subTest(value=bad):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as ctx:
+                        run("--provider", "codex", "--dest", str(self.dest),
+                            "--apply", "--effort", bad)
+                self.assertEqual(ctx.exception.code, 2)
+        self.assertFalse(self.dest.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
