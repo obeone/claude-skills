@@ -65,7 +65,8 @@ Agent(subagent_type="reviewer", description="[Opus] Final review",
       prompt="""
 Task text (verbatim):
 <the whole task>
-Baseline: <commit the task started from>.
+Baseline: <snapshot or commit noted before the first unit>.
+Untracked before the task: <paths, or none>.
 All units are done. Read the diff against the baseline yourself, and
 `git status --short` for files that are still untracked.
 """)
@@ -73,8 +74,18 @@ All units are done. Read the diff against the baseline yourself, and
 
 The restriction check, polish list and report shape are in the agent
 definition. Never paste the diff into the prompt. Note the baseline before
-the first unit (`git rev-parse HEAD`): a unit that commits or stages its work
-leaves plain `git diff` empty, and a new file never shows in it.
+the first unit:
+
+```bash
+base=$(git stash create); echo "${base:-$(git rev-parse HEAD)}"; git status --short
+```
+
+`git stash create` snapshots a dirty tree into a commit without touching it,
+so edits that were already there are part of the baseline and the reviewer
+does not take them for the task's work. On a clean tree it prints nothing and
+the baseline is `HEAD`. It does not capture untracked files, hence the list.
+A plain `git diff` is not enough: a unit that commits or stages its work
+leaves it empty, and a new file never shows in it.
 
 Never two ordered parts in the same message, even when they look
 independent: a later part can move the lines an earlier part's notes cite.

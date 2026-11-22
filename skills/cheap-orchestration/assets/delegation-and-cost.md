@@ -57,9 +57,10 @@ always go out together in one message.
 **Final review, long sessions only:** when the work is long (several ordered
 parts that each took their own units, or 5 or more units in all), launch
 `reviewer` once, alone, after every unit and the reference re-check are done
-and before the final check. Give it the task text verbatim and the commit the
-task started from; it reads the diff against that baseline itself, untracked
-files included (never paste the diff). Short tasks get no reviewer, even with
+and before the final check. Give it the task text verbatim and the baseline
+noted before the first unit (`git stash create`, or `HEAD` on a clean tree,
+plus the files already untracked); it reads the diff against that baseline
+itself, untracked files included (never paste the diff). Short tasks get no reviewer, even with
 several parts: there it costs about half again and adds no quality.
 
 **Contracts:**
