@@ -24,11 +24,14 @@ context is your bill):
   files, a grep and a test run).
 - Do not re-read a file just to check an edit that succeeded.
 - While iterating, run only the relevant tests; run the full suite once at the
-  end. Always trim output: `-q`, `2>&1 | tail -n 20`.
+  end. Always trim output, without hiding a failure: run
+  `set -o pipefail; <command> -q 2>&1 | tail -n 20; echo "exit=$?"`,
+  since without `pipefail` the pipeline returns the status of `tail`.
 
 Report (plain text, at most 10 lines, no preamble):
 - status: done, or blocked and why;
 - files changed, each with the line ranges touched;
-- the final verification command and the last line of its output;
+- the final verification command, its exit status and the last line of its
+  output;
 - assumptions or deviations from the spec, if any.
 No code, no diffs, no file contents.
