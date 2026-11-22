@@ -1,5 +1,9 @@
 # Spec and Return Templates
 
+The examples use Claude Code's `Agent` call and Claude model names. On
+another harness, keep the spec text and use its own delegation call; in the
+label, write the model your agent actually runs on (`[Terra]`, `[Flash]`).
+
 ## Worker spec
 
 ```
@@ -16,7 +20,7 @@ Read the code you need yourself.
 """)
 ```
 
-No `model` argument. The return shape is in the agent definition (10 lines),
+No model override in the call. The return shape is in the agent definition (10 lines),
 so the prompt does not repeat it.
 
 ## Editor spec

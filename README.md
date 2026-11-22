@@ -21,7 +21,7 @@ agent needs to do one job well, with no dependency on the others.
 | [**helm-bjw-s-chart**](./skills/helm-bjw-s-chart/) | 5.4.0 | Generate production Helm charts on the bjw-s common library | app-template v5 (v4 legacy), sidecars, init containers, HPA, ServiceMonitor |
 | [**automode-config**](./skills/automode-config/) | 0.9.0 | Author, validate, and migrate project-level `autoMode` blocks | Four official sections, critique gate, sha256 hash gate, atomic flock writes |
 | [**apple-shortcuts**](./skills/apple-shortcuts/) | 1.0.0 | Generate importable Apple Shortcuts for macOS and iOS | Native and third-party action catalogs, validator, inspector, App Intents discovery |
-| [**cheap-orchestration**](./skills/cheap-orchestration/) | 2.1.0 | Decide whether work runs inline or on a cheaper delegated agent | Decision rule by size and stakes, pinned scout/editor/worker/reviewer crew, spec templates, benchmark evidence |
+| [**cheap-orchestration**](./skills/cheap-orchestration/) | 2.2.0 | Decide whether work runs inline or on a cheaper delegated agent | Decision rule by size and stakes, model-agnostic tiers (Claude, GPT, Gemini), pinned scout/editor/worker/reviewer crew, spec templates, benchmark evidence |
 
 ## ⚡ Quick start
 
@@ -199,9 +199,9 @@ Every skill follows the same layout, so an agent that knows one knows them all:
 ### cheap-orchestration
 
 - **Decision rule**: whether a unit of work runs inline or is delegated, by task size and stakes
-- **Pinned crew**: scout, editor, worker and reviewer, each with a defined role
+- **Pinned crew**: scout, editor, worker and reviewer, each tied to a model tier (`small`, `medium`, `large`) that maps to Claude, GPT or Gemini models
 - **Templates**: spec and return templates for delegation, plus the benchmark evidence behind each rule
-- **Not shipped**: the operative rules live in your own `CLAUDE.md` ("Delegation & cost") and the agent definitions in `~/.claude/agents/`; the skill carries neither
+- **Not shipped**: the operative rules live in your own instruction file (`CLAUDE.md`, `AGENTS.md`) and the agent definitions in your harness config; the skill carries neither
 - **Setup guide**: [skills/cheap-orchestration/README.md](./skills/cheap-orchestration/README.md) covers the crew definitions, the decision table and the benchmark numbers
 
 ---
